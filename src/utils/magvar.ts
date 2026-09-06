@@ -1,6 +1,14 @@
 import magneticVariationData from '../data/magneticVariation.json';
 
-export type MagneticVariationTable = Record<string, number>;
+export interface MagneticVariationReference {
+  lat: number;
+  lon: number;
+  model: string;
+  date: string;
+  elevationKm: number;
+}
+
+export type MagneticVariationTable = Record<string, number | MagneticVariationReference>;
 export type MagneticVariationData = Record<string, MagneticVariationTable>;
 
 /**
@@ -9,6 +17,9 @@ export type MagneticVariationData = Record<string, MagneticVariationTable>;
  */
 export const MAGNETIC_VARIATION_DATA = magneticVariationData as MagneticVariationData;
 export const MAGNETIC_VARIATION_THEATRES = Object.keys(MAGNETIC_VARIATION_DATA);
+/** Short note for UI/help surfaces: variation is a theatre-level approximation. */
+export const MAGNETIC_VARIATION_APPROXIMATION_NOTE =
+  'Map-level approximation; position-dependent magnetic variation is not reflected.';
 
 function decimalYear(date: Date): number | null {
   const timestamp = date.getTime();
@@ -22,7 +33,7 @@ function decimalYear(date: Date): number | null {
 
 function interpolate(table: MagneticVariationTable, year: number): number {
   const points = Object.entries(table)
-    .map(([key, value]) => [Number(key), value] as const)
+    .map(([key, value]) => [Number(key), typeof value === 'number' ? value : Number.NaN] as const)
     .filter(([pointYear, value]) => Number.isFinite(pointYear) && Number.isFinite(value))
     .sort(([left], [right]) => left - right);
 
@@ -45,9 +56,11 @@ function interpolate(table: MagneticVariationTable, year: number): number {
 /**
  * Return representative magnetic variation in degrees (east positive).
  *
- * This is intentionally the map-level approximation requested for the first
- * implementation: latitude/longitude are accepted for API compatibility and
- * future regional refinement, while the current JSON is theatre + year data.
+ * UI note: this is a map-level approximation, so variation changes within a
+ * theatre are not reflected.  Latitude/longitude are retained for API
+ * compatibility and future regional refinement; the current table is theatre
+ * plus year data, and the reference coordinate used to obtain it is recorded
+ * in each theatre's `_reference` JSON entry.
  * Dates outside the table are clamped to the nearest available reference year.
  * Unknown theatres and invalid dates return 0°, which leaves a true bearing
  * unchanged while keeping the UI safe for custom maps.
