@@ -2,6 +2,7 @@ import type { MissionData, MissionMeta, Weather, Coalition, Flight, Unit, RouteP
 import { dcsToLatLon } from '../utils/coordinates';
 import { windFromTo, pressureValuesFromMmHg } from '../utils/units';
 import threatRangeData from '../data/threatRanges.json';
+import utcOffsetData from '../data/utcOffsets.json';
 import weaponData from '../data/weapons.json';
 import cloudPresetData from '../data/cloudPresets.json';
 
@@ -24,6 +25,7 @@ interface CloudPresetReference {
 }
 
 const threatRanges = threatRangeData as unknown as Record<string, ThreatRangeReference>;
+const utcOffsets = utcOffsetData as unknown as Record<string, number>;
 const weapons = weaponData as unknown as Record<string, WeaponReference>;
 const cloudPresets = cloudPresetData as unknown as Record<string, CloudPresetReference>;
 
@@ -40,13 +42,17 @@ function getValue(obj: unknown, path: string[]): unknown {
 }
 
 function getNumber(obj: unknown, path: string[], defaultValue = 0): number {
+  return getOptionalNumber(obj, path) ?? defaultValue;
+}
+
+function getOptionalNumber(obj: unknown, path: string[]): number | undefined {
   const val = getValue(obj, path);
   if (typeof val === 'number' && Number.isFinite(val)) return val;
   if (typeof val === 'string' && val.trim() !== '') {
     const parsed = Number(val);
-    return Number.isFinite(parsed) ? parsed : defaultValue;
+    return Number.isFinite(parsed) ? parsed : undefined;
   }
-  return defaultValue;
+  return undefined;
 }
 
 function getString(obj: unknown, path: string[], defaultValue = ''): string {
@@ -84,10 +90,15 @@ export function normalizeMission(
   const mapResource = parsed.mapResource;
   
   const warnings: string[] = [];
+  if (dcsToLatLon(theatre, 0, 0) == null) {
+    addWarning(warnings, `未対応のマップ: ${theatre}（座標を解決できません）`);
+  }
   
-  const meta = normalizeMeta(mission, dictionary, mapResource, theatre);
+  const meta = normalizeMeta(mission, dictionary, mapResource, theatre, warnings);
   const weather = normalizeWeather(mission, dictionary, warnings);
-  const coalitions = normalizeCoalitions(mission, warehouses, dictionary, mapResource, theatre, warnings);
+  const zones = normalizeZones(mission);
+  const drawings = normalizeDrawings(mission);
+  const coalitions = normalizeCoalitions(mission, warehouses, dictionary, mapResource, theatre, warnings, zones, drawings);
   const userNotes = createEmptyUserNotes();
   
   return {
@@ -99,10 +110,10 @@ export function normalizeMission(
   };
 }
 
-function normalizeMeta(mission: Record<string, unknown>, dictionary: Record<string, string>, mapResource: Record<string, string>, theatre: string): MissionMeta {
+function normalizeMeta(mission: Record<string, unknown>, dictionary: Record<string, string>, mapResource: Record<string, string>, theatre: string, warnings: string[]): MissionMeta {
   const date = getValue(mission, ['date']) as Record<string, unknown> || {};
   const startTime = getNumber(mission, ['start_time']);
-  const utcOffset = getNumber(mission, ['utcOffset'], 0);
+  const utcOffset = resolveUtcOffset(mission, theatre, warnings);
   
   return {
     sortie: resolveDictKey(getString(mission, ['sortie']), dictionary),
@@ -126,6 +137,17 @@ function normalizeMeta(mission: Record<string, unknown>, dictionary: Record<stri
       resolveResKey(getString(mission, ['pictureFileNameServer']), mapResource),
     ].filter(Boolean),
   };
+}
+
+function resolveUtcOffset(mission: Record<string, unknown>, theatre: string, warnings: string[]): number {
+  const missionOffset = getOptionalNumber(mission, ['utcOffset']);
+  if (missionOffset !== undefined) return missionOffset;
+
+  const tableOffset = utcOffsets[theatre];
+  if (typeof tableOffset === 'number' && Number.isFinite(tableOffset)) return tableOffset;
+
+  addWarning(warnings, `UTC オフセット未収録: ${theatre}`);
+  return 0;
 }
 
 function normalizeWeather(mission: Record<string, unknown>, _dictionary: Record<string, string>, warnings: string[]): Weather {
@@ -231,14 +253,16 @@ function normalizeCoalitions(
   dictionary: Record<string, string>,
   mapResource: Record<string, string>,
   theatre: string,
-  warnings: string[]
+  warnings: string[],
+  zones: TriggerZone[],
+  drawings: Drawing[]
 ): { blue: Coalition; red: Coalition; neutral: Coalition } {
   const coalitionData = getValue(mission, ['coalition']) as Record<string, unknown> || {};
   
   return {
-    blue: normalizeCoalition('blue', coalitionData, warehouses, dictionary, mapResource, theatre, warnings),
-    red: normalizeCoalition('red', coalitionData, warehouses, dictionary, mapResource, theatre, warnings),
-    neutral: normalizeCoalition('neutrals', coalitionData, warehouses, dictionary, mapResource, theatre, warnings),
+    blue: normalizeCoalition('blue', coalitionData, warehouses, dictionary, mapResource, theatre, warnings, zones, drawings),
+    red: normalizeCoalition('red', coalitionData, warehouses, dictionary, mapResource, theatre, warnings, zones, drawings),
+    neutral: normalizeCoalition('neutrals', coalitionData, warehouses, dictionary, mapResource, theatre, warnings, zones, drawings),
   };
 }
 
@@ -249,23 +273,33 @@ function normalizeCoalition(
   dictionary: Record<string, string>,
   _mapResource: Record<string, string>,
   theatre: string,
-  warnings: string[]
+  warnings: string[],
+  zones: TriggerZone[],
+  drawings: Drawing[]
 ): Coalition {
   const sideData = getValue(coalitionData, [side]) as Record<string, unknown> || {};
   const bullseye = getValue(sideData, ['bullseye']) as Record<string, unknown> || {};
   const bullseyeX = getNumber(bullseye, ['x']);
   const bullseyeY = getNumber(bullseye, ['y']);
-  const bullseyeLatLon = dcsToLatLon(theatre, bullseyeX, bullseyeY) || [0, 0];
+  const bullseyeCoordinate = normalizeLatLon(theatre, bullseyeX, bullseyeY);
   
   return {
-    bullseye: { xy: [bullseyeX, bullseyeY], latlon: bullseyeLatLon },
+    bullseye: { xy: [bullseyeX, bullseyeY], ...bullseyeCoordinate },
     navPoints: normalizeNavPoints(sideData, theatre),
     airbases: normalizeAirbases(sideData, warehouses, dictionary, _mapResource, theatre),
     flights: normalizeFlights(sideData, dictionary, _mapResource, theatre, warnings),
     support: normalizeSupport(sideData, dictionary, _mapResource, theatre),
     aiGroups: normalizeAIGroups(sideData, dictionary, theatre, warnings),
-    zones: normalizeZones(sideData, theatre),
-    drawings: normalizeDrawings(sideData),
+    zones,
+    drawings,
+  };
+}
+
+function normalizeLatLon(theatre: string, x: number, y: number): { latlon: [number, number]; latlonResolved: boolean } {
+  const latlon = dcsToLatLon(theatre, x, y);
+  return {
+    latlon: latlon ?? [0, 0],
+    latlonResolved: latlon != null,
   };
 }
 
@@ -279,7 +313,7 @@ function normalizeNavPoints(sideData: Record<string, unknown>, theatre: string):
       index: i + 1,
       name: getString(point, ['name']),
       xy: [x, y],
-      latlon: dcsToLatLon(theatre, x, y) || [0, 0],
+      ...normalizeLatLon(theatre, x, y),
     };
   });
 }
@@ -316,11 +350,11 @@ function normalizeAirbases(
           const airdromeId = getNumber(p, ['airdromeId']);
           if (airdromeId > 0 && airports[airdromeId]) {
             const airport = airports[airdromeId] as Record<string, unknown>;
-            const latlon = dcsToLatLon(theatre, getNumber(airport, ['x']), getNumber(airport, ['y'])) || [0, 0];
+            const coordinate = normalizeLatLon(theatre, getNumber(airport, ['x']), getNumber(airport, ['y']));
             airbases.push({
               id: airdromeId,
               name: resolveDictKey(getString(airport, ['name']), dictionary),
-              latlon,
+              ...coordinate,
               owner: getString(airport, ['coalition'], 'NEUTRAL'),
               runways: [],
               atc: [],
@@ -503,14 +537,14 @@ function normalizeRoutePoints(routePoints: unknown[], theatre: string): RoutePoi
     const alt = getNumber(point, ['alt']);
     const speed = getNumber(point, ['speed']);
     const eta = getNumber(point, ['ETA']);
-    const latlon = dcsToLatLon(theatre, x, y) || [0, 0];
+    const coordinate = normalizeLatLon(theatre, x, y);
     
     return {
       index: i + 1,
       name: getString(point, ['name']),
       action: getString(point, ['action']),
       xy: [x, y],
-      latlon,
+      ...coordinate,
       alt,
       altType: getString(point, ['alt_type']) as 'BARO' | 'RADIO',
       speed,
@@ -581,11 +615,12 @@ interface ExtractedSupportSignals {
   hasFacTask: boolean;
 }
 
-function normalizeTanker(groupData: Record<string, unknown>, dictionary: Record<string, string>, _theatre: string, signals: ExtractedSupportSignals): SupportAsset {
+function normalizeTanker(groupData: Record<string, unknown>, dictionary: Record<string, string>, theatre: string, signals: ExtractedSupportSignals): SupportAsset {
   const units = getArray(groupData, ['units']);
   const unit = units[0] as Record<string, unknown>;
   const x = getNumber(unit, ['x']);
   const y = getNumber(unit, ['y']);
+  const coordinate = normalizeLatLon(theatre, x, y);
   const route = getValue(groupData, ['route']) as Record<string, unknown> || {};
   const points = getArray(route, ['points']);
   const { hasFacTask: _hasFacTask, ...signalFields } = signals;
@@ -595,6 +630,7 @@ function normalizeTanker(groupData: Record<string, unknown>, dictionary: Record<
     callsign: normalizeCallsign(getValue(groupData, ['callsign']), dictionary),
     frequency: getNumber(groupData, ['frequency']),
     position: [x, y],
+    ...coordinate,
     ...signalFields,
     orbit: points.length > 0 ? {
       point: [getNumber(points[0], ['x']), getNumber(points[0], ['y'])],
@@ -605,11 +641,12 @@ function normalizeTanker(groupData: Record<string, unknown>, dictionary: Record<
   };
 }
 
-function normalizeAWACS(groupData: Record<string, unknown>, dictionary: Record<string, string>, _theatre: string, signals: ExtractedSupportSignals): SupportAsset {
+function normalizeAWACS(groupData: Record<string, unknown>, dictionary: Record<string, string>, theatre: string, signals: ExtractedSupportSignals): SupportAsset {
   const units = getArray(groupData, ['units']);
   const unit = units[0] as Record<string, unknown>;
   const x = getNumber(unit, ['x']);
   const y = getNumber(unit, ['y']);
+  const coordinate = normalizeLatLon(theatre, x, y);
   const route = getValue(groupData, ['route']) as Record<string, unknown> || {};
   const points = getArray(route, ['points']);
   const { hasFacTask: _hasFacTask, ...signalFields } = signals;
@@ -619,6 +656,7 @@ function normalizeAWACS(groupData: Record<string, unknown>, dictionary: Record<s
     callsign: normalizeCallsign(getValue(groupData, ['callsign']), dictionary),
     frequency: getNumber(groupData, ['frequency']),
     position: [x, y],
+    ...coordinate,
     ...signalFields,
     orbit: points.length > 0 ? {
       point: [getNumber(points[0], ['x']), getNumber(points[0], ['y'])],
@@ -629,11 +667,12 @@ function normalizeAWACS(groupData: Record<string, unknown>, dictionary: Record<s
   };
 }
 
-function normalizeCarrier(groupData: Record<string, unknown>, dictionary: Record<string, string>, _theatre: string, signals: ExtractedSupportSignals): SupportAsset {
+function normalizeCarrier(groupData: Record<string, unknown>, dictionary: Record<string, string>, theatre: string, signals: ExtractedSupportSignals): SupportAsset {
   const units = getArray(groupData, ['units']);
   const unit = units[0] as Record<string, unknown>;
   const x = getNumber(unit, ['x']);
   const y = getNumber(unit, ['y']);
+  const coordinate = normalizeLatLon(theatre, x, y);
   const { hasFacTask: _hasFacTask, ...signalFields } = signals;
   
   return {
@@ -641,6 +680,7 @@ function normalizeCarrier(groupData: Record<string, unknown>, dictionary: Record
     callsign: normalizeCallsign(getValue(groupData, ['callsign']), dictionary) || resolveDictKey(getString(groupData, ['name']), dictionary),
     frequency: getNumber(groupData, ['frequency']),
     position: [x, y],
+    ...coordinate,
     ...signalFields,
   };
 }
@@ -648,7 +688,7 @@ function normalizeCarrier(groupData: Record<string, unknown>, dictionary: Record
 function normalizeJTAC(
   groupData: Record<string, unknown>,
   dictionary: Record<string, string>,
-  _theatre: string,
+  theatre: string,
   signals: ExtractedSupportSignals,
   unitType: string
 ): SupportAsset {
@@ -657,6 +697,7 @@ function normalizeJTAC(
   const { hasFacTask: _hasFacTask, ...signalFields } = signals;
   const frequency = getNumber(groupData, ['frequency']);
   const callsign = normalizeCallsign(getValue(groupData, ['callsign']), dictionary) || getString(unit, ['name']);
+  const coordinate = normalizeLatLon(theatre, getNumber(unit, ['x']), getNumber(unit, ['y']));
   const jtac: JTACInfo = {
     unitType: unitType || undefined,
     frequency: frequency || undefined,
@@ -669,6 +710,7 @@ function normalizeJTAC(
     callsign,
     frequency,
     position: [getNumber(unit, ['x']), getNumber(unit, ['y'])],
+    ...coordinate,
     ...signalFields,
     jtac,
   };
@@ -723,12 +765,12 @@ function extractSupportSignals(groupData: Record<string, unknown>): ExtractedSup
       const mode = scalarString(getValue(beaconParams, ['modeChannel']) ?? getValue(beaconParams, ['mode'])) ?? '';
       const callsign = scalarString(getValue(beaconParams, ['callsign']));
       const system = scalarValue(getValue(beaconParams, ['system']) ?? getValue(beaconParams, ['type']));
-      result.tacan = { channel, mode, callsign, system, latlon: [0, 0] };
+      result.tacan = { channel, mode, callsign, system, latlon: [0, 0], latlonResolved: false };
     } else if (actionId === 'ActivateICLS') {
       const iclsParams = params ?? {};
       const channelValue = scalarValue(getValue(iclsParams, ['channel']) ?? getValue(iclsParams, ['channelNumber'])) ?? '';
       const callsign = scalarString(getValue(iclsParams, ['callsign']));
-      result.icls = { channel: channelValue, callsign, latlon: [0, 0] };
+      result.icls = { channel: channelValue, callsign, latlon: [0, 0], latlonResolved: false };
     } else if (actionId === 'ActivateLink4') {
       const linkParams = params ?? {};
       result.link4 = {
@@ -755,7 +797,7 @@ function extractSupportSignals(groupData: Record<string, unknown>): ExtractedSup
   return result;
 }
 
-function normalizeAIGroups(sideData: Record<string, unknown>, _dictionary: Record<string, string>, _theatre: string, warnings: string[]): AIGroup[] {
+function normalizeAIGroups(sideData: Record<string, unknown>, _dictionary: Record<string, string>, theatre: string, warnings: string[]): AIGroup[] {
   const countries = getValue(sideData, ['country']) as unknown[] || [];
   const groups: AIGroup[] = [];
   
@@ -767,44 +809,47 @@ function normalizeAIGroups(sideData: Record<string, unknown>, _dictionary: Recor
     const vehicles = getArray(c, ['vehicle']);
     const statics = getArray(c, ['static']);
     
-    for (const group of [...planes, ...helicopters, ...ships, ...vehicles, ...statics]) {
-      const g = group as Record<string, unknown>;
-      const unitGroups = getArray(g, ['group']);
-      
-      for (const grp of unitGroups) {
-        const groupData = grp as Record<string, unknown>;
-        const units = getArray(groupData, ['units']);
-        if (units.length === 0) continue;
-        
-        const unit = units[0] as Record<string, unknown>;
-        const skill = getString(unit, ['skill']);
-        if (skill === 'Client' || skill === 'Player') continue;
-        
-        const x = getNumber(unit, ['x']);
-        const y = getNumber(unit, ['y']);
-        const type = getString(unit, ['type']);
-        const threat = threatRanges[type];
-        const threatRange = threat?.threatRange > 0 ? threat.threatRange : threat?.detectionRange > 0 ? threat.detectionRange : 0;
-        const threatRangeSource: AIGroup['threatRangeSource'] = !threat
-          ? 'unknown'
-          : threat.threatRange > 0
-            ? 'reference'
-            : threat.detectionRange > 0
-              ? 'detection'
-              : 'reference';
-        if (!threat) addWarning(warnings, `未知の脅威半径: ${type}`);
-        
-        groups.push({
-          category: getString(group, ['category'], 'unknown'),
-          type,
-          count: units.length,
-          position: [x, y],
-          threatRange,
-          threatRangeSource,
-          hidden: getValue(groupData, ['hidden']) === true,
-          lateActivation: getValue(groupData, ['lateActivation']) === true,
-          startTime: getNumber(groupData, ['start_time']),
-        });
+    const groupsByCategory = [
+      { category: 'plane', groups: planes },
+      { category: 'helicopter', groups: helicopters },
+      { category: 'ship', groups: ships },
+      { category: 'vehicle', groups: vehicles },
+      { category: 'static', groups: statics },
+    ];
+
+    for (const { category: categoryHint, groups: categoryGroups } of groupsByCategory) {
+      for (const group of categoryGroups) {
+        const g = group as Record<string, unknown>;
+        const unitGroups = getArray(g, ['group']);
+
+        for (const grp of unitGroups) {
+          const groupData = grp as Record<string, unknown>;
+          const units = getArray(groupData, ['units']);
+          if (units.length === 0) continue;
+
+          const unit = units[0] as Record<string, unknown>;
+          const skill = getString(unit, ['skill']);
+          if (skill === 'Client' || skill === 'Player') continue;
+
+          const x = getNumber(unit, ['x']);
+          const y = getNumber(unit, ['y']);
+          const coordinate = normalizeLatLon(theatre, x, y);
+          const type = getString(unit, ['type']);
+          const category = getString(group, ['category'], categoryHint);
+          const threatResolution = resolveGroupThreat(units, isThreatCandidateCategory(category), warnings);
+
+          groups.push({
+            category,
+            type,
+            count: units.length,
+            position: [x, y],
+            ...coordinate,
+            ...threatResolution,
+            hidden: getValue(groupData, ['hidden']) === true,
+            lateActivation: getValue(groupData, ['lateActivation']) === true,
+            startTime: getNumber(groupData, ['start_time']),
+          });
+        }
       }
     }
   }
@@ -812,14 +857,63 @@ function normalizeAIGroups(sideData: Record<string, unknown>, _dictionary: Recor
   return groups;
 }
 
-function normalizeZones(sideData: Record<string, unknown>, _theatre: string): TriggerZone[] {
-  const zones = getArray(sideData, ['zones']);
+interface ThreatResolution {
+  threatRange: number;
+  threatRangeSource?: AIGroup['threatRangeSource'];
+  threatRangeUnitType?: string;
+}
+
+function isThreatCandidateCategory(category: string): boolean {
+  const normalizedCategory = category.trim().toLowerCase();
+  return normalizedCategory === 'vehicle' || normalizedCategory === 'ship';
+}
+
+function resolveGroupThreat(units: unknown[], isThreatCandidate: boolean, warnings: string[]): ThreatResolution {
+  let bestRange = 0;
+  let bestSource: AIGroup['threatRangeSource'] = isThreatCandidate ? 'unknown' : undefined;
+  let bestType: string | undefined;
+
+  for (const rawUnit of units) {
+    const unit = rawUnit as Record<string, unknown>;
+    const type = getString(unit, ['type']);
+    const threat = threatRanges[type];
+    if (!threat) {
+      if (isThreatCandidate && type) addWarning(warnings, `未知の脅威半径: ${type}`);
+      continue;
+    }
+
+    const threatRange = threat.threatRange > 0 ? threat.threatRange : threat.detectionRange > 0 ? threat.detectionRange : 0;
+    const source: AIGroup['threatRangeSource'] = threat.threatRange > 0
+      ? 'reference'
+      : threat.detectionRange > 0
+        ? 'detection'
+        : 'reference';
+    const shouldReplace = threatRange > bestRange
+      || (threatRange === bestRange && source === 'reference' && bestSource === 'detection');
+    if (shouldReplace || bestType === undefined) {
+      bestRange = threatRange;
+      bestSource = source;
+      bestType = type;
+    }
+  }
+
+  return {
+    threatRange: bestRange,
+    threatRangeSource: bestSource,
+    threatRangeUnitType: bestType,
+  };
+}
+
+function normalizeZones(mission: Record<string, unknown>): TriggerZone[] {
+  const zones = getArray(mission, ['triggers', 'zones']);
   return zones.map((zone, i) => {
     const z = zone as Record<string, unknown>;
     const x = getNumber(z, ['x']);
     const y = getNumber(z, ['y']);
     const zoneType = getNumber(z, ['type'], 0);
-    const vertices = getArray(z, ['vertices']).map(v => [getNumber(v as Record<string, unknown>, ['x']), getNumber(v as Record<string, unknown>, ['y'])] as [number, number]);
+    const rawVertices = getArray(z, ['vertices']);
+    const vertices = (rawVertices.length > 0 ? rawVertices : getArray(z, ['verticies']))
+      .map(v => [getNumber(v as Record<string, unknown>, ['x']), getNumber(v as Record<string, unknown>, ['y'])] as [number, number]);
     const color = getArray(z, ['color']);
     
     return {
@@ -835,8 +929,8 @@ function normalizeZones(sideData: Record<string, unknown>, _theatre: string): Tr
   });
 }
 
-function normalizeDrawings(sideData: Record<string, unknown>): Drawing[] {
-  const drawings = getValue(sideData, ['drawings']) as Record<string, unknown> || {};
+function normalizeDrawings(mission: Record<string, unknown>): Drawing[] {
+  const drawings = getValue(mission, ['drawings']) as Record<string, unknown> || {};
   const layers = getArray(drawings, ['layers']);
   
   return layers.map(l => {

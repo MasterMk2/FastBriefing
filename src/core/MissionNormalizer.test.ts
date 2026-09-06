@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { normalizeMission } from './MissionNormalizer';
+import { formatTimeHHMM, missionZuluDate } from '../utils/time';
 
 const settings = { coordinateFormat: 'DDM', unitSystem: 'metric', viewMode: 'creator' };
 
@@ -7,7 +8,12 @@ function unit(type: string, skill = 'Excellent', extra: Record<string, unknown> 
   return { type, skill, x: 100, y: 200, unitId: 1, name: type, ...extra };
 }
 
-function makeMission(overrides: { weather?: Record<string, unknown>; coalition?: Record<string, unknown> } = {}) {
+function makeMission(overrides: {
+  weather?: Record<string, unknown>;
+  coalition?: Record<string, unknown>;
+  mission?: Record<string, unknown>;
+  theatre?: string;
+} = {}) {
   const samTypes = [
     'S_75M_Volhov', 'Kub', 'Hawk', 'NASAMS', 'Strela-1', 'ZSU-23-4',
     'SA-10', 'SA-11', 'SA-15', 'SA-19', 'Tor', 'Osa', 'Roland', 'Rapier',
@@ -80,6 +86,7 @@ function makeMission(overrides: { weather?: Record<string, unknown>; coalition?:
   return {
     mission: {
       date: { Year: 2026, Month: 9, Day: 6 },
+      ...overrides.mission,
       weather: {
         qnh: 760,
         season: { temperature: 8, dewPoint: -2 },
@@ -90,7 +97,7 @@ function makeMission(overrides: { weather?: Record<string, unknown>; coalition?:
       },
       coalition: { blue: coalitionSide, red: {}, neutrals: {}, ...overrides.coalition },
     },
-    theatre: 'Caucasus',
+    theatre: overrides.theatre ?? 'Caucasus',
     warehouses: { airports: {} },
     dictionary: {},
     mapResource: {},
@@ -157,5 +164,183 @@ describe('MissionNormalizer reference-backed layers', () => {
 
     const unknown = normalizeMission(makeMission({ weather: { clouds: { preset: 'RainyPreset99', base: 900 } } }), settings);
     expect(unknown.warnings).toContain('未知の雲プリセット: RainyPreset99');
+  });
+
+  it('normalizes mission-level zones and drawings once, retaining coalition fields for the UI', () => {
+    const missionZone = {
+      zoneId: 101,
+      name: 'Mission polygon',
+      x: 100,
+      y: 200,
+      radius: 0,
+      type: 2,
+      verticies: [{ x: 90, y: 190 }, { x: 110, y: 210 }],
+      color: [1, 0, 0, 1],
+      hidden: false,
+    };
+    const missionCircle = {
+      zoneId: 102,
+      name: 'Mission circle',
+      x: 300,
+      y: 400,
+      radius: 500,
+      type: 0,
+      vertices: [{ x: 300, y: 400 }],
+      color: [0, 1, 0, 1],
+      hidden: true,
+    };
+    const coalitionOnlyZone = {
+      zoneId: 999,
+      name: 'Coalition-only legacy fixture',
+      x: 900,
+      y: 900,
+      radius: 25,
+      type: 0,
+      color: [0, 0, 1, 1],
+      hidden: false,
+    };
+    const coalitionOnlyDrawing = {
+      layers: [{
+        name: 'Coalition-only legacy layer',
+        visible: true,
+        objects: [],
+      }],
+    };
+    const normalized = normalizeMission(makeMission({
+      mission: {
+        triggers: { zones: [missionZone, missionCircle] },
+        drawings: {
+          layers: [{
+            name: 'Common',
+            visible: true,
+            objects: [{
+              primitiveType: 'Line',
+              points: [{ x: 1, y: 2 }, { x: 3, y: 4 }],
+              colorString: '#00ff00',
+              thickness: 2,
+              style: 1,
+              name: 'Mission line',
+            }],
+          }],
+        },
+      },
+      coalition: { blue: { zones: [coalitionOnlyZone], drawings: coalitionOnlyDrawing } },
+    }), settings);
+
+    expect(normalized.coalitions.blue.zones).toHaveLength(2);
+    expect(normalized.coalitions.blue.zones[0].name).toBe('Mission polygon');
+    expect(normalized.coalitions.blue.zones[0].vertices).toEqual([[90, 190], [110, 210]]);
+    expect(normalized.coalitions.blue.zones).toBe(normalized.coalitions.red.zones);
+    expect(normalized.coalitions.red.zones).toBe(normalized.coalitions.neutral.zones);
+    expect(normalized.coalitions.blue.drawings).toHaveLength(1);
+    expect(normalized.coalitions.blue.drawings[0].objects[0].name).toBe('Mission line');
+    expect(normalized.coalitions.blue.drawings).toBe(normalized.coalitions.red.drawings);
+    expect(normalized.coalitions.red.drawings).toBe(normalized.coalitions.neutral.drawings);
+  });
+
+  it('uses the largest threat radius in a mixed ground group and records its unit type', () => {
+    const mixedGroup = {
+      group: [{
+        groupId: 700,
+        units: [unit('S-300PS 54K6 cp'), unit('S-300PS 5P85C ln')],
+        hidden: false,
+        lateActivation: false,
+      }],
+    };
+    const normalized = normalizeMission(makeMission({
+      coalition: {
+        blue: { country: [{ vehicle: [mixedGroup] }] },
+        red: {},
+        neutrals: {},
+      },
+    }), settings);
+    const group = normalized.coalitions.blue.aiGroups[0];
+
+    expect(group.type).toBe('S-300PS 54K6 cp');
+    expect(group.threatRange).toBe(120000);
+    expect(group.threatRangeSource).toBe('reference');
+    expect(group.threatRangeUnitType).toBe('S-300PS 5P85C ln');
+  });
+
+  it('does not warn about unrecorded threat radii for aircraft groups', () => {
+    const aircraftGroup = {
+      category: 'plane',
+      group: [{ units: [unit('F-16C_50')] }],
+    };
+    const normalized = normalizeMission(makeMission({
+      coalition: {
+        blue: { country: [{ plane: [aircraftGroup] }] },
+        red: {},
+        neutrals: {},
+      },
+    }), settings);
+
+    expect(normalized.warnings).not.toContain('未知の脅威半径: F-16C_50');
+    expect(normalized.coalitions.blue.aiGroups[0].threatRangeSource).toBeUndefined();
+  });
+
+  it('resolves UTC offset from the theatre table and produces Caucasus Zulu 04:00', () => {
+    const normalized = normalizeMission(makeMission({
+      mission: {
+        date: { Year: 2025, Month: 5, Day: 1 },
+        start_time: 28800,
+      },
+      theatre: 'Caucasus',
+    }), settings);
+
+    expect(normalized.meta.utcOffset).toBe(4);
+    expect(formatTimeHHMM(missionZuluDate(normalized.meta))).toBe('04:00');
+
+    const explicit = normalizeMission(makeMission({
+      mission: { utcOffset: 9 },
+      theatre: 'Caucasus',
+    }), settings);
+    expect(explicit.meta.utcOffset).toBe(9);
+  });
+
+  it('marks coordinates unresolved and warns once for an unsupported theatre', () => {
+    const flightGroup = {
+      category: 'plane',
+      group: [{
+        units: [unit('F-15E', 'Client')],
+        route: { points: [{ x: 500, y: 600 }] },
+      }],
+    };
+    const tankerGroup = {
+      category: 'plane',
+      group: [{
+        task: 'Tanker',
+        callsign: { name: 'Texaco' },
+        units: [unit('KC-135', 'Excellent', { x: 700, y: 800 })],
+        route: { points: [] },
+      }],
+    };
+    const groundGroup = {
+      category: 'vehicle',
+      group: [{ units: [unit('S-300PS 54K6 cp')] }],
+    };
+    const normalized = normalizeMission(makeMission({
+      theatre: 'Afghanistan',
+      coalition: {
+        blue: {
+          nav_points: [{ name: 'Unknown map point', x: 100, y: 200 }],
+          country: [{ plane: [flightGroup, tankerGroup], vehicle: [groundGroup] }],
+        },
+        red: {},
+        neutrals: {},
+      },
+    }), settings);
+
+    expect(normalized.coalitions.blue.bullseye.latlon).toEqual([0, 0]);
+    expect(normalized.coalitions.blue.bullseye.latlonResolved).toBe(false);
+    expect(normalized.coalitions.blue.navPoints[0].latlon).toEqual([0, 0]);
+    expect(normalized.coalitions.blue.navPoints[0].latlonResolved).toBe(false);
+    expect(normalized.coalitions.blue.flights[0].route[0].latlonResolved).toBe(false);
+    expect(normalized.coalitions.blue.support[0].latlon).toEqual([0, 0]);
+    expect(normalized.coalitions.blue.support[0].latlonResolved).toBe(false);
+    expect(normalized.coalitions.blue.aiGroups[0].latlon).toEqual([0, 0]);
+    expect(normalized.coalitions.blue.aiGroups[0].latlonResolved).toBe(false);
+    expect(normalized.warnings.filter(warning => warning === '未対応のマップ: Afghanistan（座標を解決できません）')).toHaveLength(1);
+    expect(normalized.warnings.filter(warning => warning === 'UTC オフセット未収録: Afghanistan')).toHaveLength(1);
   });
 });
