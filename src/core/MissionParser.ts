@@ -4,6 +4,8 @@ export class MissionParser {
   private worker: Worker | null = null;
   
   async parse(file: File): Promise<ParsedMissionFile> {
+    const buffer = await file.arrayBuffer();
+
     return new Promise((resolve, reject) => {
       this.worker = new Worker(new URL('../workers/missionParser.ts', import.meta.url), { type: 'module' });
       
@@ -23,7 +25,7 @@ export class MissionParser {
         this.worker = null;
       };
       
-      this.worker.postMessage({ file: file.arrayBuffer() });
+      this.worker.postMessage({ file: buffer }, [buffer]);
     });
   }
   
