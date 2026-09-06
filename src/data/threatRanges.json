@@ -130,5 +130,9 @@
   "QF-37 AA": { "threatRange": 4000, "detectionRange": 0 },
   "HQ-7_LN_SP": { "threatRange": 15000, "detectionRange": 20000 },
   "HQ-7_LN_P": { "threatRange": 15000, "detectionRange": 20000 },
-  "HQ-7_STR_SP": { "threatRange": 0, "detectionRange": 30000 }
+  "HQ-7_STR_SP": { "threatRange": 0, "detectionRange": 30000 },
+  "Hummer": { "threatRange": 0, "detectionRange": 0 },
+  "M978 HEMTT Tanker": { "threatRange": 0, "detectionRange": 0 },
+  "M 818": { "threatRange": 0, "detectionRange": 0 },
+  "M-2 Bradley": { "threatRange": 2500, "detectionRange": 5000 }
 }
