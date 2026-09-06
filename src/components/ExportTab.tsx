@@ -14,12 +14,7 @@ import {
   missionLocalDate,
   missionZuluDate,
 } from '../utils/time';
-import OverviewTab from './OverviewTab';
-import FlightsTab from './FlightsTab';
-import MapTab from './MapTab';
-import CommsTab from './CommsTab';
-import SupportTab from './SupportTab';
-import ThreatsTab from './ThreatsTab';
+import PrintView from './PrintView';
 import { useSettings } from '../hooks/useSettings';
 
 interface ExportTabProps {
@@ -190,13 +185,8 @@ export default function ExportTab({ mission, settings }: ExportTabProps) {
         <p className="hint">{t('export.pngHelp')}</p>
       </section>
 
-      <div className="print-briefing" aria-hidden="true">
-        <OverviewTab mission={mission} settings={settings} />
-        <FlightsTab mission={mission} settings={settings} />
-        <MapTab mission={mission} settings={settings} />
-        <CommsTab mission={mission} settings={settings} />
-        <SupportTab mission={mission} settings={settings} />
-        <ThreatsTab mission={mission} settings={settings} />
+      <div className="print-briefing">
+        <PrintView mission={mission} settings={settings} />
       </div>
     </div>
   );

@@ -16,6 +16,7 @@
     "invalidMiz": ".mizファイルを選択してください",
     "invalidMizOnly": ".mizファイルを選択してください（他の形式は読み込めません）",
     "parseError": "ミッションファイルの解析に失敗しました",
+    "parseErrorDetails": "ミッションファイルの解析に失敗しました。詳細: {{message}}",
     "multipleFiles": "複数ファイルが選択されたため、最初の.mizファイル「{{fileName}}」だけを解析します（{{count}}件は無視）。"
   },
   "tabs": {
@@ -207,6 +208,8 @@
     "printPdf": "印刷 / PDF",
     "generatePng": "PNG生成",
     "preview": "プレビュー",
+    "printFlights": "全フライト詳細",
+    "mapPrintNote": "地図は印刷用ビューに含めていません。画面の地図タブで確認してください。",
     "printImageExport": "印刷・画像出力",
     "printHelp": "印刷用レイアウトには概要、フライト、地図、通信、支援機、脅威の各セクションが含まれます。ブラウザの印刷機能（Ctrl+P）で PDF として保存できます。",
     "pngHelp": "PNG はブリーフィング要約を 1536×2048 のキャンバスに描画して保存します。.miz への埋め込みは未対応です。",

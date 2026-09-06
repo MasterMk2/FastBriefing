@@ -1,10 +1,15 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import type { DisplaySettings } from '../types/mission';
-import i18n from '../i18n';
+import i18n, {
+  DEFAULT_LANGUAGE,
+  SETTINGS_STORAGE_KEY as I18N_SETTINGS_STORAGE_KEY,
+  SETTINGS_VERSION as I18N_SETTINGS_VERSION,
+  SUPPORTED_LANGUAGES,
+} from '../i18n';
 
-export const SETTINGS_STORAGE_KEY = 'fastbriefing-settings';
-export const SETTINGS_VERSION = 1;
+export const SETTINGS_STORAGE_KEY = I18N_SETTINGS_STORAGE_KEY;
+export const SETTINGS_VERSION = I18N_SETTINGS_VERSION;
 
 export const DEFAULT_SETTINGS: Readonly<DisplaySettings> = {
   coordinateFormat: 'DDM',
@@ -15,8 +20,8 @@ export const DEFAULT_SETTINGS: Readonly<DisplaySettings> = {
   pressureUnit: 'hPa',
   temperatureUnit: 'C',
   viewMode: 'pilot',
-  language: 'ja',
-  outputLanguage: 'ja',
+  language: DEFAULT_LANGUAGE,
+  outputLanguage: DEFAULT_LANGUAGE,
 };
 
 export type SettingsStorage = Pick<Storage, 'getItem' | 'setItem'>;
@@ -29,7 +34,7 @@ const DISTANCE_UNITS = ['nm', 'km'] as const;
 const PRESSURE_UNITS = ['hPa', 'inHg', 'mmHg'] as const;
 const TEMPERATURE_UNITS = ['C', 'F'] as const;
 const VIEW_MODES = ['creator', 'pilot'] as const;
-const LANGUAGES = ['ja', 'en'] as const;
+const LANGUAGES = SUPPORTED_LANGUAGES;
 
 function getStorage(): SettingsStorage | null {
   try {
