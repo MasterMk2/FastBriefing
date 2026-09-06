@@ -74,8 +74,12 @@ export class MissionParser {
         }
       };
 
+      // ErrorEvent は Error ではないので、そのまま reject すると呼び出し側の
+      // err.message が undefined になる。Error に包んでから渡す。
       worker.onerror = (err) => {
-        if (this.settle(request)) reject(err);
+        if (this.settle(request)) {
+          reject(new Error(err.message || 'ミッション解析ワーカーが異常終了しました。'));
+        }
       };
 
       worker.postMessage({ file: buffer }, [buffer]);
