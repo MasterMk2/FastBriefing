@@ -1,5 +1,5 @@
 import proj4 from 'proj4';
-import mgrs from 'mgrs';
+import { forward as mgrsForward } from 'mgrs';
 import aircraftCoordinateDefaults from '../data/aircraftCoordinateDefaults.json';
 import type { CoordinateFormat } from '../types/mission';
 
@@ -197,7 +197,7 @@ export function formatMGRS(lat: number, lon: number, accuracy: number = DEFAULT_
   }
 
   try {
-    return mgrs.forward([lon, lat], normalizeMGRSAccuracy(accuracy));
+    return mgrsForward([lon, lat], normalizeMGRSAccuracy(accuracy));
   } catch {
     return formatMGRSFallback(lat, lon);
   }

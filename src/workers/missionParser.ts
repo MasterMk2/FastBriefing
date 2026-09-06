@@ -33,6 +33,8 @@ function zipError(message: string): Error {
 }
 
 function displayEntryName(name: string): string {
+  // ZIPエントリ名に混入しうるASCII制御文字を表示用の「?」へ置換する意図的なマッチ。
+  // eslint-disable-next-line no-control-regex
   return name.replace(/[\u0000-\u001f\u007f]/g, '?');
 }
 
