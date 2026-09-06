@@ -1,41 +1,106 @@
 import type { ParsedMissionFile } from '../types/mission';
+import { ZIP_LIMITS } from '../workers/missionParser';
+
+export { ZIP_LIMITS } from '../workers/missionParser';
+
+export interface MissionParserResult extends ParsedMissionFile {
+  briefingImages: Map<string, Uint8Array>;
+}
+
+interface ParseRequest {
+  worker: Worker | null;
+  reject: (reason?: unknown) => void;
+  settled: boolean;
+}
+
+function formatBytes(bytes: number): string {
+  return `${bytes.toLocaleString('ja-JP')}バイト`;
+}
+
+function archiveSizeError(size: number): Error {
+  return new Error(
+    `圧縮後のファイルサイズ（${formatBytes(size)}）が上限（${formatBytes(ZIP_LIMITS.MAX_ARCHIVE_SIZE)}）を超えています。`
+  );
+}
+
+function abortError(): Error {
+  const error = new Error('ミッション解析がキャンセルされました。');
+  error.name = 'AbortError';
+  return error;
+}
 
 export class MissionParser {
-  private worker: Worker | null = null;
+  private readonly requests = new Set<ParseRequest>();
 
-  async parse(file: File): Promise<ParsedMissionFile> {
-    // Promise の executor は async にできないので、Worker を起こす前に読み切る
-    const buffer = await file.arrayBuffer();
+  parse(file: File): Promise<MissionParserResult> {
+    const request: ParseRequest = {
+      worker: null,
+      reject: () => undefined,
+      settled: false,
+    };
+    this.requests.add(request);
 
     return new Promise((resolve, reject) => {
-      const worker = new Worker(new URL('../workers/missionParser.ts', import.meta.url), { type: 'module' });
-      this.worker = worker;
-
-      const dispose = () => {
-        worker.terminate();
-        if (this.worker === worker) this.worker = null;
-      };
-
-      worker.onmessage = (e: MessageEvent<{ type: string; data?: ParsedMissionFile; error?: string }>) => {
-        if (e.data.type === 'success') {
-          resolve(e.data.data!);
-        } else if (e.data.type === 'error') {
-          reject(new Error(e.data.error));
-        }
-        dispose();
-      };
-
-      worker.onerror = (err) => {
-        reject(new Error(err.message || 'Mission parser worker failed'));
-        dispose();
-      };
-
-      worker.postMessage({ file: buffer }, [buffer]);
+      request.reject = reject;
+      void this.start(request, file, resolve, reject);
     });
   }
 
+  private async start(
+    request: ParseRequest,
+    file: File,
+    resolve: (value: MissionParserResult | PromiseLike<MissionParserResult>) => void,
+    reject: (reason?: unknown) => void
+  ): Promise<void> {
+    try {
+      // Reject before arrayBuffer() so an oversized archive never enters main-thread memory.
+      if (file.size > ZIP_LIMITS.MAX_ARCHIVE_SIZE) {
+        throw archiveSizeError(file.size);
+      }
+
+      const buffer = await file.arrayBuffer();
+      if (request.settled) return;
+
+      const worker = new Worker(new URL('../workers/missionParser.ts', import.meta.url), { type: 'module' });
+      request.worker = worker;
+
+      worker.onmessage = (e: MessageEvent<{ type: string; data?: MissionParserResult; error?: string }>) => {
+        if (e.data.type === 'success') {
+          if (this.settle(request)) resolve(e.data.data!);
+        } else if (e.data.type === 'error') {
+          if (this.settle(request)) reject(new Error(e.data.error));
+        } else if (this.settle(request)) {
+          reject(new Error('ミッション解析から不明な応答を受信しました。'));
+        }
+      };
+
+      // ErrorEvent は Error ではないので、そのまま reject すると呼び出し側の
+      // err.message が undefined になる。Error に包んでから渡す。
+      worker.onerror = (err) => {
+        if (this.settle(request)) {
+          reject(new Error(err.message || 'ミッション解析ワーカーが異常終了しました。'));
+        }
+      };
+
+      worker.postMessage({ file: buffer }, [buffer]);
+    } catch (error) {
+      if (this.settle(request)) reject(error);
+    }
+  }
+
+  private settle(request: ParseRequest): boolean {
+    if (request.settled) return false;
+    request.settled = true;
+    this.requests.delete(request);
+    request.worker?.terminate();
+    request.worker = null;
+    return true;
+  }
+
   cancel() {
-    this.worker?.terminate();
-    this.worker = null;
+    const error = abortError();
+    for (const request of [...this.requests]) {
+      if (this.settle(request)) request.reject(error);
+    }
   }
 }

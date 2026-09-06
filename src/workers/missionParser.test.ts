@@ -1,122 +1,227 @@
+import { strToU8, zipSync } from 'fflate';
 import { describe, expect, it } from 'vitest';
-import { zipSync, strToU8 } from 'fflate';
+import {
+  convertLuaNode,
+  parseLuaTable,
+  parseDictionary,
+  parseMapResource,
+  parseMissionArchive,
+  shouldExtractEntry,
+  unzipWithLimits,
+  ZIP_LIMITS,
+} from './missionParser';
 
-import { decodeLuaString, parseMissionArchive } from './missionParser';
+describe('Lua table conversion', () => {
+  it('TableValueだけのテーブルをJavaScript配列に変換する', () => {
+    const result = parseLuaTable('mission = { "alpha", -2, true, nil }');
 
-/**
- * A .miz whose Lua contains Japanese used to fail outright:
- *
- *   [1189:8] code unit U+30A8 is not allowed in the current encoding mode
- *
- * luaparse was being run in `pseudo-latin1`, which requires every code unit to
- * be <= 0xFF, on a string that had already been decoded from UTF-8 -- so the
- * first Japanese character in the mission killed the upload. English missions
- * were unaffected, which is why it shipped.
- */
-function miz(entries: Record<string, string>): ArrayBuffer {
-  const zipped = zipSync(
-    Object.fromEntries(Object.entries(entries).map(([k, v]) => [k, strToU8(v)])),
-  );
-  return zipped.buffer.slice(
-    zipped.byteOffset,
-    zipped.byteOffset + zipped.byteLength,
-  ) as ArrayBuffer;
-}
-
-const MISSION_LUA = `mission = {
-  descriptionText = "エルブルス山の東で敵編隊を迎撃せよ",
-  sortie = "ASCII only",
-  start_time = 28800,
-  ["開始地点"] = "クラスノダール",
-  coalition = { blue = { country = { [1] = { name = "日本", id = 3 } } } },
-}`;
-
-describe('parseMissionArchive', () => {
-  it('reads a mission whose Lua contains Japanese', async () => {
-    const result = await parseMissionArchive(miz({ mission: MISSION_LUA }));
-    const mission = result.mission as Record<string, unknown>;
-
-    expect(mission.descriptionText).toBe('エルブルス山の東で敵編隊を迎撃せよ');
-    // A Japanese TABLE KEY, not just a value.
-    expect(mission['開始地点']).toBe('クラスノダール');
-
-    // `country` is `[1] = {...}` in Lua, which now comes back as a JS array.
-    const coalition = mission.coalition as Record<string, Record<string, unknown>>;
-    const countries = coalition.blue.country as unknown as Record<string, unknown>[];
-    const country = countries[0];
-    expect(country.name).toBe('日本');
-    // Numbers must survive the byte-level round trip as numbers.
-    expect(country.id).toBe(3);
-    expect(mission.start_time).toBe(28800);
-    expect(mission.sortie).toBe('ASCII only');
+    expect(Array.isArray(result)).toBe(true);
+    expect(result).toEqual(['alpha', -2, true, null]);
   });
 
-  it('keeps the non-Lua entries on ordinary UTF-8', async () => {
-    // parseDictionary/parseMapResource are regex-based and never see luaparse,
-    // so they must NOT get the byte-per-code-unit treatment -- and they hold
-    // most of a localised mission's prose.
-    //
-    // The shape below is what DCS actually writes: a Lua table whose keys
-    // already carry the DictKey_/ResKey_ prefix, indented with a tab and with
-    // a trailing comma.
-    const result = await parseMissionArchive(
-      miz({
-        mission: 'mission = { a = 1 }',
-        theatre: 'Caucasus\n',
-        'l10n/DEFAULT/dictionary':
-          'dictionary = \n{\n\t["DictKey_descriptionText_1"] = "ブリーフィング本文",\n}',
-        'l10n/DEFAULT/mapResource':
-          'mapResource = \n{\n\t["ResKey_ImageBriefing_2"] = "地図資料.png",\n}',
-      }),
-    );
+  it('[1]から始まる連続した数値キーのテーブルを配列に変換する', () => {
+    const result = parseLuaTable('mission = { [2] = "second", [1] = "first" }');
 
-    expect(result.theatre).toBe('Caucasus');
-    expect(result.dictionary.DictKey_descriptionText_1).toBe('ブリーフィング本文');
-    expect(result.mapResource.ResKey_ImageBriefing_2).toBe('地図資料.png');
+    expect(Array.isArray(result)).toBe(true);
+    expect(result).toEqual(['first', 'second']);
   });
 
-  it('reads DCS integer-keyed tables as arrays', async () => {
-    // Lua has no array type; DCS writes lists as `[1] = ..., [2] = ...`.
-    // Leaving them as objects made getArray() in the normalizer return [] and
-    // every flight, zone and threat silently disappeared.
-    const result = await parseMissionArchive(
-      miz({
-        mission:
-          'mission = { coalition = { blue = { country = { [1] = { name = "USA" }, [2] = { name = "JPN" } } } },' +
-          ' callsign = { [1] = 1, [2] = 1, ["name"] = "Enfield11" } }',
-      }),
-    );
-    const mission = result.mission as Record<string, unknown>;
+  it('数値キーと文字列キーが混在するテーブルをオブジェクトとして保持する', () => {
+    const result = parseLuaTable('mission = { [1] = "first", label = "mixed" }');
 
-    const country = (
-      (mission.coalition as Record<string, Record<string, unknown>>).blue as Record<string, unknown>
-    ).country;
-    expect(Array.isArray(country)).toBe(true);
-    expect((country as Record<string, unknown>[])[0].name).toBe('USA');
-    expect((country as Record<string, unknown>[])[1].name).toBe('JPN');
-
-    // A mixed table keeps its object shape: DCS writes callsigns that way.
-    expect(Array.isArray(mission.callsign)).toBe(false);
-    expect((mission.callsign as Record<string, unknown>).name).toBe('Enfield11');
+    expect(Array.isArray(result)).toBe(false);
+    expect(result).toEqual({ '1': 'first', label: 'mixed' });
   });
 
-  it('leaves binary attachments untouched', async () => {
-    const result = await parseMissionArchive(
-      miz({ mission: 'mission = { a = 1 }', 'KNEEBOARD/IMAGES/x.png': 'not really a png' }),
-    );
-    expect(result.kneeboardFiles.get('KNEEBOARD/IMAGES/x.png')).toBeInstanceOf(Uint8Array);
+  it('ネストしたroute.pointsの数値キーテーブルを配列に変換する', () => {
+    const result = parseLuaTable(`mission = {
+      route = {
+        points = {
+          [1] = { x = 10, y = -20 },
+          [2] = { x = 30, y = 40 },
+        },
+      },
+    }`) as { route: { points: unknown } };
+
+    expect(Array.isArray(result.route.points)).toBe(true);
+    expect(result.route.points).toEqual([
+      { x: 10, y: -20 },
+      { x: 30, y: 40 },
+    ]);
+  });
+
+  it('mission以外の変数名とlocal宣言でもテーブルを解析する', () => {
+    for (const variableName of ['mission', 'warehouses', 'options']) {
+      expect(parseLuaTable(`${variableName} = { enabled = true }`)).toEqual({ enabled: true });
+    }
+    expect(parseLuaTable('local warehouses = { enabled = false }')).toEqual({ enabled: false });
+  });
+
+  it('convertLuaNodeが単項マイナスと基本リテラルを変換する', () => {
+    expect(convertLuaNode({
+      type: 'UnaryExpression',
+      operator: '-',
+      argument: { type: 'NumericLiteral', value: 12 },
+    })).toBe(-12);
+    expect(convertLuaNode({ type: 'BooleanLiteral', value: false })).toBe(false);
+    expect(convertLuaNode({ type: 'NilLiteral', value: null })).toBeNull();
+    expect(convertLuaNode({ type: 'StringLiteral', value: 'text' })).toBe('text');
+  });
+
+  it('明示数値キーと暗黙フィールドは独立した連番をソース順に代入する', () => {
+    expect(parseLuaTable('mission = { [1] = "first", "second" }')).toEqual({ '1': 'second' });
+  });
+
+  it('実DCS形式のdictionaryを引用符付きキーとエスケープ込みで解析する', () => {
+    const content = String.raw`dictionary =
+{
+    ["DictKey_sortie_1"] = "Sortie \"Name\"",
+    ["DictKey_descriptionText_2"] = "line one\nline two",
+    ["DictKey_nonString_3"] = { ["ignored"] = "nested" },
+} -- end of dictionary`;
+
+    expect(parseDictionary(content)).toEqual({
+      DictKey_sortie_1: 'Sortie "Name"',
+      DictKey_descriptionText_2: 'line one\nline two',
+    });
+  });
+
+  it('実DCS形式のmapResourceを最上位の文字列値だけ解析する', () => {
+    const content = String.raw`mapResource =
+{
+    ["ResKey_briefing_1"] = "brief.png",
+    ["ResKey_map_2"] = "map,with,comma.jpg",
+    ["ResKey_nested_3"] = { ["ignored"] = "nested" },
+} -- end of mapResource`;
+
+    expect(parseMapResource(content)).toEqual({
+      ResKey_briefing_1: 'brief.png',
+      ResKey_map_2: 'map,with,comma.jpg',
+    });
+  });
+
+  it('日本語のミッション名・説明・グループ名を保持する', () => {
+    const result = parseLuaTable(`mission = {
+      name = "日本語のミッション",
+      descriptionText = "敵部隊を確認",
+      groupName = "第一飛行隊",
+    }`);
+
+    expect(result).toEqual({
+      name: '日本語のミッション',
+      descriptionText: '敵部隊を確認',
+      groupName: '第一飛行隊',
+    });
+  });
+
+  it('キリル文字を文字列リテラルから保持する', () => {
+    expect(parseLuaTable('mission = { groupName = "Группа Л" }')).toEqual({
+      groupName: 'Группа Л',
+    });
+  });
+
+  it('サロゲートペアを含む絵文字を分割せず保持する', () => {
+    const result = parseLuaTable('mission = { groupName = "飛行隊 🚀🛩️" }') as { groupName: string };
+
+    expect(result.groupName).toBe('飛行隊 🚀🛩️');
+    const emojiOffset = result.groupName.indexOf('🚀');
+    expect(result.groupName.codePointAt(emojiOffset)).toBe(0x1f680);
+    expect(result.groupName.slice(emojiOffset, emojiOffset + 2)).toBe('🚀');
+  });
+
+  it('Luaエスケープと非ASCII文字を同じ文字列で復元する', () => {
+    const content = String.raw`mission = {
+      text = "日本語\n\"引用符\" \\ \101",
+    }`;
+
+    expect(parseLuaTable(content)).toEqual({
+      text: '日本語\n"引用符" \\ e',
+    });
   });
 });
 
-describe('decodeLuaString', () => {
-  it('passes ASCII through unchanged', () => {
-    expect(decodeLuaString('Caucasus 07L')).toBe('Caucasus 07L');
+describe('ZIP展開ガード', () => {
+  it('展開後サイズが上限を超えるZIPを展開前に拒否する', async () => {
+    const oversizedEntry = new Uint8Array(ZIP_LIMITS.MAX_ENTRY_SIZE + 1);
+    const archive = zipSync({ oversized: [oversizedEntry, { level: 0 }] });
+
+    await expect(unzipWithLimits(archive)).rejects.toThrow('展開後サイズ');
   });
 
-  it('decodes bytes that luaparse hands back one per code unit', () => {
-    // What pseudo-latin1 produces for UTF-8 "日本": 6 bytes, 6 code units.
-    const bytes = 'æ¥æ¬';
-    expect(bytes.length).toBe(6);
-    expect(decodeLuaString(bytes)).toBe('日本');
+  it('展開後サイズと圧縮サイズの比率が高すぎるZIPを拒否する', async () => {
+    const repetitiveEntry = new Uint8Array(1024 * 1024);
+    const archive = zipSync({ repetitive: [repetitiveEntry, { level: 9 }] });
+
+    await expect(unzipWithLimits(archive)).rejects.toThrow('比率');
+  });
+
+  it('小さいmiz相当のZIPは展開できる', async () => {
+    const archive = zipSync({
+      mission: strToU8('mission = { route = { points = { [1] = { x = 1 } } } }'),
+      theatre: strToU8('Caucasus'),
+      warehouses: strToU8('warehouses = { airports = {} }'),
+      options: strToU8('options = { difficulty = "custom" }'),
+    });
+
+    await expect(unzipWithLimits(archive)).resolves.toMatchObject({
+      mission: expect.any(Uint8Array),
+      theatre: expect.any(Uint8Array),
+    });
+  });
+
+  it('l10n/DEFAULT配下の許可拡張子画像を展開し、他のリソースは除外する', async () => {
+    const archive = zipSync({
+      'l10n/DEFAULT/brief.PNG': strToU8('png'),
+      'l10n/DEFAULT/map.jpg': strToU8('jpg'),
+      'l10n/DEFAULT/script.lua': strToU8('lua'),
+      'other/brief.png': strToU8('png'),
+    });
+
+    const extracted = await unzipWithLimits(archive, shouldExtractEntry);
+    expect(extracted['l10n/DEFAULT/brief.PNG']).toEqual(strToU8('png'));
+    expect(extracted['l10n/DEFAULT/map.jpg']).toEqual(strToU8('jpg'));
+    expect(extracted['l10n/DEFAULT/script.lua']).toBeUndefined();
+    expect(extracted['other/brief.png']).toBeUndefined();
+  });
+
+  it('解析結果に展開済みのブリーフィング画像Uint8Arrayを保持する', async () => {
+    const archive = zipSync({
+      mission: strToU8('mission = {}'),
+      'l10n/DEFAULT/dictionary': strToU8(`dictionary = {
+        ["DictKey_sortie_1"] = "Sortie Name",
+      }`),
+      'l10n/DEFAULT/mapResource': strToU8(`mapResource = {
+        ["ResKey_briefing_1"] = "brief.png",
+      }`),
+      'l10n/DEFAULT/brief.png': strToU8('png-bytes'),
+      'l10n/DEFAULT/brief.txt': strToU8('not-an-image'),
+    });
+
+    const result = await parseMissionArchive(archive);
+    expect(result.dictionary).toEqual({ DictKey_sortie_1: 'Sortie Name' });
+    expect(result.mapResource).toEqual({ ResKey_briefing_1: 'brief.png' });
+    expect(result.briefingImages.get('l10n/DEFAULT/brief.png')).toEqual(strToU8('png-bytes'));
+    expect(result.briefingImages.has('l10n/DEFAULT/brief.txt')).toBe(false);
+  });
+
+  it('ZIP内のUTF-8文字列を復号し、UTF-8 BOMを除去してから解析する', async () => {
+    const archive = zipSync({
+      mission: strToU8('\uFEFFmission = { name = "日本語 🚀" }'),
+      theatre: strToU8('\uFEFFCaucasus'),
+      'l10n/DEFAULT/dictionary': strToU8('\uFEFFdictionary = { ["DictKey_sortie_1"] = "Лётная группа" }'),
+    });
+
+    const result = await parseMissionArchive(archive);
+
+    expect(result.mission).toEqual({ name: '日本語 🚀' });
+    expect(result.theatre).toBe('Caucasus');
+    expect(result.dictionary).toEqual({ DictKey_sortie_1: 'Лётная группа' });
+  });
+
+  it('画像は専用の1ファイル上限を超えると拒否する', async () => {
+    const oversizedImage = new Uint8Array(ZIP_LIMITS.MAX_IMAGE_SIZE + 1);
+    const archive = zipSync({ 'l10n/DEFAULT/brief.png': [oversizedImage, { level: 0 }] });
+
+    await expect(unzipWithLimits(archive, shouldExtractEntry)).rejects.toThrow('展開後サイズ');
   });
 });

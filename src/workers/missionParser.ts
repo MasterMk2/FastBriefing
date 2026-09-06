@@ -1,7 +1,19 @@
-import { unzipSync, strFromU8 } from 'fflate';
+import { strFromU8, unzip, Unzip, UnzipInflate } from 'fflate';
+import type { UnzipFileInfo } from 'fflate';
 import { parse } from 'luaparse';
 
-interface ParsedMissionFile {
+export const ZIP_LIMITS = {
+  MAX_ARCHIVE_SIZE: 50 * 1024 * 1024,
+  MAX_ENTRIES: 100,
+  MAX_TOTAL_SIZE: 50 * 1024 * 1024,
+  MAX_ENTRY_SIZE: 10 * 1024 * 1024,
+  MAX_IMAGE_SIZE: 5 * 1024 * 1024,
+  MAX_COMPRESSION_RATIO: 100,
+} as const;
+
+const ZIP_STREAM_CHUNK_SIZE = 64 * 1024;
+
+export interface ParsedMissionFile {
   mission: unknown;
   theatre: string;
   warehouses: unknown;
@@ -9,189 +21,479 @@ interface ParsedMissionFile {
   dictionary: Record<string, string>;
   mapResource: Record<string, string>;
   kneeboardFiles: Map<string, Uint8Array>;
+  briefingImages: Map<string, Uint8Array>;
 }
 
-const UTF8 = new TextDecoder('utf-8');
+type ZipEntryMetadata = Pick<UnzipFileInfo, 'name' | 'size' | 'originalSize' | 'compression'>;
 
-/**
- * Decode a luaparse `pseudo-latin1` string back into real text.
- *
- * In that mode luaparse requires every code unit to be <= 0xFF and hands the
- * literal back the same way, so a string is a sequence of BYTES stored one per
- * code unit. The mission Lua is UTF-8, so those bytes have to be decoded or
- * every non-ASCII name comes out as mojibake ("エルブルス" -> "ã¨ã«ãã«ã¹").
- */
-export function decodeLuaString(value: string): string {
-  // Fast path: pure ASCII is already correct and covers most of a mission file.
+function asError(error: unknown): Error {
+  return error instanceof Error ? error : new Error(String(error));
+}
+
+function zipError(message: string): Error {
+  return new Error(`ZIPファイルを安全に展開できませんでした。${message}`);
+}
+
+function displayEntryName(name: string): string {
+  // ZIPエントリ名に混入しうるASCII制御文字を表示用の「?」へ置換する意図的なマッチ。
   // eslint-disable-next-line no-control-regex
-  if (!/[^\x00-\x7f]/.test(value)) return value;
-  return UTF8.decode(Uint8Array.from(value, (c) => c.charCodeAt(0) & 0xff));
+  return name.replace(/[\u0000-\u001f\u007f]/g, '?');
 }
 
-/**
- * @param luaBytes raw bytes of the Lua file, NOT a decoded string.
- *
- * The bytes are decoded as latin1 so that one code unit is one UTF-8 byte,
- * which is what `pseudo-latin1` requires. Handing it a UTF-8-decoded string
- * instead is what produced
- *   "[1189:8] code unit U+30A8 is not allowed in the current encoding mode"
- * on any mission containing Japanese (U+30A8 is エ) -- the file loaded fine in
- * English and failed outright in Japanese.
- *
- * `encodingMode: 'none'` looks like the obvious fix and is a trap: it accepts
- * every code unit but sets `discardStrings`, so `StringLiteral.value` comes
- * back `null` and every name and description in the mission silently becomes
- * empty. Verified against luaparse 0.3.1.
- */
-export function parseLuaTable(luaBytes: Uint8Array, rootName: string): unknown {
-  try {
-    const luaCode = strFromU8(luaBytes, true);
-    const ast = parse(luaCode, { encodingMode: 'pseudo-latin1' });
+function formatBytes(bytes: number): string {
+  return `${bytes.toLocaleString('ja-JP')}バイト`;
+}
 
-    if (ast.type === 'Chunk' && ast.body.length > 0) {
-      const firstStat = ast.body[0];
-      if (firstStat.type === 'AssignmentStatement' && firstStat.variables.length > 0) {
-        const varExpr = firstStat.variables[0];
-        // The root variable is named after the entry: `mission = {...}` in
-        // `mission`, `warehouses = {...}` in `warehouses`, and so on. Hardcoding
-        // `mission` here made every caller but the first throw.
-        if (varExpr.type === 'Identifier' && varExpr.name === rootName) {
-          // `init` is an ARRAY of expressions (Lua allows `a, b = 1, 2`), so
-          // the table is init[0]. Passing the array itself fell through
-          // convertLuaNode's switch to `default`, which returns the raw AST
-          // node -- every mission came back as unconverted luaparse output
-          // with no usable fields. Separate, pre-existing bug; the encoding
-          // failure simply hid it by throwing first.
-          return convertLuaNode(firstStat.init[0]);
-        }
-      }
+const BRIEFING_IMAGE_PATTERN = /^l10n\/DEFAULT\/.*\.(?:png|jpe?g|gif|bmp)$/i;
+
+function isBriefingImageEntry(name: string): boolean {
+  return BRIEFING_IMAGE_PATTERN.test(name);
+}
+
+function entrySizeLimit(name: string): number {
+  return isBriefingImageEntry(name) ? ZIP_LIMITS.MAX_IMAGE_SIZE : ZIP_LIMITS.MAX_ENTRY_SIZE;
+}
+
+function validateZipEntryMetadata(entry: {
+  name: string;
+  size?: number;
+  originalSize?: number;
+}, maxEntrySize = ZIP_LIMITS.MAX_ENTRY_SIZE): Error | null {
+  const { name, size: compressedSize, originalSize } = entry;
+  const shownName = `「${displayEntryName(name)}」`;
+
+  if (originalSize !== undefined && (!Number.isFinite(originalSize) || originalSize < 0)) {
+    return zipError(`エントリ${shownName}の展開後サイズが不正です。`);
+  }
+  if (compressedSize !== undefined && (!Number.isFinite(compressedSize) || compressedSize < 0)) {
+    return zipError(`エントリ${shownName}の圧縮サイズが不正です。`);
+  }
+  if (originalSize !== undefined && originalSize > maxEntrySize) {
+    return zipError(
+      `エントリ${shownName}の展開後サイズ（${formatBytes(originalSize)}）が上限（${formatBytes(maxEntrySize)}）を超えています。`
+    );
+  }
+
+  if (compressedSize !== undefined && originalSize !== undefined) {
+    const compressionRatio = compressedSize === 0
+      ? (originalSize === 0 ? 0 : Number.POSITIVE_INFINITY)
+      : originalSize / compressedSize;
+    if (compressionRatio > ZIP_LIMITS.MAX_COMPRESSION_RATIO) {
+      return zipError(
+        `エントリ${shownName}の展開後サイズと圧縮サイズの比率（${compressionRatio.toFixed(1)}倍）が上限（${ZIP_LIMITS.MAX_COMPRESSION_RATIO}倍）を超えています。`
+      );
     }
-    throw new Error('Lua table ' + rootName + ' not found');
-  } catch (e) {
-    console.error('Lua parse error:', e);
-    throw e;
   }
+
+  return null;
 }
 
-/**
- * Lua has no array type: a list is a table with the integer keys 1..n, and DCS
- * writes them out explicitly (`["units"] = { [1] = {...}, [2] = {...} }`). A
- * straight key/value conversion therefore yields `{"1": ..., "2": ...}`, which
- * every consumer downstream mistakes for a map -- `getArray` returns `[]` and
- * lists silently come back empty, or `for...of` throws outright.
- *
- * Convert only when the keys are exactly 1..n in order. DCS also emits mixed
- * tables such as `callsign = { [1] = 1, [2] = 1, ["name"] = "Enfield11" }`,
- * and those have to stay objects.
- */
-function toArrayIfSequence(obj: Record<string, unknown>): unknown {
-  const keys = Object.keys(obj);
-  if (keys.length === 0) return obj;
-  // Integer-like keys are enumerated in ascending numeric order, so comparing
-  // position by position is enough to reject holes and extra keys.
-  for (let i = 0; i < keys.length; i++) {
-    if (keys[i] !== String(i + 1)) return obj;
-  }
-  return keys.map((k) => obj[k]);
+function inspectZip(data: Uint8Array): Promise<ZipEntryMetadata[]> {
+  return new Promise((resolve, reject) => {
+    const entries: ZipEntryMetadata[] = [];
+    let entryCount = 0;
+    let totalSize = 0;
+    let validationError: Error | null = null;
+
+    try {
+      unzip(data, {
+        filter: (entry) => {
+          entryCount += 1;
+          if (entryCount > ZIP_LIMITS.MAX_ENTRIES && !validationError) {
+            validationError = zipError(
+              `ZIP内のファイル数（${entryCount}件）が上限（${ZIP_LIMITS.MAX_ENTRIES}件）を超えています。`
+            );
+          }
+
+          const entryError = validateZipEntryMetadata(entry, entrySizeLimit(entry.name));
+          if (entryError && !validationError) {
+            validationError = entryError;
+          }
+
+          if (entry.originalSize !== undefined) {
+            totalSize += entry.originalSize;
+            if (totalSize > ZIP_LIMITS.MAX_TOTAL_SIZE && !validationError) {
+              validationError = zipError(
+                `ZIP全体の展開後サイズ（${formatBytes(totalSize)}）が上限（${formatBytes(ZIP_LIMITS.MAX_TOTAL_SIZE)}）を超えています。`
+              );
+            }
+          }
+
+          if (entries.length < ZIP_LIMITS.MAX_ENTRIES) {
+            entries.push(entry);
+          }
+          return false;
+        },
+      }, (error) => {
+        if (error) {
+          reject(zipError(`ZIPの構造を読み取れませんでした: ${asError(error).message}`));
+        } else if (validationError) {
+          reject(validationError);
+        } else {
+          resolve(entries);
+        }
+      });
+    } catch (error) {
+      reject(zipError(`ZIPの構造を読み取れませんでした: ${asError(error).message}`));
+    }
+  });
 }
 
-function convertLuaNode(node: unknown): unknown {
-  if (!node || typeof node !== 'object') return node;
-  
+function concatenateChunks(chunks: Uint8Array[], totalSize: number): Uint8Array {
+  if (chunks.length === 0) return new Uint8Array(0);
+  if (chunks.length === 1) return chunks[0];
+
+  const result = new Uint8Array(totalSize);
+  let offset = 0;
+  for (const chunk of chunks) {
+    result.set(chunk, offset);
+    offset += chunk.length;
+  }
+  return result;
+}
+
+function extractZipEntries(
+  data: Uint8Array,
+  metadata: ZipEntryMetadata[],
+  shouldExtract: (name: string) => boolean
+): Promise<Record<string, Uint8Array>> {
+  return new Promise((resolve, reject) => {
+    const files: Record<string, Uint8Array> = {};
+    const metadataByName = new Map<string, ZipEntryMetadata[]>();
+    let extractedEntryCount = 0;
+    let extractedSize = 0;
+    let offset = 0;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let settled = false;
+
+    for (const entry of metadata) {
+      const entriesForName = metadataByName.get(entry.name) ?? [];
+      entriesForName.push(entry);
+      metadataByName.set(entry.name, entriesForName);
+    }
+    const stream = new Unzip((file) => {
+      extractedEntryCount += 1;
+      if (extractedEntryCount > ZIP_LIMITS.MAX_ENTRIES) {
+        throw zipError(`ZIP内のファイル数が上限（${ZIP_LIMITS.MAX_ENTRIES}件）を超えています。`);
+      }
+
+      const entriesForName = metadataByName.get(file.name);
+      const declared = entriesForName?.shift();
+      const entryError = validateZipEntryMetadata({
+        name: file.name,
+        size: file.size ?? declared?.size,
+        originalSize: file.originalSize ?? declared?.originalSize,
+      }, entrySizeLimit(file.name));
+      if (entryError) throw entryError;
+      if (!shouldExtract(file.name)) return;
+
+      const chunks: Uint8Array[] = [];
+      let entrySize = 0;
+      const maxEntrySize = entrySizeLimit(file.name);
+      file.ondata = (error, chunk, final) => {
+        if (error) throw zipError(`エントリ「${displayEntryName(file.name)}」を展開できませんでした: ${asError(error).message}`);
+        if (chunk && chunk.length > 0) {
+          entrySize += chunk.length;
+          extractedSize += chunk.length;
+          if (entrySize > maxEntrySize) {
+            throw zipError(
+              `エントリ「${displayEntryName(file.name)}」の展開後サイズが上限（${formatBytes(maxEntrySize)}）を超えたため、展開を中断しました。`
+            );
+          }
+          if (extractedSize > ZIP_LIMITS.MAX_TOTAL_SIZE) {
+            throw zipError(
+              `ZIP全体の展開後サイズが上限（${formatBytes(ZIP_LIMITS.MAX_TOTAL_SIZE)}）を超えたため、展開を中断しました。`
+            );
+          }
+          chunks.push(chunk);
+        }
+        if (final) {
+          const expectedSize = file.originalSize ?? declared?.originalSize;
+          if (expectedSize !== undefined && entrySize !== expectedSize) {
+            throw zipError(
+              `エントリ「${displayEntryName(file.name)}」の展開サイズ（${formatBytes(entrySize)}）が宣言値と一致しません。`
+            );
+          }
+
+          const compressedSize = file.size ?? declared?.size;
+          if (compressedSize === undefined) {
+            const compressionRatio = data.length === 0 ? 0 : entrySize / data.length;
+            if (compressionRatio > ZIP_LIMITS.MAX_COMPRESSION_RATIO) {
+              throw zipError(
+                `エントリ「${displayEntryName(file.name)}」の圧縮率が上限（${ZIP_LIMITS.MAX_COMPRESSION_RATIO}倍）を超えています。`
+              );
+            }
+          }
+          files[file.name] = concatenateChunks(chunks, entrySize);
+        }
+      };
+      file.start();
+    });
+    stream.register(UnzipInflate);
+
+    const fail = (error: unknown) => {
+      if (settled) return;
+      settled = true;
+      if (timer !== undefined) clearTimeout(timer);
+      const normalized = asError(error);
+      reject(normalized.message.startsWith('ZIPファイルを安全に') ? normalized : zipError(normalized.message));
+    };
+
+    const feed = () => {
+      if (settled) return;
+      const end = Math.min(offset + ZIP_STREAM_CHUNK_SIZE, data.length);
+      const final = end === data.length;
+      try {
+        stream.push(data.subarray(offset, end), final);
+      } catch (error) {
+        fail(error);
+        return;
+      }
+
+      offset = end;
+      if (final) {
+        settled = true;
+        resolve(files);
+      } else {
+        timer = setTimeout(feed, 0);
+      }
+    };
+
+    feed();
+  });
+}
+
+export async function unzipWithLimits(
+  data: Uint8Array,
+  shouldExtract: (name: string) => boolean = () => true
+): Promise<Record<string, Uint8Array>> {
+  if (data.length > ZIP_LIMITS.MAX_ARCHIVE_SIZE) {
+    throw zipError(
+      `圧縮後のファイルサイズ（${formatBytes(data.length)}）が上限（${formatBytes(ZIP_LIMITS.MAX_ARCHIVE_SIZE)}）を超えています。`
+    );
+  }
+
+  const metadata = await inspectZip(data);
+  return extractZipEntries(data, metadata, shouldExtract);
+}
+
+function decodeUtf8Entry(data: Uint8Array): string {
+  const text = strFromU8(data);
+  return text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
+}
+
+function decodeLuaLongString(raw: string): string {
+  let level = 0;
+  while (raw.charAt(level + 1) === '=') level += 1;
+
+  let contentStart = level + 2;
+  if (raw.charCodeAt(contentStart) === 13) {
+    contentStart += raw.charCodeAt(contentStart + 1) === 10 ? 2 : 1;
+  } else if (raw.charCodeAt(contentStart) === 10) {
+    contentStart += 1;
+  }
+
+  const contentEnd = raw.length - level - 2;
+  return raw.slice(contentStart, contentEnd);
+}
+
+function decodeLuaQuotedString(raw: string): string {
+  const contentEnd = raw.length - 1;
+  let contentStart = 1;
+  let result = '';
+
+  for (let index = 1; index < contentEnd;) {
+    if (raw.charCodeAt(index) !== 92) {
+      index += 1;
+      continue;
+    }
+
+    result += raw.slice(contentStart, index);
+    index += 1;
+    const escape = raw.charAt(index);
+
+    switch (escape) {
+      case 'a': result += '\x07'; index += 1; break;
+      case 'b': result += '\b'; index += 1; break;
+      case 'f': result += '\f'; index += 1; break;
+      case 'n': result += '\n'; index += 1; break;
+      case 'r': result += '\r'; index += 1; break;
+      case 't': result += '\t'; index += 1; break;
+      case 'v': result += '\x0b'; index += 1; break;
+      case '\r':
+        index += raw.charAt(index + 1) === '\n' ? 2 : 1;
+        result += '\n';
+        break;
+      case '\n':
+        index += 1;
+        result += '\n';
+        break;
+      case '0': case '1': case '2': case '3': case '4':
+      case '5': case '6': case '7': case '8': case '9': {
+        const digitStart = index;
+        while (index < contentEnd && index - digitStart < 3) {
+          const code = raw.charCodeAt(index);
+          if (code < 48 || code > 57) break;
+          index += 1;
+        }
+        result += String.fromCharCode(Number.parseInt(raw.slice(digitStart, index), 10));
+        break;
+      }
+      default:
+        result += escape;
+        index += 1;
+        break;
+    }
+
+    contentStart = index;
+  }
+
+  return result + raw.slice(contentStart, contentEnd);
+}
+
+function decodeLuaStringLiteral(raw: string): string {
+  return raw.charAt(0) === '[' ? decodeLuaLongString(raw) : decodeLuaQuotedString(raw);
+}
+
+export function parseLuaTable(luaCode: string): unknown {
+  let ast: { type: string; body: unknown[] };
+  try {
+    // `none` is luaparse 0.3.1's only mode that accepts arbitrary UTF-16 input.
+    // It intentionally sets StringLiteral.value to null, so conversion below
+    // restores string values from each literal's raw source text.
+    ast = parse(luaCode, { encodingMode: 'none' }) as unknown as { type: string; body: unknown[] };
+  } catch (error) {
+    console.error('Lua parse error:', error);
+    throw new Error(`Luaファイルを解析できませんでした: ${asError(error).message}`);
+  }
+
+  if (ast.type === 'Chunk' && ast.body.length > 0) {
+    const firstStat = ast.body[0] as unknown as Record<string, unknown>;
+    if (firstStat.type === 'AssignmentStatement' || firstStat.type === 'LocalStatement') {
+      const initializers = firstStat.init;
+      const initializer = Array.isArray(initializers) ? initializers[0] : initializers;
+      if (initializer !== undefined) return convertLuaNode(initializer);
+    }
+  }
+
+  throw new Error('Luaテーブルが見つかりません。');
+}
+
+export function convertLuaNode(node: unknown): unknown {
+  if (node === null || typeof node !== 'object') return node;
+  if (Array.isArray(node)) return node.map((value) => convertLuaNode(value));
+
   const n = node as Record<string, unknown>;
-  
+
   switch (n.type) {
-    case 'TableConstructorExpression':
+    case 'TableConstructorExpression': {
+      const fields = Array.isArray(n.fields) ? n.fields : [];
+      if (fields.every((field) => (field as Record<string, unknown>).type === 'TableValue')) {
+        return fields.map((field) => convertLuaNode((field as Record<string, unknown>).value));
+      }
+
+      const numericKeys = fields.map((field) => {
+        const f = field as Record<string, unknown>;
+        if (f.type !== 'TableKey') return undefined;
+        const key = convertLuaNode(f.key);
+        return typeof key === 'number' && Number.isInteger(key) && key > 0 ? key : undefined;
+      });
+      const isNumericKeyArray = fields.length > 0
+        && numericKeys.every((key): key is number => key !== undefined)
+        && new Set(numericKeys).size === numericKeys.length
+        && [...numericKeys].sort((a, b) => a - b).every((key, index) => key === index + 1);
+
+      if (isNumericKeyArray) {
+        const values = new Array<unknown>(fields.length);
+        for (let index = 0; index < fields.length; index += 1) {
+          const field = fields[index] as Record<string, unknown>;
+          values[numericKeys[index] - 1] = convertLuaNode(field.value);
+        }
+        return values;
+      }
+
       const result: Record<string, unknown> = {};
-      const fields = (n.fields as unknown[]) || [];
+      let implicitIndex = 1;
       for (const field of fields) {
-        const f = field as { type: string; key?: unknown; value?: unknown; name?: string };
-        if (f.type === 'TableKey' && f.key && f.value) {
+        const f = field as Record<string, unknown>;
+        if (f.type === 'TableKey') {
           const key = convertLuaNode(f.key);
           const value = convertLuaNode(f.value);
-          if (typeof key === 'string' || typeof key === 'number') {
+          if (typeof key === 'string' || typeof key === 'number' || typeof key === 'boolean') {
             result[String(key)] = value;
           }
-        } else if (f.type === 'TableKeyString' && f.key && f.value) {
-          const rawKey = f.key as { name?: string; value?: string };
-          // `name` is a Lua identifier and therefore ASCII; `value` is a
-          // string literal and carries the same byte-per-code-unit encoding
-          // as any other one.
-          const key =
-            rawKey.name ?? (rawKey.value !== undefined ? decodeLuaString(rawKey.value) : '');
-          const value = convertLuaNode(f.value);
-          result[key] = value;
-        } else if (f.type === 'TableValue' && f.value) {
-          const value = convertLuaNode(f.value);
-          const idx = Object.keys(result).length + 1;
-          result[idx] = value;
+        } else if (f.type === 'TableKeyString') {
+          const key = convertLuaNode(f.key);
+          if (typeof key === 'string' || typeof key === 'number') {
+            result[String(key)] = convertLuaNode(f.value);
+          }
+        } else if (f.type === 'TableValue') {
+          result[String(implicitIndex)] = convertLuaNode(f.value);
+          implicitIndex += 1;
         }
       }
-      return toArrayIfSequence(result);
+      return result;
+    }
+
+    case 'UnaryExpression': {
+      const argument = convertLuaNode(n.argument);
+      if (n.operator === '-' && typeof argument === 'number') return -argument;
+      if (n.operator === '+' && typeof argument === 'number') return argument;
+      if (n.operator === 'not') return argument === null || argument === false;
+      return n;
+    }
 
     case 'NumericLiteral':
-      return n.value;
-      
     case 'StringLiteral':
-      return decodeLuaString(n.value as string);
-      
+      if (n.value === null && typeof n.raw === 'string') return decodeLuaStringLiteral(n.raw);
+      return n.value;
     case 'BooleanLiteral':
       return n.value;
-      
+
     case 'NilLiteral':
       return null;
-      
+
     case 'Identifier':
       return n.name;
-      
+
     default:
       console.warn('Unknown Lua node type:', n.type);
       return n;
   }
 }
 
-/**
- * `l10n/DEFAULT/dictionary` and `mapResource` are Lua tables whose keys already
- * carry their prefix:
- *
- *   dictionary =
- *   {
- *       ["DictKey_sortie_5"] = "text",
- *   }
- *
- * The previous pattern looked for `[5] = "text"` and rebuilt the key as
- * `DictKey_5`, so it matched nothing and every lookup fell back to showing the
- * raw `DictKey_*` token in the UI.
- */
-function parseKeyedStrings(content: string, prefix: string): Record<string, string> {
-  const out: Record<string, string> = {};
+function parseStringTable(content: string): Record<string, string> {
+  const parsed = parseLuaTable(content);
+  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
 
-  for (const line of content.split('\n')) {
-    const match = line.match(/^\s*\["([^"]+)"\]\s*=\s*"(.*)"\s*,?\s*$/);
-    if (match && match[1].startsWith(prefix)) {
-      out[match[1]] = match[2].replace(/\\"/g, '"').replace(/\\\\/g, '\\');
-    }
+  const result: Record<string, string> = {};
+  for (const [key, value] of Object.entries(parsed)) {
+    if (typeof value === 'string') result[key] = value;
   }
-  return out;
+  return result;
 }
 
-function parseDictionary(content: string): Record<string, string> {
-  return parseKeyedStrings(content, 'DictKey_');
+export function parseDictionary(content: string): Record<string, string> {
+  return parseStringTable(content);
 }
 
-function parseMapResource(content: string): Record<string, string> {
-  return parseKeyedStrings(content, 'ResKey_');
+export function parseMapResource(content: string): Record<string, string> {
+  return parseStringTable(content);
 }
 
-/**
- * Parse a .miz archive into its component tables.
- *
- * Kept separate from the worker plumbing so it can be called directly: the
- * module previously assigned `self.onmessage` at import time, which throws
- * anywhere there is no `self` and made the whole file impossible to test.
- */
-export async function parseMissionArchive(file: ArrayBuffer): Promise<ParsedMissionFile> {
-  const zip = unzipSync(new Uint8Array(file)) as Record<string, Uint8Array>;
+export function shouldExtractEntry(name: string): boolean {
+  return name === 'mission'
+    || name === 'theatre'
+    || name === 'warehouses'
+    || name === 'options'
+    || name === 'l10n/DEFAULT/dictionary'
+    || name === 'l10n/DEFAULT/mapResource'
+    || isBriefingImageEntry(name)
+    || name.startsWith('KNEEBOARD/');
+}
+
+export async function parseMissionArchive(data: Uint8Array): Promise<ParsedMissionFile> {
+  const zip = await unzipWithLimits(data, shouldExtractEntry);
 
   const result: ParsedMissionFile = {
     mission: null,
@@ -201,44 +503,43 @@ export async function parseMissionArchive(file: ArrayBuffer): Promise<ParsedMiss
     dictionary: {},
     mapResource: {},
     kneeboardFiles: new Map(),
+    briefingImages: new Map(),
   };
 
   for (const name of Object.keys(zip)) {
     const entry = zip[name];
-    // Only the entries that go through luaparse are handed raw bytes: it is
-    // fed latin1 (one code unit per byte) and the strings are decoded on the
-    // way out. parseDictionary/parseMapResource are line- and regex-based,
-    // never touch luaparse, and want ordinary UTF-8 text -- which is also
-    // where most of a Japanese mission's prose lives, so decoding them the
-    // other way would break exactly what this fix is for.
+
     if (name === 'mission') {
-      result.mission = parseLuaTable(entry, 'mission');
+      result.mission = parseLuaTable(decodeUtf8Entry(entry));
     } else if (name === 'theatre') {
-      result.theatre = strFromU8(entry).trim();
+      result.theatre = decodeUtf8Entry(entry).trim();
     } else if (name === 'warehouses') {
-      result.warehouses = parseLuaTable(entry, 'warehouses');
+      result.warehouses = parseLuaTable(decodeUtf8Entry(entry));
     } else if (name === 'options') {
-      result.options = parseLuaTable(entry, 'options');
+      result.options = parseLuaTable(decodeUtf8Entry(entry));
     } else if (name === 'l10n/DEFAULT/dictionary') {
-      result.dictionary = parseDictionary(strFromU8(entry));
+      result.dictionary = parseDictionary(decodeUtf8Entry(entry));
     } else if (name === 'l10n/DEFAULT/mapResource') {
-      result.mapResource = parseMapResource(strFromU8(entry));
+      result.mapResource = parseMapResource(decodeUtf8Entry(entry));
     } else if (name.startsWith('KNEEBOARD/')) {
       result.kneeboardFiles.set(name, entry);
+    } else if (isBriefingImageEntry(name)) {
+      result.briefingImages.set(name, entry);
     }
   }
 
   return result;
 }
 
-// Registration is guarded: a test runner has no `self`, and assigning to it
-// unconditionally is what made this module unimportable outside a worker.
-if (typeof self !== 'undefined') {
+// Importing this module from the main thread to share ZIP_LIMITS must not
+// install a main-thread message handler. Dedicated workers do not expose document.
+if (typeof self !== 'undefined' && typeof document === 'undefined') {
   self.onmessage = async (e: MessageEvent<{ file: ArrayBuffer }>) => {
     try {
-      self.postMessage({ type: 'success', data: await parseMissionArchive(e.data.file) });
+      const result = await parseMissionArchive(new Uint8Array(e.data.file));
+      self.postMessage({ type: 'success', data: result });
     } catch (error) {
-      self.postMessage({ type: 'error', error: (error as Error).message });
+      self.postMessage({ type: 'error', error: asError(error).message });
     }
   };
 }

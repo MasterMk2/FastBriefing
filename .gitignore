@@ -6,6 +6,7 @@ node_modules/
 # build outputs
 dist/
 dist-ssr/
+*.tsbuildinfo
 *.local
 .vite/
 
@@ -28,8 +29,7 @@ lerna-debug.log*
 *.sw?
 
 # research snapshots (ED forum HTML) - keep URLs in docs/research-notes.md, not raw HTML
-# uncomment to exclude if re-scraped: *.html is too broad because index.html is required
-# so exclude only research dumps explicitly:
+# Exclude only research dumps; *.html is too broad because index.html is required:
 brief.html
 clouds.html
 draken.html
@@ -43,13 +43,10 @@ kbres.html
 mbr.html
 mpdtc.html
 wombat.html
+docs/research/*.html
 
 # env / secrets
-.env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+.env*
 
 # coverage
 coverage/

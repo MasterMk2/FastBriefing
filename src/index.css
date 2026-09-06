@@ -21,15 +21,99 @@ body {
   width: 100%;
 }
 
+.print-briefing {
+  display: none;
+}
+
 @media print {
-  .no-print {
+  @page {
+    size: A4 portrait;
+    margin: 12mm;
+  }
+
+  html,
+  body {
+    background: #fff;
+  }
+
+  .no-print,
+  .tab-nav,
+  .header,
+  .map-controls,
+  .export-actions,
+  .tab-button,
+  .btn,
+  button,
+  input,
+  select,
+  .side-selector,
+  .flight-list,
+  .leaflet-control-container {
     display: none !important;
   }
-  .tab-nav, .header, .map-controls, .export-actions {
+
+  .mission-view {
+    box-shadow: none;
+    border-radius: 0;
+    overflow: visible;
+  }
+
+  .main,
+  .tab-content {
+    padding: 0;
+  }
+
+  /* ExportTab owns the print-only copy of every briefing section. */
+  .tab-panel.export > .markdown-preview,
+  .tab-panel.export > .export-help {
     display: none !important;
   }
-  .tab-panel {
+
+  .print-briefing {
     display: block !important;
+  }
+
+  .print-briefing .print-view {
+    display: block !important;
+  }
+
+  .section,
+  .task-text,
+  .support-asset,
+  .flight-detail-content,
+  .data-table,
+  pre {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  h2,
+  h3,
+  h4 {
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+
+  .data-table {
+    break-inside: auto;
+    page-break-inside: auto;
+  }
+
+  .data-table tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .print-view > .print-section,
+  .print-view > .print-flight-list,
+  .print-view .print-flight {
+    break-inside: auto;
+    page-break-inside: auto;
+  }
+
+  .print-view .print-flight {
+    break-before: page;
+    page-break-before: always;
   }
 }
 
@@ -243,6 +327,10 @@ body {
 .info-grid dd {
   margin: 0;
   color: #333;
+}
+
+.print-definition {
+  display: contents;
 }
 
 .data-table {
@@ -611,5 +699,125 @@ body {
   
   .tab-nav {
     -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* Accessibility and drag-and-drop interaction additions. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.drop-zone.dragging {
+  border-color: #0066ff;
+  background: #eaf2ff;
+  box-shadow: 0 0 0 3px rgba(0, 102, 255, 0.15);
+}
+
+.drop-overlay {
+  position: absolute;
+  inset: 1rem;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 3px dashed #0066ff;
+  border-radius: 12px;
+  background: rgba(234, 242, 255, 0.94);
+  color: #0044aa;
+  font-size: 1.125rem;
+  font-weight: 600;
+  pointer-events: none;
+}
+
+.drop-label:focus-visible,
+.tab-button:focus-visible,
+.tab-content:focus-visible {
+  outline: 3px solid #0066ff;
+  outline-offset: 2px;
+}
+
+.drop-notice {
+  max-width: 600px;
+  margin: 1rem auto 0;
+  padding: 0.75rem;
+  border: 1px solid #90caf9;
+  border-radius: 4px;
+  background: #e3f2fd;
+  color: #0d47a1;
+}
+
+.app-error {
+  max-width: 600px;
+  margin: 1rem auto 0;
+}
+
+.app-error p {
+  margin: 0;
+}
+
+.error-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-top: 0.75rem;
+}
+
+.tab-loading {
+  min-height: 400px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #666;
+}
+
+/* Keep each overview label/value pair together while allowing multiple columns. */
+.overview .info-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 28rem), 1fr));
+  align-items: start;
+}
+
+.overview .info-grid-item {
+  display: grid;
+  grid-template-columns: minmax(7rem, max-content) minmax(0, 1fr);
+  gap: 0.75rem;
+  align-items: baseline;
+  min-width: 0;
+}
+
+.overview .info-grid-item dt,
+.overview .info-grid-item dd {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.map-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.25rem;
+  margin-top: 0.75rem;
+}
+
+.map-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  white-space: nowrap;
+}
+
+.map-legend-item > [aria-hidden="true"] {
+  flex: 0 0 auto;
+}
+
+@media (max-width: 768px) {
+  .overview .info-grid {
+    grid-template-columns: 1fr;
   }
 }

@@ -1,4 +1,15 @@
 import proj4 from 'proj4';
+import { forward as mgrsForward } from 'mgrs';
+import aircraftCoordinateDefaults from '../data/aircraftCoordinateDefaults.json';
+import type { CoordinateFormat } from '../types/mission';
+
+/**
+ * MGRS accuracy is the number of digits used for each of the easting and
+ * northing values.  Therefore accuracy 4 produces the FR-12 eight-digit
+ * reference (four digits east and four digits north).
+ */
+export type MGRSAccuracy = 1 | 2 | 3 | 4 | 5;
+export const DEFAULT_MGRS_ACCURACY: MGRSAccuracy = 4;
 
 export interface ProjectionParams {
   central_meridian: number;
@@ -7,6 +18,8 @@ export interface ProjectionParams {
   scale_factor: number;
 }
 
+// These values mirror pydcs master dcs/terrain/*/projection.py.  Keep the
+// false-northing sign exactly as published; Falklands is intentionally positive.
 export const PROJECTIONS: Record<string, ProjectionParams> = {
   Caucasus: {
     central_meridian: 33,
@@ -28,50 +41,50 @@ export const PROJECTIONS: Record<string, ProjectionParams> = {
   },
   Nevada: {
     central_meridian: -117,
-    false_easting: 292500,
-    false_northing: -4265000,
+    false_easting: -193996.80999964548,
+    false_northing: -4410028.063999966,
     scale_factor: 0.9996,
   },
   Normandy: {
     central_meridian: -3,
-    false_easting: 300000,
-    false_northing: -5200000,
+    false_easting: -195526.00000000204,
+    false_northing: -5484812.999999951,
     scale_factor: 0.9996,
   },
   PersianGulf: {
-    central_meridian: 51,
-    false_easting: 300000,
-    false_northing: -3000000,
+    central_meridian: 57,
+    false_easting: 75755.99999999645,
+    false_northing: -2894933.0000000377,
     scale_factor: 0.9996,
   },
   TheChannel: {
-    central_meridian: -2,
-    false_easting: 300000,
-    false_northing: -5700000,
+    central_meridian: 3,
+    false_easting: 99376.00000000288,
+    false_northing: -5636889.00000001,
     scale_factor: 0.9996,
   },
   Falklands: {
-    central_meridian: -60,
-    false_easting: 300000,
-    false_northing: -5700000,
+    central_meridian: -57,
+    false_easting: 147639.99999997593,
+    false_northing: 5815417.000000032,
     scale_factor: 0.9996,
   },
   Sinai: {
     central_meridian: 33,
-    false_easting: 300000,
-    false_northing: -3400000,
+    false_easting: 169221.9999999585,
+    false_northing: -3325312.9999999693,
     scale_factor: 0.9996,
   },
   Kola: {
-    central_meridian: 33,
-    false_easting: 300000,
-    false_northing: -7500000,
+    central_meridian: 21,
+    false_easting: -62702.00000000087,
+    false_northing: -7543624.999999979,
     scale_factor: 0.9996,
   },
   GermanyCW: {
-    central_meridian: 10.5,
-    false_easting: 300000,
-    false_northing: -5500000,
+    central_meridian: 21,
+    false_easting: 35427.619999985734,
+    false_northing: -6061633.128000011,
     scale_factor: 0.9996,
   },
 };
@@ -111,7 +124,12 @@ export function latLonToDCS(theatre: string, lat: number, lon: number): [number,
   return [result[1], result[0]];
 }
 
-export function formatCoordinate(lat: number, lon: number, format: 'DDM' | 'DMS' | 'MGRS' | 'DEC'): string {
+export function formatCoordinate(
+  lat: number,
+  lon: number,
+  format: CoordinateFormat,
+  mgrsAccuracy: number = DEFAULT_MGRS_ACCURACY,
+): string {
   switch (format) {
     case 'DEC':
       return `${lat.toFixed(6)}°, ${lon.toFixed(6)}°`;
@@ -120,88 +138,137 @@ export function formatCoordinate(lat: number, lon: number, format: 'DDM' | 'DMS'
     case 'DMS':
       return formatDMS(lat, lon);
     case 'MGRS':
-      return formatMGRS(lat, lon);
+      return formatMGRS(lat, lon, mgrsAccuracy);
     default:
       return formatDDM(lat, lon);
   }
 }
 
 function formatDDM(lat: number, lon: number): string {
-  const latDeg = Math.floor(Math.abs(lat));
-  const latMin = (Math.abs(lat) - latDeg) * 60;
-  const lonDeg = Math.floor(Math.abs(lon));
-  const lonMin = (Math.abs(lon) - lonDeg) * 60;
+  const latComponent = formatDDMComponent(lat, 90);
+  const lonComponent = formatDDMComponent(lon, 180);
   
   const latDir = lat >= 0 ? 'N' : 'S';
   const lonDir = lon >= 0 ? 'E' : 'W';
   
-  return `${latDeg}°${latMin.toFixed(2).padStart(5, '0')}′${latDir} ${lonDeg}°${lonMin.toFixed(2).padStart(5, '0')}′${lonDir}`;
+  return `${latComponent.degrees}°${latComponent.minutes.toFixed(2).padStart(5, '0')}′${latDir} ${lonComponent.degrees}°${lonComponent.minutes.toFixed(2).padStart(5, '0')}′${lonDir}`;
 }
 
 function formatDMS(lat: number, lon: number): string {
-  const latDeg = Math.floor(Math.abs(lat));
-  const latMinFull = (Math.abs(lat) - latDeg) * 60;
-  const latMin = Math.floor(latMinFull);
-  const latSec = (latMinFull - latMin) * 60;
-  
-  const lonDeg = Math.floor(Math.abs(lon));
-  const lonMinFull = (Math.abs(lon) - lonDeg) * 60;
-  const lonMin = Math.floor(lonMinFull);
-  const lonSec = (lonMinFull - lonMin) * 60;
+  const latComponent = formatDMSComponent(lat, 90);
+  const lonComponent = formatDMSComponent(lon, 180);
   
   const latDir = lat >= 0 ? 'N' : 'S';
   const lonDir = lon >= 0 ? 'E' : 'W';
   
-  return `${latDeg}°${latMin.toString().padStart(2, '0')}′${latSec.toFixed(2).padStart(5, '0')}″${latDir} ${lonDeg}°${lonMin.toString().padStart(2, '0')}′${lonSec.toFixed(2).padStart(5, '0')}″${lonDir}`;
+  return `${latComponent.degrees}°${latComponent.minutes.toString().padStart(2, '0')}′${latComponent.seconds.toFixed(2).padStart(5, '0')}″${latDir} ${lonComponent.degrees}°${lonComponent.minutes.toString().padStart(2, '0')}′${lonComponent.seconds.toFixed(2).padStart(5, '0')}″${lonDir}`;
 }
 
-function formatMGRS(lat: number, lon: number): string {
-  return `MGRS: ${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+interface DDMComponent {
+  degrees: number;
+  minutes: number;
 }
 
-export function formatAltitude(meters: number, unit: 'ft' | 'm'): string {
-  if (unit === 'ft') {
-    return `${Math.round(meters * 3.28084)} ft`;
+function formatDDMComponent(value: number, maximumDegrees: number): DDMComponent {
+  const magnitude = Math.min(Math.abs(value), maximumDegrees);
+  let degrees = Math.floor(magnitude);
+  let minutes = Number(((magnitude - degrees) * 60).toFixed(2));
+
+  // Round first, then carry 60.00 minutes into the degree component.
+  if (minutes >= 60) {
+    degrees += 1;
+    minutes = 0;
   }
-  return `${Math.round(meters)} m`;
-}
 
-export function formatSpeed(ms: number, unit: 'kt' | 'kmh'): string {
-  if (unit === 'kt') {
-    return `${Math.round(ms * 1.94384)} kt`;
+  if (degrees >= maximumDegrees) {
+    degrees = maximumDegrees;
+    minutes = 0;
   }
-  return `${Math.round(ms * 3.6)} km/h`;
+
+  return { degrees, minutes };
 }
 
-export function formatDistance(meters: number, unit: 'nm' | 'km'): string {
-  if (unit === 'nm') {
-    return `${(meters / 1852).toFixed(1)} nm`;
+interface DMSComponent {
+  degrees: number;
+  minutes: number;
+  seconds: number;
+}
+
+function formatDMSComponent(value: number, maximumDegrees: number): DMSComponent {
+  const magnitude = Math.min(Math.abs(value), maximumDegrees);
+  let degrees = Math.floor(magnitude);
+  const minutesFull = (magnitude - degrees) * 60;
+  let minutes = Math.floor(minutesFull);
+  let seconds = Number(((minutesFull - minutes) * 60).toFixed(2));
+
+  // Round first, then carry 60.00 seconds through minutes and degrees.
+  if (seconds >= 60) {
+    seconds = 0;
+    minutes += 1;
   }
-  return `${(meters / 1000).toFixed(1)} km`;
+  if (minutes >= 60) {
+    minutes = 0;
+    degrees += 1;
+  }
+
+  if (degrees >= maximumDegrees) {
+    degrees = maximumDegrees;
+    minutes = 0;
+    seconds = 0;
+  }
+
+  return { degrees, minutes, seconds };
 }
 
-export function formatPressure(mmHg: number, unit: 'hPa' | 'inHg' | 'mmHg'): string {
-  switch (unit) {
-    case 'hPa':
-      return `${(mmHg * 1.33322).toFixed(1)} hPa`;
-    case 'inHg':
-      return `${(mmHg * 0.0393701).toFixed(2)} inHg`;
-    case 'mmHg':
-      return `${mmHg.toFixed(1)} mmHg`;
+function normalizeMGRSAccuracy(accuracy: number): MGRSAccuracy {
+  if (accuracy >= 1 && accuracy <= 5 && Number.isInteger(accuracy)) {
+    return accuracy as MGRSAccuracy;
+  }
+  return DEFAULT_MGRS_ACCURACY;
+}
+
+function formatMGRSFallback(lat: number, lon: number): string {
+  const formatValue = (value: number): string => Number.isFinite(value) ? value.toFixed(4) : 'invalid';
+  return `MGRS unavailable: ${formatValue(lat)}°, ${formatValue(lon)}°`;
+}
+
+/**
+ * Convert WGS84 latitude/longitude to MGRS.
+ *
+ * The npm implementation also emits UPS references near the poles, but DCS
+ * coordinate entry and this utility's FR-12 contract are UTM-oriented.  Keep
+ * a deterministic decimal fallback for polar, invalid, or library-failure
+ * inputs instead of allowing a conversion exception to reach the UI.
+ */
+export function formatMGRS(lat: number, lon: number, accuracy: number = DEFAULT_MGRS_ACCURACY): string {
+  if (!Number.isFinite(lat) || !Number.isFinite(lon) || lat < -84 || lat > 84 || lon < -180 || lon > 180) {
+    return formatMGRSFallback(lat, lon);
+  }
+
+  try {
+    return mgrsForward([lon, lat], normalizeMGRSAccuracy(accuracy));
+  } catch {
+    return formatMGRSFallback(lat, lon);
   }
 }
 
-export function formatTemperature(celsius: number, unit: 'C' | 'F'): string {
-  if (unit === 'F') {
-    return `${(celsius * 9/5 + 32).toFixed(1)}°F`;
-  }
-  return `${celsius.toFixed(1)}°C`;
+const AIRCRAFT_DEFAULTS = aircraftCoordinateDefaults as Record<string, string>;
+
+function isCoordinateFormat(value: string | undefined): value is CoordinateFormat {
+  return value === 'DDM' || value === 'DMS' || value === 'MGRS' || value === 'DEC';
 }
 
-export function windFromTo(dirTo: number): { from: number; to: number } {
-  const from = (dirTo + 180) % 360;
-  return { from, to: dirTo };
+/**
+ * Return the coordinate format normally used by a DCS unit type.
+ * Unknown or empty types intentionally fall back to the application default.
+ */
+export function getDefaultCoordinateFormat(aircraftType: string | null | undefined): CoordinateFormat {
+  const value = typeof aircraftType === 'string' ? AIRCRAFT_DEFAULTS[aircraftType.trim()] : undefined;
+  return isCoordinateFormat(value) ? value : 'DDM';
 }
+
+/** Alias kept explicit for callers that phrase the lookup as aircraft format. */
+export const getAircraftCoordinateFormat = getDefaultCoordinateFormat;
 
 export function calculateBearing(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const dLon = (lon2 - lon1) * Math.PI / 180;

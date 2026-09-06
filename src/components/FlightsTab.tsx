@@ -1,6 +1,11 @@
 import React, { useState } from 'react';
-import type { MissionData, DisplaySettings, Flight } from '../types/mission';
-import { formatAltitude, formatSpeed, formatDistance } from '../utils/coordinates';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
+import type { MissionData, DisplaySettings, Flight, MissionMeta } from '../types/mission';
+import { calculateBearing, formatCoordinate, getDefaultCoordinateFormat } from '../utils/coordinates';
+import { getMagneticVariation, trueToMagnetic } from '../utils/magvar';
+import { formatEtaLocal, formatEtaZulu, missionZuluDate } from '../utils/time';
+import { formatAltitude, formatSpeed, formatDistance } from '../utils/units';
 
 interface FlightsTabProps {
   mission: MissionData;
@@ -8,6 +13,7 @@ interface FlightsTabProps {
 }
 
 export default function FlightsTab({ mission, settings }: FlightsTabProps) {
+  const { t } = useTranslation();
   const [selectedFlight, setSelectedFlight] = useState<Flight | null>(null);
   const [side, setSide] = useState<'blue' | 'red'>('blue');
   
@@ -17,8 +23,8 @@ export default function FlightsTab({ mission, settings }: FlightsTabProps) {
     <div className="tab-panel flights">
       <div className="flights-header">
         <div className="side-selector">
-          <button className={side === 'blue' ? 'active' : ''} onClick={() => setSide('blue')}>青側</button>
-          <button className={side === 'red' ? 'active' : ''} onClick={() => setSide('red')}>赤側</button>
+          <button className={side === 'blue' ? 'active' : ''} onClick={() => setSide('blue')}>{t('flights.selectBlue')}</button>
+          <button className={side === 'red' ? 'active' : ''} onClick={() => setSide('red')}>{t('flights.selectRed')}</button>
         </div>
       </div>
       
@@ -42,19 +48,19 @@ export default function FlightsTab({ mission, settings }: FlightsTabProps) {
         
         {selectedFlight && (
           <main className="flight-detail">
-            <FlightDetail flight={selectedFlight} settings={settings} startTime={mission.meta.startTime} />
+            <FlightDetail flight={selectedFlight} settings={settings} meta={mission.meta} />
           </main>
         )}
         
         {!selectedFlight && flights.length > 0 && (
           <main className="flight-detail empty">
-            <p>フライトを選択して詳細を表示</p>
+            <p>{t('flights.selectPrompt')}</p>
           </main>
         )}
         
         {flights.length === 0 && (
           <main className="flight-detail empty">
-            <p>この勢力にフライトがありません</p>
+            <p>{t('flights.empty')}</p>
           </main>
         )}
       </div>
@@ -62,8 +68,11 @@ export default function FlightsTab({ mission, settings }: FlightsTabProps) {
   );
 }
 
-function FlightDetail({ flight, settings, startTime }: { flight: Flight; settings: DisplaySettings; startTime: number }) {
+function FlightDetail({ flight, settings, meta }: { flight: Flight; settings: DisplaySettings; meta: MissionMeta }) {
+  const { t } = useTranslation();
   const leadUnit = flight.units[0];
+  const aircraftDefaultCoordinateFormat = getDefaultCoordinateFormat(flight.type);
+  const missionDate = missionZuluDate(meta);
   
   return (
     <div className="flight-detail-content">
@@ -71,25 +80,25 @@ function FlightDetail({ flight, settings, startTime }: { flight: Flight; setting
         <h2>{flight.name}</h2>
         <div className="flight-meta">
           <span className="badge">{flight.type}</span>
-          <span className="badge">{flight.units.length}機</span>
+          <span className="badge">{t('flights.unitCount', { count: flight.units.length })}</span>
           <span className="badge callsign">{flight.callsign}</span>
           <span className="badge task">{flight.task}</span>
-          {flight.hidden && <span className="badge hidden">Hidden</span>}
+          {flight.hidden && <span className="badge hidden">{t('flights.hidden')}</span>}
         </div>
       </header>
       
       <section className="section">
-        <h3>機体構成</h3>
+        <h3>{t('flights.aircraftRoster')}</h3>
         <table className="data-table">
           <thead>
             <tr>
               <th>#</th>
-              <th>機番</th>
-              <th>コールサイン</th>
-              <th>スキル</th>
-              <th>スキン</th>
-              <th>燃料</th>
-              <th>チャフ/フレア</th>
+              <th>{t('flights.number')}</th>
+              <th>{t('flights.callsign')}</th>
+              <th>{t('flights.skill')}</th>
+              <th>{t('flights.livery')}</th>
+              <th>{t('flights.fuel')}</th>
+              <th>{t('flights.chaffFlare')}</th>
             </tr>
           </thead>
           <tbody>
@@ -100,7 +109,7 @@ function FlightDetail({ flight, settings, startTime }: { flight: Flight; setting
                 <td>{unit.name}</td>
                 <td>{unit.skill}</td>
                 <td>{unit.livery || `-`}</td>
-                <td>{unit.payload.fuel} kg</td>
+                <td>{t('flights.fuelAmount', { value: unit.payload.fuel })}</td>
                 <td>{unit.payload.chaff} / {unit.payload.flare}</td>
               </tr>
             ))}
@@ -109,13 +118,13 @@ function FlightDetail({ flight, settings, startTime }: { flight: Flight; setting
       </section>
       
       <section className="section">
-        <h3>搭載</h3>
+        <h3>{t('flights.loadout')}</h3>
         <table className="data-table">
           <thead>
             <tr>
-              <th>ステーション</th>
-              <th>兵装</th>
-              <th>数</th>
+              <th>{t('flights.station')}</th>
+              <th>{t('flights.weapon')}</th>
+              <th>{t('flights.count')}</th>
             </tr>
           </thead>
           <tbody>
@@ -131,14 +140,14 @@ function FlightDetail({ flight, settings, startTime }: { flight: Flight; setting
       </section>
       
       <section className="section">
-        <h3>無線プリセット</h3>
+        <h3>{t('flights.radioPreset')}</h3>
         <table className="data-table">
           <thead>
             <tr>
               <th>CH</th>
-              <th>周波数</th>
-              <th>変調</th>
-              <th>名称</th>
+              <th>{t('flights.frequency')}</th>
+              <th>{t('flights.modulation')}</th>
+              <th>{t('flights.name')}</th>
             </tr>
           </thead>
           <tbody>
@@ -155,42 +164,48 @@ function FlightDetail({ flight, settings, startTime }: { flight: Flight; setting
       </section>
       
       <section className="section">
-        <h3>経路 (ナビログ)</h3>
+        <h3>{t('flights.route')}</h3>
+        <p className="coordinate-note" title={t('flights.coordinateNoteTitle')}>
+          {t('flights.coordinateFormat', { format: settings.coordinateFormat, defaultFormat: aircraftDefaultCoordinateFormat })}
+        </p>
         <table className="data-table">
           <thead>
             <tr>
               <th>#</th>
-              <th>名称</th>
-              <th>種別</th>
-              <th>座標</th>
-              <th>高度</th>
-              <th>速度</th>
-              <th>ETA</th>
-              <th>距離</th>
-              <th>方位</th>
+              <th>{t('flights.name')}</th>
+              <th>{t('flights.type')}</th>
+              <th>{t('flights.coordinate')}</th>
+              <th>{t('flights.altitude')}</th>
+              <th>{t('flights.speed')}</th>
+              <th>{t('flights.eta')}</th>
+              <th>{t('flights.distance')}</th>
+              <th title={t('flights.bearingTitle')}>{t('flights.bearing')}</th>
             </tr>
           </thead>
           <tbody>
-            {flight.route.map((wp) => (
+            {flight.route.map((wp, routeIndex) => {
+              const bearing = getDisplayedBearing(flight.route, routeIndex, meta, missionDate);
+              return (
               <tr key={wp.index}>
                 <td>{wp.index}</td>
                 <td>{wp.name}</td>
                 <td>{wp.action}</td>
-                <td>{wp.latlon[0].toFixed(4)}, {wp.latlon[1].toFixed(4)}</td>
+                <td>{formatCoordinate(wp.latlon[0], wp.latlon[1], settings.coordinateFormat)}</td>
                 <td>{formatAltitude(wp.alt, settings.altitudeUnit)}</td>
                 <td>{formatSpeed(wp.speed, settings.speedUnit)}</td>
-                <td>{formatETA(wp.eta, startTime)}</td>
+                <td>{formatETA(wp.eta, meta, t)}</td>
                 <td>{wp.leg ? formatDistance(wp.leg.distance, settings.distanceUnit) : '-'}</td>
-                <td>{wp.leg ? `${wp.leg.trueBearing.toFixed(0)}°T / ${wp.leg.magneticBearing.toFixed(0)}°M` : '-'}</td>
+                <td>{bearing ? t('flights.bearingValue', { trueBearing: bearing.trueBearing.toFixed(0), magneticBearing: bearing.magneticBearing.toFixed(0) }) : '-'}</td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </section>
       
       {leadUnit.props && Object.keys(leadUnit.props).length > 0 && (
         <section className="section">
-          <h3>機種固有設定 (AddPropAircraft)</h3>
+          <h3>{t('flights.aircraftSettings')}</h3>
           <dl className="info-grid">
             {Object.entries(leadUnit.props).map(([key, value]) => (
               <React.Fragment key={key}>
@@ -204,11 +219,11 @@ function FlightDetail({ flight, settings, startTime }: { flight: Flight; setting
       
       {leadUnit.datalink?.link16 && (
         <section className="section">
-          <h3>データリンク (Link 16)</h3>
+          <h3>{t('flights.datalink')}</h3>
           <dl className="info-grid">
-            <dt>フライトリード</dt>
-            <dd>{leadUnit.datalink.link16.flightLead ? 'Yes' : 'No'}</dd>
-            <dt>チーム</dt>
+            <dt>{t('flights.flightLead')}</dt>
+            <dd>{leadUnit.datalink.link16.flightLead ? t('common.yes') : t('common.no')}</dd>
+            <dt>{t('flights.team')}</dt>
             <dd>{leadUnit.datalink.link16.team}</dd>
           </dl>
         </section>
@@ -217,7 +232,44 @@ function FlightDetail({ flight, settings, startTime }: { flight: Flight; setting
   );
 }
 
-function formatETA(eta: number, startTime: number): string {
-  const date = new Date((startTime + eta) * 1000);
-  return date.toISOString().slice(11, 19) + 'Z';
+function formatETA(eta: number, meta: MissionMeta, t: TFunction): string {
+  return t('flights.etaValue', {
+    localTime: formatEtaLocal(meta, eta),
+    zuluTime: formatEtaZulu(meta, eta),
+  });
+}
+
+interface DisplayBearing {
+  trueBearing: number;
+  magneticBearing: number;
+}
+
+function getDisplayedBearing(
+  route: Flight['route'],
+  routeIndex: number,
+  meta: MissionMeta,
+  missionDate: Date,
+): DisplayBearing | null {
+  const waypoint = route[routeIndex];
+  const previousWaypoint = route[routeIndex - 1];
+  if (!waypoint || !previousWaypoint) {
+    return null;
+  }
+
+  const [fromLat, fromLon] = previousWaypoint.latlon;
+  const [toLat, toLon] = waypoint.latlon;
+  if (![fromLat, fromLon, toLat, toLon].every(Number.isFinite)) {
+    return null;
+  }
+
+  const trueBearing = calculateBearing(fromLat, fromLon, toLat, toLon);
+  if (!Number.isFinite(trueBearing)) {
+    return null;
+  }
+
+  const variation = getMagneticVariation(meta.theatre, toLat, toLon, missionDate);
+  return {
+    trueBearing,
+    magneticBearing: trueToMagnetic(trueBearing, variation),
+  };
 }
