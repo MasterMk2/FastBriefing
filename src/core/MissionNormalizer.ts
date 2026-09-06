@@ -28,16 +28,33 @@ function getArray(obj: unknown, path: string[]): unknown[] {
   return Array.isArray(val) ? val : [];
 }
 
+/**
+ * A unit category under a country is a single table, not a list:
+ *
+ *   ["country"] = { [1] = { ["plane"] = { ["group"] = { [1] = ... } } } }
+ *
+ * The group loops below expect something they can iterate and then read
+ * `group` out of, so hand them the one table. Reading it with getArray
+ * returned [] and made every flight, ship and static disappear.
+ */
+function getCategory(obj: unknown, key: string): unknown[] {
+  const val = getValue(obj, [key]);
+  return val && typeof val === 'object' ? [val] : [];
+}
+
+// An entry that exists but is empty means the mission author left the field
+// blank. Falling back to the key printed `DictKey_sortie_5` in the briefing;
+// showing nothing is what the author meant.
 function resolveDictKey(key: string, dictionary: Record<string, string>): string {
   if (key.startsWith('DictKey_')) {
-    return dictionary[key] || key;
+    return key in dictionary ? dictionary[key] : key;
   }
   return key;
 }
 
 function resolveResKey(key: string, mapResource: Record<string, string>): string {
   if (key.startsWith('ResKey_')) {
-    return mapResource[key] || key;
+    return key in mapResource ? mapResource[key] : key;
   }
   return key;
 }
@@ -221,17 +238,17 @@ function normalizeAirbases(
   _mapResource: Record<string, string>,
   theatre: string
 ): Airbase[] {
-  const countries = getValue(sideData, ['country']) as unknown[];
+  const countries = getArray(sideData, ['country']);
   const airports = getValue(warehouses, ['airports']) as Record<string, unknown> || {};
   const airbases: Airbase[] = [];
   
   for (const country of countries) {
     const c = country as Record<string, unknown>;
-    const planes = getArray(c, ['plane']);
-    const helicopters = getArray(c, ['helicopter']);
-    const ships = getArray(c, ['ship']);
-    const vehicles = getArray(c, ['vehicle']);
-    const statics = getArray(c, ['static']);
+    const planes = getCategory(c, 'plane');
+    const helicopters = getCategory(c, 'helicopter');
+    const ships = getCategory(c, 'ship');
+    const vehicles = getCategory(c, 'vehicle');
+    const statics = getCategory(c, 'static');
     
     for (const group of [...planes, ...helicopters, ...ships, ...vehicles, ...statics]) {
       const g = group as Record<string, unknown>;
@@ -272,13 +289,13 @@ function normalizeFlights(
   _mapResource: Record<string, string>,
   theatre: string
 ): Flight[] {
-  const countries = getValue(sideData, ['country']) as unknown[];
+  const countries = getArray(sideData, ['country']);
   const flights: Flight[] = [];
   
   for (const country of countries) {
     const c = country as Record<string, unknown>;
-    const planes = getArray(c, ['plane']);
-    const helicopters = getArray(c, ['helicopter']);
+    const planes = getCategory(c, 'plane');
+    const helicopters = getCategory(c, 'helicopter');
     
     for (const group of [...planes, ...helicopters]) {
       const g = group as Record<string, unknown>;
@@ -442,14 +459,14 @@ function normalizeSupport(
   _mapResource: Record<string, string>,
   theatre: string
 ): SupportAsset[] {
-  const countries = getValue(sideData, ['country']) as unknown[];
+  const countries = getArray(sideData, ['country']);
   const support: SupportAsset[] = [];
   
   for (const country of countries) {
     const c = country as Record<string, unknown>;
-    const planes = getArray(c, ['plane']);
-    const helicopters = getArray(c, ['helicopter']);
-    const ships = getArray(c, ['ship']);
+    const planes = getCategory(c, 'plane');
+    const helicopters = getCategory(c, 'helicopter');
+    const ships = getCategory(c, 'ship');
     
     for (const group of [...planes, ...helicopters, ...ships]) {
       const g = group as Record<string, unknown>;
@@ -543,16 +560,16 @@ function normalizeCarrier(groupData: Record<string, unknown>, dictionary: Record
 }
 
 function normalizeAIGroups(sideData: Record<string, unknown>, _dictionary: Record<string, string>, _theatre: string): AIGroup[] {
-  const countries = getValue(sideData, ['country']) as unknown[];
+  const countries = getArray(sideData, ['country']);
   const groups: AIGroup[] = [];
   
   for (const country of countries) {
     const c = country as Record<string, unknown>;
-    const planes = getArray(c, ['plane']);
-    const helicopters = getArray(c, ['helicopter']);
-    const ships = getArray(c, ['ship']);
-    const vehicles = getArray(c, ['vehicle']);
-    const statics = getArray(c, ['static']);
+    const planes = getCategory(c, 'plane');
+    const helicopters = getCategory(c, 'helicopter');
+    const ships = getCategory(c, 'ship');
+    const vehicles = getCategory(c, 'vehicle');
+    const statics = getCategory(c, 'static');
     
     for (const group of [...planes, ...helicopters, ...ships, ...vehicles, ...statics]) {
       const g = group as Record<string, unknown>;

@@ -43,7 +43,7 @@ export function decodeLuaString(value: string): string {
  * back `null` and every name and description in the mission silently becomes
  * empty. Verified against luaparse 0.3.1.
  */
-export function parseLuaTable(luaBytes: Uint8Array): unknown {
+export function parseLuaTable(luaBytes: Uint8Array, rootName: string): unknown {
   try {
     const luaCode = strFromU8(luaBytes, true);
     const ast = parse(luaCode, { encodingMode: 'pseudo-latin1' });
@@ -52,7 +52,10 @@ export function parseLuaTable(luaBytes: Uint8Array): unknown {
       const firstStat = ast.body[0];
       if (firstStat.type === 'AssignmentStatement' && firstStat.variables.length > 0) {
         const varExpr = firstStat.variables[0];
-        if (varExpr.type === 'Identifier' && varExpr.name === 'mission') {
+        // The root variable is named after the entry: `mission = {...}` in
+        // `mission`, `warehouses = {...}` in `warehouses`, and so on. Hardcoding
+        // `mission` here made every caller but the first throw.
+        if (varExpr.type === 'Identifier' && varExpr.name === rootName) {
           // `init` is an ARRAY of expressions (Lua allows `a, b = 1, 2`), so
           // the table is init[0]. Passing the array itself fell through
           // convertLuaNode's switch to `default`, which returns the raw AST
@@ -63,11 +66,33 @@ export function parseLuaTable(luaBytes: Uint8Array): unknown {
         }
       }
     }
-    throw new Error('Mission table not found in Lua code');
+    throw new Error('Lua table ' + rootName + ' not found');
   } catch (e) {
     console.error('Lua parse error:', e);
     throw e;
   }
+}
+
+/**
+ * Lua has no array type: a list is a table with the integer keys 1..n, and DCS
+ * writes them out explicitly (`["units"] = { [1] = {...}, [2] = {...} }`). A
+ * straight key/value conversion therefore yields `{"1": ..., "2": ...}`, which
+ * every consumer downstream mistakes for a map -- `getArray` returns `[]` and
+ * lists silently come back empty, or `for...of` throws outright.
+ *
+ * Convert only when the keys are exactly 1..n in order. DCS also emits mixed
+ * tables such as `callsign = { [1] = 1, [2] = 1, ["name"] = "Enfield11" }`,
+ * and those have to stay objects.
+ */
+function toArrayIfSequence(obj: Record<string, unknown>): unknown {
+  const keys = Object.keys(obj);
+  if (keys.length === 0) return obj;
+  // Integer-like keys are enumerated in ascending numeric order, so comparing
+  // position by position is enough to reject holes and extra keys.
+  for (let i = 0; i < keys.length; i++) {
+    if (keys[i] !== String(i + 1)) return obj;
+  }
+  return keys.map((k) => obj[k]);
 }
 
 function convertLuaNode(node: unknown): unknown {
@@ -98,16 +123,12 @@ function convertLuaNode(node: unknown): unknown {
           result[key] = value;
         } else if (f.type === 'TableValue' && f.value) {
           const value = convertLuaNode(f.value);
-          if (Array.isArray(result)) {
-            result.push(value);
-          } else {
-            const idx = Object.keys(result).length + 1;
-            result[idx] = value;
-          }
+          const idx = Object.keys(result).length + 1;
+          result[idx] = value;
         }
       }
-      return result;
-      
+      return toArrayIfSequence(result);
+
     case 'NumericLiteral':
       return n.value;
       
@@ -129,30 +150,37 @@ function convertLuaNode(node: unknown): unknown {
   }
 }
 
-function parseDictionary(content: string): Record<string, string> {
-  const dict: Record<string, string> = {};
-  const lines = content.split('\n');
-  
-  for (const line of lines) {
-    const match = line.match(/^\[(\d+)\]\s*=\s*"(.*)"$/);
-    if (match) {
-      dict[`DictKey_${match[1]}`] = match[2].replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+/**
+ * `l10n/DEFAULT/dictionary` and `mapResource` are Lua tables whose keys already
+ * carry their prefix:
+ *
+ *   dictionary =
+ *   {
+ *       ["DictKey_sortie_5"] = "text",
+ *   }
+ *
+ * The previous pattern looked for `[5] = "text"` and rebuilt the key as
+ * `DictKey_5`, so it matched nothing and every lookup fell back to showing the
+ * raw `DictKey_*` token in the UI.
+ */
+function parseKeyedStrings(content: string, prefix: string): Record<string, string> {
+  const out: Record<string, string> = {};
+
+  for (const line of content.split('\n')) {
+    const match = line.match(/^\s*\["([^"]+)"\]\s*=\s*"(.*)"\s*,?\s*$/);
+    if (match && match[1].startsWith(prefix)) {
+      out[match[1]] = match[2].replace(/\\"/g, '"').replace(/\\\\/g, '\\');
     }
   }
-  return dict;
+  return out;
+}
+
+function parseDictionary(content: string): Record<string, string> {
+  return parseKeyedStrings(content, 'DictKey_');
 }
 
 function parseMapResource(content: string): Record<string, string> {
-  const map: Record<string, string> = {};
-  const lines = content.split('\n');
-  
-  for (const line of lines) {
-    const match = line.match(/^\[(\d+)\]\s*=\s*"(.*)"$/);
-    if (match) {
-      map[`ResKey_${match[1]}`] = match[2].replace(/\\"/g, '"').replace(/\\\\/g, '\\');
-    }
-  }
-  return map;
+  return parseKeyedStrings(content, 'ResKey_');
 }
 
 /**
@@ -184,13 +212,13 @@ export async function parseMissionArchive(file: ArrayBuffer): Promise<ParsedMiss
     // where most of a Japanese mission's prose lives, so decoding them the
     // other way would break exactly what this fix is for.
     if (name === 'mission') {
-      result.mission = parseLuaTable(entry);
+      result.mission = parseLuaTable(entry, 'mission');
     } else if (name === 'theatre') {
       result.theatre = strFromU8(entry).trim();
     } else if (name === 'warehouses') {
-      result.warehouses = parseLuaTable(entry);
+      result.warehouses = parseLuaTable(entry, 'warehouses');
     } else if (name === 'options') {
-      result.options = parseLuaTable(entry);
+      result.options = parseLuaTable(entry, 'options');
     } else if (name === 'l10n/DEFAULT/dictionary') {
       result.dictionary = parseDictionary(strFromU8(entry));
     } else if (name === 'l10n/DEFAULT/mapResource') {
