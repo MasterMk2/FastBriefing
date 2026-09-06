@@ -11,16 +11,55 @@ interface ParsedMissionFile {
   kneeboardFiles: Map<string, Uint8Array>;
 }
 
-function parseLuaTable(luaCode: string): unknown {
+const UTF8 = new TextDecoder('utf-8');
+
+/**
+ * Decode a luaparse `pseudo-latin1` string back into real text.
+ *
+ * In that mode luaparse requires every code unit to be <= 0xFF and hands the
+ * literal back the same way, so a string is a sequence of BYTES stored one per
+ * code unit. The mission Lua is UTF-8, so those bytes have to be decoded or
+ * every non-ASCII name comes out as mojibake ("エルブルス" -> "ã¨ã«ãã«ã¹").
+ */
+export function decodeLuaString(value: string): string {
+  // Fast path: pure ASCII is already correct and covers most of a mission file.
+  // eslint-disable-next-line no-control-regex
+  if (!/[^\x00-\x7f]/.test(value)) return value;
+  return UTF8.decode(Uint8Array.from(value, (c) => c.charCodeAt(0) & 0xff));
+}
+
+/**
+ * @param luaBytes raw bytes of the Lua file, NOT a decoded string.
+ *
+ * The bytes are decoded as latin1 so that one code unit is one UTF-8 byte,
+ * which is what `pseudo-latin1` requires. Handing it a UTF-8-decoded string
+ * instead is what produced
+ *   "[1189:8] code unit U+30A8 is not allowed in the current encoding mode"
+ * on any mission containing Japanese (U+30A8 is エ) -- the file loaded fine in
+ * English and failed outright in Japanese.
+ *
+ * `encodingMode: 'none'` looks like the obvious fix and is a trap: it accepts
+ * every code unit but sets `discardStrings`, so `StringLiteral.value` comes
+ * back `null` and every name and description in the mission silently becomes
+ * empty. Verified against luaparse 0.3.1.
+ */
+export function parseLuaTable(luaBytes: Uint8Array): unknown {
   try {
+    const luaCode = strFromU8(luaBytes, true);
     const ast = parse(luaCode, { encodingMode: 'pseudo-latin1' });
-    
+
     if (ast.type === 'Chunk' && ast.body.length > 0) {
       const firstStat = ast.body[0];
       if (firstStat.type === 'AssignmentStatement' && firstStat.variables.length > 0) {
         const varExpr = firstStat.variables[0];
         if (varExpr.type === 'Identifier' && varExpr.name === 'mission') {
-          return convertLuaNode(firstStat.init);
+          // `init` is an ARRAY of expressions (Lua allows `a, b = 1, 2`), so
+          // the table is init[0]. Passing the array itself fell through
+          // convertLuaNode's switch to `default`, which returns the raw AST
+          // node -- every mission came back as unconverted luaparse output
+          // with no usable fields. Separate, pre-existing bug; the encoding
+          // failure simply hid it by throwing first.
+          return convertLuaNode(firstStat.init[0]);
         }
       }
     }
@@ -49,7 +88,12 @@ function convertLuaNode(node: unknown): unknown {
             result[String(key)] = value;
           }
         } else if (f.type === 'TableKeyString' && f.key && f.value) {
-          const key = (f.key as { name?: string; value?: string }).name ?? (f.key as { name?: string; value?: string }).value ?? '';
+          const rawKey = f.key as { name?: string; value?: string };
+          // `name` is a Lua identifier and therefore ASCII; `value` is a
+          // string literal and carries the same byte-per-code-unit encoding
+          // as any other one.
+          const key =
+            rawKey.name ?? (rawKey.value !== undefined ? decodeLuaString(rawKey.value) : '');
           const value = convertLuaNode(f.value);
           result[key] = value;
         } else if (f.type === 'TableValue' && f.value) {
@@ -68,7 +112,7 @@ function convertLuaNode(node: unknown): unknown {
       return n.value;
       
     case 'StringLiteral':
-      return n.value;
+      return decodeLuaString(n.value as string);
       
     case 'BooleanLiteral':
       return n.value;
@@ -111,44 +155,62 @@ function parseMapResource(content: string): Record<string, string> {
   return map;
 }
 
-self.onmessage = async (e: MessageEvent<{ file: ArrayBuffer }>) => {
-  try {
-    const { file } = e.data;
-    const zip = unzipSync(new Uint8Array(file)) as Record<string, Uint8Array>;
-    
-    const result: ParsedMissionFile = {
-      mission: null,
-      theatre: '',
-      warehouses: null,
-      options: null,
-      dictionary: {},
-      mapResource: {},
-      kneeboardFiles: new Map(),
-    };
-    
-    for (const name of Object.keys(zip)) {
-      const entry = zip[name];
-      const content = strFromU8(entry);
-      
-      if (name === 'mission') {
-        result.mission = parseLuaTable(content);
-      } else if (name === 'theatre') {
-        result.theatre = content.trim();
-      } else if (name === 'warehouses') {
-        result.warehouses = parseLuaTable(content);
-      } else if (name === 'options') {
-        result.options = parseLuaTable(content);
-      } else if (name === 'l10n/DEFAULT/dictionary') {
-        result.dictionary = parseDictionary(content);
-      } else if (name === 'l10n/DEFAULT/mapResource') {
-        result.mapResource = parseMapResource(content);
-      } else if (name.startsWith('KNEEBOARD/')) {
-        result.kneeboardFiles.set(name, entry);
-      }
+/**
+ * Parse a .miz archive into its component tables.
+ *
+ * Kept separate from the worker plumbing so it can be called directly: the
+ * module previously assigned `self.onmessage` at import time, which throws
+ * anywhere there is no `self` and made the whole file impossible to test.
+ */
+export async function parseMissionArchive(file: ArrayBuffer): Promise<ParsedMissionFile> {
+  const zip = unzipSync(new Uint8Array(file)) as Record<string, Uint8Array>;
+
+  const result: ParsedMissionFile = {
+    mission: null,
+    theatre: '',
+    warehouses: null,
+    options: null,
+    dictionary: {},
+    mapResource: {},
+    kneeboardFiles: new Map(),
+  };
+
+  for (const name of Object.keys(zip)) {
+    const entry = zip[name];
+    // Only the entries that go through luaparse are handed raw bytes: it is
+    // fed latin1 (one code unit per byte) and the strings are decoded on the
+    // way out. parseDictionary/parseMapResource are line- and regex-based,
+    // never touch luaparse, and want ordinary UTF-8 text -- which is also
+    // where most of a Japanese mission's prose lives, so decoding them the
+    // other way would break exactly what this fix is for.
+    if (name === 'mission') {
+      result.mission = parseLuaTable(entry);
+    } else if (name === 'theatre') {
+      result.theatre = strFromU8(entry).trim();
+    } else if (name === 'warehouses') {
+      result.warehouses = parseLuaTable(entry);
+    } else if (name === 'options') {
+      result.options = parseLuaTable(entry);
+    } else if (name === 'l10n/DEFAULT/dictionary') {
+      result.dictionary = parseDictionary(strFromU8(entry));
+    } else if (name === 'l10n/DEFAULT/mapResource') {
+      result.mapResource = parseMapResource(strFromU8(entry));
+    } else if (name.startsWith('KNEEBOARD/')) {
+      result.kneeboardFiles.set(name, entry);
     }
-    
-    self.postMessage({ type: 'success', data: result });
-  } catch (error) {
-    self.postMessage({ type: 'error', error: (error as Error).message });
   }
-};
+
+  return result;
+}
+
+// Registration is guarded: a test runner has no `self`, and assigning to it
+// unconditionally is what made this module unimportable outside a worker.
+if (typeof self !== 'undefined') {
+  self.onmessage = async (e: MessageEvent<{ file: ArrayBuffer }>) => {
+    try {
+      self.postMessage({ type: 'success', data: await parseMissionArchive(e.data.file) });
+    } catch (error) {
+      self.postMessage({ type: 'error', error: (error as Error).message });
+    }
+  };
+}
