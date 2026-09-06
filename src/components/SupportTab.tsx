@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import type { MissionData, DisplaySettings, SupportAsset } from '../types/mission';
 import { dcsToLatLon, formatCoordinate } from '../utils/coordinates';
 import { formatAltitude, formatSpeed } from '../utils/units';
@@ -8,12 +9,13 @@ interface SupportTabProps {
 }
 
 export default function SupportTab({ mission, settings }: SupportTabProps) {
+  const { t } = useTranslation();
   const allSupport = [...mission.coalitions.blue.support, ...mission.coalitions.red.support];
   
   if (allSupport.length === 0) {
     return (
       <div className="tab-panel support">
-        <p>支援機がありません</p>
+        <p>{t('support.none')}</p>
       </div>
     );
   }
@@ -28,12 +30,12 @@ export default function SupportTab({ mission, settings }: SupportTabProps) {
           </header>
           
           <dl className="info-grid">
-            <dt>コールサイン</dt>
+            <dt>{t('support.callsign')}</dt>
             <dd>{s.callsign}</dd>
             
             {s.frequency && (
               <>
-                <dt>周波数</dt>
+                <dt>{t('support.frequency')}</dt>
                 <dd>{(s.frequency / 1000000).toFixed(3)} MHz</dd>
               </>
             )}
@@ -47,23 +49,23 @@ export default function SupportTab({ mission, settings }: SupportTabProps) {
             
             {s.icls && (
               <>
-                <dt>ICLS</dt>
-                <dd>Channel {s.icls.channel}</dd>
+                <dt>{t('support.icls')}</dt>
+                <dd>{t('support.channel', { channel: s.icls.channel })}</dd>
               </>
             )}
             
             {s.orbit && (
               <>
-                <dt>軌道高度</dt>
+                <dt>{t('support.orbitAltitude')}</dt>
                 <dd>{formatAltitude(s.orbit.altitude, settings.altitudeUnit)}</dd>
-                <dt>軌道速度</dt>
+                <dt>{t('support.orbitSpeed')}</dt>
                 <dd>{formatSpeed(s.orbit.speed, settings.speedUnit)}</dd>
-                <dt>パターン</dt>
+                <dt>{t('support.pattern')}</dt>
                 <dd>{s.orbit.pattern}</dd>
               </>
             )}
             
-            <dt>位置</dt>
+            <dt>{t('support.position')}</dt>
             <dd>{formatSupportPosition(s, mission.meta.theatre, settings.coordinateFormat)}</dd>
           </dl>
         </section>

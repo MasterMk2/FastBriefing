@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import type { MissionData, DisplaySettings } from '../types/mission';
 import { formatAltitude, formatPressure, formatTemperature, formatSpeed, formatDistance } from '../utils/units';
 import { getMoonInfo, getSunTimes, type SunTimes } from '../utils/astro';
@@ -10,6 +12,7 @@ interface OverviewTabProps {
 }
 
 export default function OverviewTab({ mission, settings }: OverviewTabProps) {
+  const { t } = useTranslation();
   const { meta, weather, coalitions } = mission;
   const blueFlights = coalitions.blue.flights.length;
   const redFlights = coalitions.red.flights.length;
@@ -30,87 +33,87 @@ export default function OverviewTab({ mission, settings }: OverviewTabProps) {
   return (
     <div className="tab-panel overview">
       <section className="section">
-        <h2>ミッション概要</h2>
+        <h2>{t('overview.title')}</h2>
         <dl className="info-grid">
-          <dt>ソーティ名</dt>
+          <dt>{t('overview.sortie')}</dt>
           <dd>{meta.sortie}</dd>
           
-          <dt>マップ</dt>
+          <dt>{t('overview.map')}</dt>
           <dd>{meta.theatre}</dd>
           
-          <dt>日付</dt>
+          <dt>{t('overview.date')}</dt>
           <dd>{formatDateYMD(localDate)}</dd>
           
-          <dt>開始時刻 (Local)</dt>
+          <dt>{t('overview.startLocal')}</dt>
           <dd>{formatDateYMD(localDate)} {formatTimeHHMM(localDate)} ({formatUtcOffset(meta.utcOffset)})</dd>
           
-          <dt>開始時刻 (Zulu)</dt>
+          <dt>{t('overview.startZulu')}</dt>
           <dd>{formatDateYMD(zuluDate)} {formatTimeHHMM(zuluDate)}Z</dd>
           
-          <dt>MEバージョン</dt>
+          <dt>{t('overview.meVersion')}</dt>
           <dd>{meta.meVersion}</dd>
           
-          <dt>青側フライト</dt>
+          <dt>{t('overview.blueFlights')}</dt>
           <dd>{blueFlights}</dd>
           
-          <dt>赤側フライト</dt>
+          <dt>{t('overview.redFlights')}</dt>
           <dd>{redFlights}</dd>
           
-          <dt>総フライト数</dt>
+          <dt>{t('overview.totalFlights')}</dt>
           <dd>{totalFlights}</dd>
         </dl>
       </section>
       
       <section className="section">
-        <h2>天候</h2>
+        <h2>{t('overview.weather')}</h2>
         <dl className="info-grid">
-          <dt>気温</dt>
+          <dt>{t('overview.temperature')}</dt>
           <dd>{formatTemperature(weather.temperature, settings.temperatureUnit)}</dd>
           
-          <dt>QNH</dt>
+          <dt>{t('overview.qnh')}</dt>
           <dd>{formatPressure(weather.qnh, settings.pressureUnit)}</dd>
           
-          <dt>視程</dt>
+          <dt>{t('overview.visibility')}</dt>
           <dd>{formatDistance(weather.visibility, settings.distanceUnit)}</dd>
           
-          <dt>雲</dt>
-          <dd>{weather.clouds.label} (底: {formatAltitude(weather.clouds.base, settings.altitudeUnit)})</dd>
+          <dt>{t('overview.clouds')}</dt>
+          <dd>{weather.clouds.label} ({t('overview.cloudBase', { value: formatAltitude(weather.clouds.base, settings.altitudeUnit) })})</dd>
 
-          <dt>METAR</dt>
+          <dt>{t('overview.metar')}</dt>
           <dd><code>{metar}</code></dd>
           
           {weather.fog.enabled && (
             <>
-              <dt>霧</dt>
-              <dd>厚さ: {formatAltitude(weather.fog.thickness, settings.altitudeUnit)}, 視程: {formatDistance(weather.fog.visibility, settings.distanceUnit)}</dd>
+              <dt>{t('overview.fog')}</dt>
+              <dd>{t('overview.fogDetails', { thickness: formatAltitude(weather.fog.thickness, settings.altitudeUnit), visibility: formatDistance(weather.fog.visibility, settings.distanceUnit) })}</dd>
             </>
           )}
           
           {weather.dust.enabled && (
             <>
-              <dt>砂塵</dt>
-              <dd>濃度: {weather.dust.density}</dd>
+              <dt>{t('overview.dust')}</dt>
+              <dd>{t('overview.dustDensity', { value: weather.dust.density })}</dd>
             </>
           )}
           
-          <dt>地上乱気流</dt>
+          <dt>{t('overview.groundTurbulence')}</dt>
           <dd>{weather.turbulence.ground}</dd>
         </dl>
         
-        <h3>風</h3>
+        <h3>{t('overview.wind')}</h3>
         <table className="data-table">
           <thead>
             <tr>
-              <th>高度</th>
-              <th>風向 (FROM)</th>
-              <th>風向 (TO)</th>
-              <th>風速</th>
+              <th>{t('overview.altitude')}</th>
+              <th>{t('overview.windFrom')}</th>
+              <th>{t('overview.windTo')}</th>
+              <th>{t('overview.windSpeed')}</th>
             </tr>
           </thead>
           <tbody>
             {weather.wind.map(w => (
               <tr key={w.level}>
-                <td>{w.level === 'ground' ? '地上' : w.level === '2000' ? '2000m' : '8000m'}</td>
+                <td>{t(`overview.windLevels.${w.level}`)}</td>
                 <td>{w.from}°</td>
                 <td>{w.to}°</td>
                 <td>{formatSpeed(w.speed, settings.speedUnit)}</td>
@@ -121,46 +124,46 @@ export default function OverviewTab({ mission, settings }: OverviewTabProps) {
       </section>
 
       <section className="section astro">
-        <h2>天文情報</h2>
+        <h2>{t('overview.astronomy')}</h2>
         <dl className="info-grid">
-          <dt>基準点 (Blue Bullseye)</dt>
-          <dd>{hasValidReferencePoint ? `${referencePoint[0].toFixed(4)}°, ${referencePoint[1].toFixed(4)}°` : '—'}</dd>
+          <dt>{t('overview.bullseye')}</dt>
+          <dd>{hasValidReferencePoint ? `${referencePoint[0].toFixed(4)}°, ${referencePoint[1].toFixed(4)}°` : t('common.notAvailable')}</dd>
 
-          <dt>日の出</dt>
-          <dd>{formatAstroTime(sunTimes?.sunrise, meta.utcOffset)}</dd>
+          <dt>{t('overview.sunrise')}</dt>
+          <dd>{formatAstroTime(sunTimes?.sunrise, meta.utcOffset, t)}</dd>
 
-          <dt>日の入り</dt>
-          <dd>{formatAstroTime(sunTimes?.sunset, meta.utcOffset)}</dd>
+          <dt>{t('overview.sunset')}</dt>
+          <dd>{formatAstroTime(sunTimes?.sunset, meta.utcOffset, t)}</dd>
 
-          <dt>市民薄明</dt>
-          <dd>{formatAstroRange(sunTimes, 'dawn', 'dusk', meta.utcOffset)}</dd>
+          <dt>{t('overview.civilTwilight')}</dt>
+          <dd>{formatAstroRange(sunTimes, 'dawn', 'dusk', meta.utcOffset, t)}</dd>
 
-          <dt>航空薄明</dt>
-          <dd>{formatAstroRange(sunTimes, 'nauticalDawn', 'nauticalDusk', meta.utcOffset)}</dd>
+          <dt>{t('overview.nauticalTwilight')}</dt>
+          <dd>{formatAstroRange(sunTimes, 'nauticalDawn', 'nauticalDusk', meta.utcOffset, t)}</dd>
 
-          <dt>月齢</dt>
-          <dd>{moonInfo ? `${moonInfo.ageDays.toFixed(1)} 日` : '—'}</dd>
+          <dt>{t('overview.moonAge')}</dt>
+          <dd>{moonInfo ? t('overview.moonAgeDays', { days: moonInfo.ageDays.toFixed(1) }) : t('common.notAvailable')}</dd>
         </dl>
       </section>
       
       {(meta.descriptionBlueTask || meta.descriptionRedTask || meta.descriptionNeutralTask) && (
         <section className="section">
-          <h2>タスク文</h2>
+          <h2>{t('overview.taskText')}</h2>
           {meta.descriptionBlueTask && (
             <div className="task-text blue">
-              <h3>青側</h3>
+              <h3>{t('flights.selectBlue')}</h3>
               <pre>{meta.descriptionBlueTask}</pre>
             </div>
           )}
           {meta.descriptionRedTask && (
             <div className="task-text red">
-              <h3>赤側</h3>
+              <h3>{t('flights.selectRed')}</h3>
               <pre>{meta.descriptionRedTask}</pre>
             </div>
           )}
           {meta.descriptionNeutralTask && (
             <div className="task-text neutral">
-              <h3>中立</h3>
+              <h3>{t('overview.neutral')}</h3>
               <pre>{meta.descriptionNeutralTask}</pre>
             </div>
           )}
@@ -169,7 +172,7 @@ export default function OverviewTab({ mission, settings }: OverviewTabProps) {
       
       {mission.warnings.length > 0 && (
         <section className="section warnings">
-          <h2>⚠️ 警告</h2>
+          <h2>{t('overview.warning')}</h2>
           <ul>
             {mission.warnings.map((w, i) => <li key={i}>{w}</li>)}
           </ul>
@@ -190,11 +193,11 @@ function isValidReferencePoint(latlon: [number, number]): boolean {
     && (lat !== 0 || lon !== 0);
 }
 
-function formatAstroTime(date: Date | null | undefined, utcOffset: number): string {
-  if (!date) return '—';
+function formatAstroTime(date: Date | null | undefined, utcOffset: number, t: TFunction): string {
+  if (!date) return t('common.notAvailable');
 
   const localDate = addSeconds(date, utcOffset * 3600);
-  return `Local ${formatDateYMD(localDate)} ${formatTimeHHMM(localDate)} / Zulu ${formatDateYMD(date)} ${formatTimeHHMM(date)}Z`;
+  return `${t('common.local')} ${formatDateYMD(localDate)} ${formatTimeHHMM(localDate)} / ${t('common.zulu')} ${formatDateYMD(date)} ${formatTimeHHMM(date)}Z`;
 }
 
 function formatAstroRange(
@@ -202,7 +205,8 @@ function formatAstroRange(
   startKey: 'dawn' | 'nauticalDawn',
   endKey: 'dusk' | 'nauticalDusk',
   utcOffset: number,
+  t: TFunction,
 ): string {
-  if (!times) return '—';
-  return `${formatAstroTime(times[startKey], utcOffset)} ～ ${formatAstroTime(times[endKey], utcOffset)}`;
+  if (!times) return t('common.notAvailable');
+  return `${formatAstroTime(times[startKey], utcOffset, t)}${t('common.rangeSeparator')}${formatAstroTime(times[endKey], utcOffset, t)}`;
 }
