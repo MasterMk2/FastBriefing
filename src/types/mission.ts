@@ -33,7 +33,7 @@ export interface WindLayer {
 }
 
 export interface Coalition {
-  bullseye: { xy: [number, number]; latlon: [number, number] };
+  bullseye: { xy: [number, number]; latlon: [number, number]; latlonResolved?: boolean };
   navPoints: NavPoint[];
   airbases: Airbase[];
   flights: Flight[];
@@ -48,12 +48,14 @@ export interface NavPoint {
   name: string;
   xy: [number, number];
   latlon: [number, number];
+  latlonResolved?: boolean;
 }
 
 export interface Airbase {
   id: number;
   name: string;
   latlon: [number, number];
+  latlonResolved?: boolean;
   owner: string;
   runways: Runway[];
   atc: ATCFrequency[];
@@ -80,6 +82,7 @@ export interface TACAN {
   channel: string;
   mode: string;
   latlon: [number, number];
+  latlonResolved?: boolean;
   callsign?: string;
   system?: number | string;
 }
@@ -155,6 +158,7 @@ export interface RoutePoint {
   action: string;
   xy: [number, number];
   latlon: [number, number];
+  latlonResolved?: boolean;
   alt: number;
   altType: 'BARO' | 'RADIO';
   speed: number;
@@ -192,11 +196,14 @@ export interface SupportAsset {
   jtac?: JTACInfo;
   orbit?: OrbitInfo;
   position: [number, number];
+  latlon?: [number, number];
+  latlonResolved?: boolean;
 }
 
 export interface ICLS {
   channel: number | string;
   latlon: [number, number];
+  latlonResolved?: boolean;
   callsign?: string;
 }
 
@@ -225,8 +232,11 @@ export interface AIGroup {
   type: string;
   count: number;
   position: [number, number];
+  latlon?: [number, number];
+  latlonResolved?: boolean;
   threatRange?: number;
   threatRangeSource?: 'reference' | 'detection' | 'unknown';
+  threatRangeUnitType?: string;
   hidden: boolean;
   lateActivation: boolean;
   startTime: number;
