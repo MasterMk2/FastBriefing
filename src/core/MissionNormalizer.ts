@@ -1,6 +1,31 @@
-import type { MissionData, MissionMeta, Weather, Coalition, Flight, Unit, RoutePoint, SupportAsset, AIGroup, TriggerZone, Drawing, NavPoint, Airbase, Payload, Pylon, RadioPreset, WindLayer, UserNotes } from '../types/mission';
+import type { MissionData, MissionMeta, Weather, Coalition, Flight, Unit, RoutePoint, SupportAsset, AIGroup, TriggerZone, Drawing, NavPoint, Airbase, Payload, Pylon, RadioPreset, WindLayer, UserNotes, TACAN, ICLS, Link4, JTACInfo } from '../types/mission';
 import { dcsToLatLon } from '../utils/coordinates';
-import { windFromTo } from '../utils/units';
+import { windFromTo, pressureValuesFromMmHg } from '../utils/units';
+import threatRangeData from '../data/threatRanges.json';
+import weaponData from '../data/weapons.json';
+import cloudPresetData from '../data/cloudPresets.json';
+
+interface ThreatRangeReference {
+  threatRange: number;
+  detectionRange: number;
+}
+
+interface WeaponReference {
+  name: string;
+  weight: number;
+}
+
+interface CloudPresetReference {
+  label: string;
+  baseMin: number;
+  baseMax: number;
+  coverage: string;
+  weather?: string;
+}
+
+const threatRanges = threatRangeData as unknown as Record<string, ThreatRangeReference>;
+const weapons = weaponData as unknown as Record<string, WeaponReference>;
+const cloudPresets = cloudPresetData as unknown as Record<string, CloudPresetReference>;
 
 function getValue(obj: unknown, path: string[]): unknown {
   let current: unknown = obj;
@@ -16,7 +41,12 @@ function getValue(obj: unknown, path: string[]): unknown {
 
 function getNumber(obj: unknown, path: string[], defaultValue = 0): number {
   const val = getValue(obj, path);
-  return typeof val === 'number' ? val : defaultValue;
+  if (typeof val === 'number' && Number.isFinite(val)) return val;
+  if (typeof val === 'string' && val.trim() !== '') {
+    const parsed = Number(val);
+    return Number.isFinite(parsed) ? parsed : defaultValue;
+  }
+  return defaultValue;
 }
 
 function getString(obj: unknown, path: string[], defaultValue = ''): string {
@@ -56,7 +86,7 @@ export function normalizeMission(
   const warnings: string[] = [];
   
   const meta = normalizeMeta(mission, dictionary, mapResource, theatre);
-  const weather = normalizeWeather(mission, dictionary);
+  const weather = normalizeWeather(mission, dictionary, warnings);
   const coalitions = normalizeCoalitions(mission, warehouses, dictionary, mapResource, theatre, warnings);
   const userNotes = createEmptyUserNotes();
   
@@ -98,25 +128,25 @@ function normalizeMeta(mission: Record<string, unknown>, dictionary: Record<stri
   };
 }
 
-function normalizeWeather(mission: Record<string, unknown>, _dictionary: Record<string, string>): Weather {
+function normalizeWeather(mission: Record<string, unknown>, _dictionary: Record<string, string>, warnings: string[]): Weather {
   const weather = getValue(mission, ['weather']) as Record<string, unknown> || {};
   const wind = getValue(weather, ['wind']) as Record<string, unknown> || {};
   
   const qnhMmHg = getNumber(weather, ['qnh'], 760);
+  const qnh = pressureValuesFromMmHg(qnhMmHg);
+  const temperature = getNumber(weather, ['season', 'temperature']);
+  const dewPointValue = getValue(weather, ['season', 'dew_point']) ?? getValue(weather, ['season', 'dewPoint']) ?? getValue(weather, ['dew_point']) ?? getValue(weather, ['dewPoint']);
   
   return {
-    temperature: getNumber(weather, ['season', 'temperature']),
-    qnh: {
-      mmHg: qnhMmHg,
-      hPa: qnhMmHg * 1.33322,
-      inHg: qnhMmHg * 0.0393701,
-    },
+    temperature,
+    ...(typeof dewPointValue === 'number' || typeof dewPointValue === 'string' ? { dewPoint: getNumber({ value: dewPointValue }, ['value']) } : {}),
+    qnh,
     wind: [
       normalizeWindLayer(wind, 'atGround', 'ground'),
       normalizeWindLayer(wind, 'at2000', '2000'),
       normalizeWindLayer(wind, 'at8000', '8000'),
     ],
-    clouds: normalizeClouds(weather),
+    clouds: normalizeClouds(weather, warnings),
     visibility: getNumber(weather, ['visibility', 'distance']),
     fog: {
       thickness: getNumber(weather, ['fog', 'thickness']),
@@ -145,15 +175,54 @@ function normalizeWindLayer(wind: Record<string, unknown>, key: string, level: '
   };
 }
 
-function normalizeClouds(weather: Record<string, unknown>): { preset: string; label: string; base: number } {
+function normalizeClouds(weather: Record<string, unknown>, warnings: string[]): Weather['clouds'] {
   const clouds = getValue(weather, ['clouds']) as Record<string, unknown> || {};
   const preset = getString(clouds, ['preset']);
-  const base = getNumber(clouds, ['base']);
+  const rawBase = getNumber(clouds, ['base']);
+  const densityValue = getValue(clouds, ['density']);
+  const density = typeof densityValue === 'number' || typeof densityValue === 'string'
+    ? getNumber({ value: densityValue }, ['value'])
+    : undefined;
+  const reference = preset ? cloudPresets[preset] : undefined;
+
+  if (preset && !reference) {
+    addWarning(warnings, `未知の雲プリセット: ${preset}`);
+  }
+
+  const coverage = reference?.coverage ?? legacyCloudCoverage(density);
+  const label = reference?.label ?? (coverage ? `${legacyCloudLabel(coverage)}${density === undefined ? '' : ` (${density})`}` : 'Sky condition unavailable');
   return {
     preset,
-    label: preset,
-    base,
+    label,
+    base: rawBase,
+    ...(density === undefined ? {} : { density }),
+    ...(coverage ? { coverage } : {}),
+    ...(reference?.weather ? { weather: reference.weather } : {}),
   };
+}
+
+function legacyCloudCoverage(density: number | undefined): string | undefined {
+  if (density === undefined) return undefined;
+  if (density <= 0) return 'SKC';
+  if (density <= 2) return 'FEW';
+  if (density <= 5) return 'SCT';
+  if (density <= 8) return 'BKN';
+  return 'OVC';
+}
+
+function legacyCloudLabel(coverage: string): string {
+  switch (coverage) {
+    case 'SKC': return 'Clear';
+    case 'FEW': return 'Few';
+    case 'SCT': return 'Scattered';
+    case 'BKN': return 'Broken';
+    case 'OVC': return 'Overcast';
+    default: return 'Clouds';
+  }
+}
+
+function addWarning(warnings: string[], warning: string): void {
+  if (!warnings.includes(warning)) warnings.push(warning);
 }
 
 function normalizeCoalitions(
@@ -180,7 +249,7 @@ function normalizeCoalition(
   dictionary: Record<string, string>,
   _mapResource: Record<string, string>,
   theatre: string,
-  _warnings: string[]
+  warnings: string[]
 ): Coalition {
   const sideData = getValue(coalitionData, [side]) as Record<string, unknown> || {};
   const bullseye = getValue(sideData, ['bullseye']) as Record<string, unknown> || {};
@@ -192,9 +261,9 @@ function normalizeCoalition(
     bullseye: { xy: [bullseyeX, bullseyeY], latlon: bullseyeLatLon },
     navPoints: normalizeNavPoints(sideData, theatre),
     airbases: normalizeAirbases(sideData, warehouses, dictionary, _mapResource, theatre),
-    flights: normalizeFlights(sideData, dictionary, _mapResource, theatre),
+    flights: normalizeFlights(sideData, dictionary, _mapResource, theatre, warnings),
     support: normalizeSupport(sideData, dictionary, _mapResource, theatre),
-    aiGroups: normalizeAIGroups(sideData, dictionary, theatre),
+    aiGroups: normalizeAIGroups(sideData, dictionary, theatre, warnings),
     zones: normalizeZones(sideData, theatre),
     drawings: normalizeDrawings(sideData),
   };
@@ -222,7 +291,7 @@ function normalizeAirbases(
   _mapResource: Record<string, string>,
   theatre: string
 ): Airbase[] {
-  const countries = getValue(sideData, ['country']) as unknown[];
+  const countries = getValue(sideData, ['country']) as unknown[] || [];
   const airports = getValue(warehouses, ['airports']) as Record<string, unknown> || {};
   const airbases: Airbase[] = [];
   
@@ -271,9 +340,10 @@ function normalizeFlights(
   sideData: Record<string, unknown>,
   dictionary: Record<string, string>,
   _mapResource: Record<string, string>,
-  theatre: string
+  theatre: string,
+  warnings: string[]
 ): Flight[] {
-  const countries = getValue(sideData, ['country']) as unknown[];
+  const countries = getValue(sideData, ['country']) as unknown[] || [];
   const flights: Flight[] = [];
   
   for (const country of countries) {
@@ -309,7 +379,7 @@ function normalizeFlights(
           frequency: getNumber(groupData, ['frequency']),
           modulation: getNumber(groupData, ['modulation']),
           hidden: getValue(groupData, ['hidden']) === true,
-          units: normalizeUnits(units, dictionary, theatre),
+          units: normalizeUnits(units, dictionary, theatre, warnings),
           route: normalizeRoutePoints(routePoints, theatre),
         });
       }
@@ -333,12 +403,12 @@ function normalizeCallsign(callsign: unknown, dictionary: Record<string, string>
   return String(callsign);
 }
 
-function normalizeUnits(units: unknown[], dictionary: Record<string, string>, _theatre: string): Unit[] {
+function normalizeUnits(units: unknown[], dictionary: Record<string, string>, _theatre: string, warnings: string[]): Unit[] {
   return units.map((u) => {
     const unit = u as Record<string, unknown>;
     const payload = getValue(unit, ['payload']) as Record<string, unknown> || {};
-    const pylons = getArray(payload, ['pylons']);
-    const radios = getArray(unit, ['Radio', 'channels']) || getArray(unit, ['radioSet', 'channels']);
+    const primaryRadios = getArray(unit, ['Radio', 'channels']);
+    const radios = primaryRadios.length > 0 ? primaryRadios : getArray(unit, ['radioSet', 'channels']);
     
     return {
       unitId: getNumber(unit, ['unitId']),
@@ -346,7 +416,7 @@ function normalizeUnits(units: unknown[], dictionary: Record<string, string>, _t
       tailNumber: getString(unit, ['onboard_num']),
       skill: getString(unit, ['skill']),
       livery: getString(unit, ['livery_id']),
-      payload: normalizePayload(pylons),
+      payload: normalizePayload(payload, warnings),
       radios: normalizeRadios(radios),
       props: getValue(unit, ['AddPropAircraft']) as Record<string, unknown> || {},
       datalink: normalizeDatalink(getValue(unit, ['datalinks'])),
@@ -354,33 +424,50 @@ function normalizeUnits(units: unknown[], dictionary: Record<string, string>, _t
   });
 }
 
-function normalizePayload(pylons: unknown[]): Payload {
+export function normalizePayload(payload: Record<string, unknown>, warnings: string[] = []): Payload {
+  const pylons = getArray(payload, ['pylons']);
   const pylonList: Pylon[] = [];
-  let totalWeight = 0;
+  const fuel = getNumber(payload, ['fuel']);
+  const chaff = getNumber(payload, ['chaff']);
+  const flare = getNumber(payload, ['flare']);
+  const gun = getNumber(payload, ['gun']);
+  let totalWeight = fuel;
   
   for (const pylon of pylons) {
     const p = pylon as Record<string, unknown>;
     const n = getNumber(p, ['n']);
     const clsid = getString(p, ['CLSID']);
     if (clsid) {
+      const reference = weapons[clsid];
+      const weight = reference?.weight ?? 0;
+      if (!reference) addWarning(warnings, `未知の兵装 CLSID: ${clsid}`);
       pylonList.push({
         station: String(n),
         clsid,
-        name: clsid,
+        name: reference?.name ?? fallbackWeaponName(clsid),
         count: 1,
-        weight: 0,
+        weight,
       });
+      totalWeight += weight;
     }
   }
   
   return {
     pylons: pylonList,
-    fuel: 0,
-    chaff: 0,
-    flare: 0,
-    gun: 0,
+    fuel,
+    chaff,
+    flare,
+    gun,
     weight: totalWeight,
   };
+}
+
+function fallbackWeaponName(clsid: string): string {
+  const readable = clsid
+    .replace(/^\{/, '')
+    .replace(/\}$/, '')
+    .replace(/^CLSID[_-]?/i, '');
+  return `${readable || clsid} (未収録)`;
 }
 
 function normalizeRadios(radios: unknown[]): RadioPreset[] {
@@ -443,7 +530,7 @@ function normalizeSupport(
   _mapResource: Record<string, string>,
   theatre: string
 ): SupportAsset[] {
-  const countries = getValue(sideData, ['country']) as unknown[];
+  const countries = getValue(sideData, ['country']) as unknown[] || [];
   const support: SupportAsset[] = [];
   
   for (const country of countries) {
@@ -451,31 +538,32 @@ function normalizeSupport(
     const planes = getArray(c, ['plane']);
     const helicopters = getArray(c, ['helicopter']);
     const ships = getArray(c, ['ship']);
+    const vehicles = getArray(c, ['vehicle']);
     
-    for (const group of [...planes, ...helicopters, ...ships]) {
+    // Every source group is visited exactly once, including ships.  A carrier
+    // with a task such as Tanker is classified by the task branch and cannot
+    // be appended a second time by a separate ship pass.
+    for (const group of [...planes, ...helicopters, ...ships, ...vehicles]) {
       const g = group as Record<string, unknown>;
       const groups = getArray(g, ['group']);
       
       for (const grp of groups) {
         const groupData = grp as Record<string, unknown>;
         const task = getString(groupData, ['task']);
-        getArray(groupData, ['units']);
+        const units = getArray(groupData, ['units']);
+        const unitType = getString(units[0], ['type']) || getString(groupData, ['type']);
+        const signals = extractSupportSignals(groupData);
+        const carrier = isCarrierType(unitType);
+        const jtac = isJTACGroup(unitType, signals.hasFacTask || /JTAC|FAC/i.test(task));
         
         if (task === 'Tanker') {
-          support.push(normalizeTanker(groupData, dictionary, theatre));
+          support.push(normalizeTanker(groupData, dictionary, theatre, signals));
         } else if (task === 'AWACS') {
-          support.push(normalizeAWACS(groupData, dictionary, theatre));
-        }
-      }
-    }
-    
-    for (const ship of ships) {
-      const s = ship as Record<string, unknown>;
-      const groups = getArray(s, ['group']);
-      for (const grp of groups) {
-        const groupData = grp as Record<string, unknown>;
-        if (getString(groupData, ['type']).includes('CVN') || getString(groupData, ['type']).includes('LHA')) {
-          support.push(normalizeCarrier(groupData, dictionary, theatre));
+          support.push(normalizeAWACS(groupData, dictionary, theatre, signals));
+        } else if (carrier) {
+          support.push(normalizeCarrier(groupData, dictionary, theatre, signals));
+        } else if (jtac) {
+          support.push(normalizeJTAC(groupData, dictionary, theatre, signals, unitType));
         }
       }
     }
@@ -484,20 +572,30 @@ function normalizeSupport(
   return support;
 }
 
-function normalizeTanker(groupData: Record<string, unknown>, dictionary: Record<string, string>, _theatre: string): SupportAsset {
+interface ExtractedSupportSignals {
+  tacan?: TACAN;
+  icls?: ICLS;
+  link4?: Link4;
+  laserCode?: number | string;
+  datalink?: string | number;
+  hasFacTask: boolean;
+}
+
+function normalizeTanker(groupData: Record<string, unknown>, dictionary: Record<string, string>, _theatre: string, signals: ExtractedSupportSignals): SupportAsset {
   const units = getArray(groupData, ['units']);
   const unit = units[0] as Record<string, unknown>;
   const x = getNumber(unit, ['x']);
   const y = getNumber(unit, ['y']);
   const route = getValue(groupData, ['route']) as Record<string, unknown> || {};
   const points = getArray(route, ['points']);
+  const { hasFacTask: _hasFacTask, ...signalFields } = signals;
   
   return {
     kind: 'tanker',
     callsign: normalizeCallsign(getValue(groupData, ['callsign']), dictionary),
     frequency: getNumber(groupData, ['frequency']),
     position: [x, y],
-    tacan: undefined,
+    ...signalFields,
     orbit: points.length > 0 ? {
       point: [getNumber(points[0], ['x']), getNumber(points[0], ['y'])],
       altitude: getNumber(points[0], ['alt']),
@@ -507,19 +605,21 @@ function normalizeTanker(groupData: Record<string, unknown>, dictionary: Record<
   };
 }
 
-function normalizeAWACS(groupData: Record<string, unknown>, dictionary: Record<string, string>, _theatre: string): SupportAsset {
+function normalizeAWACS(groupData: Record<string, unknown>, dictionary: Record<string, string>, _theatre: string, signals: ExtractedSupportSignals): SupportAsset {
   const units = getArray(groupData, ['units']);
   const unit = units[0] as Record<string, unknown>;
   const x = getNumber(unit, ['x']);
   const y = getNumber(unit, ['y']);
   const route = getValue(groupData, ['route']) as Record<string, unknown> || {};
   const points = getArray(route, ['points']);
+  const { hasFacTask: _hasFacTask, ...signalFields } = signals;
   
   return {
     kind: 'awacs',
     callsign: normalizeCallsign(getValue(groupData, ['callsign']), dictionary),
     frequency: getNumber(groupData, ['frequency']),
     position: [x, y],
+    ...signalFields,
     orbit: points.length > 0 ? {
       point: [getNumber(points[0], ['x']), getNumber(points[0], ['y'])],
       altitude: getNumber(points[0], ['alt']),
@@ -529,22 +629,134 @@ function normalizeAWACS(groupData: Record<string, unknown>, dictionary: Record<s
   };
 }
 
-function normalizeCarrier(groupData: Record<string, unknown>, dictionary: Record<string, string>, _theatre: string): SupportAsset {
+function normalizeCarrier(groupData: Record<string, unknown>, dictionary: Record<string, string>, _theatre: string, signals: ExtractedSupportSignals): SupportAsset {
   const units = getArray(groupData, ['units']);
   const unit = units[0] as Record<string, unknown>;
   const x = getNumber(unit, ['x']);
   const y = getNumber(unit, ['y']);
+  const { hasFacTask: _hasFacTask, ...signalFields } = signals;
   
   return {
     kind: 'carrier',
-    callsign: resolveDictKey(getString(groupData, ['name']), dictionary),
-    frequency: 0,
+    callsign: normalizeCallsign(getValue(groupData, ['callsign']), dictionary) || resolveDictKey(getString(groupData, ['name']), dictionary),
+    frequency: getNumber(groupData, ['frequency']),
     position: [x, y],
+    ...signalFields,
   };
 }
 
-function normalizeAIGroups(sideData: Record<string, unknown>, _dictionary: Record<string, string>, _theatre: string): AIGroup[] {
-  const countries = getValue(sideData, ['country']) as unknown[];
+function normalizeJTAC(
+  groupData: Record<string, unknown>,
+  dictionary: Record<string, string>,
+  _theatre: string,
+  signals: ExtractedSupportSignals,
+  unitType: string
+): SupportAsset {
+  const units = getArray(groupData, ['units']);
+  const unit = units[0] as Record<string, unknown>;
+  const { hasFacTask: _hasFacTask, ...signalFields } = signals;
+  const frequency = getNumber(groupData, ['frequency']);
+  const callsign = normalizeCallsign(getValue(groupData, ['callsign']), dictionary) || getString(unit, ['name']);
+  const jtac: JTACInfo = {
+    unitType: unitType || undefined,
+    frequency: frequency || undefined,
+    laserCode: signals.laserCode,
+    datalink: signals.datalink,
+  };
+
+  return {
+    kind: 'jtac',
+    callsign,
+    frequency,
+    position: [getNumber(unit, ['x']), getNumber(unit, ['y'])],
+    ...signalFields,
+    jtac,
+  };
+}
+
+function isCarrierType(type: string): boolean {
+  return /(?:CVN|LHA|LHD|KUZNECOV|TARAWA|STENNIS|FLEET\s*CARRIER|FORRESTAL|INVINCIBLE)/i.test(type);
+}
+
+function isJTACGroup(unitType: string, hasFacTask: boolean): boolean {
+  return hasFacTask || /(?:^|[ _-])(JTAC|FAC|MCC)(?:$|[ _-])/i.test(unitType) || unitType.toLowerCase() === 'soldier';
+}
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function scalarString(value: unknown): string | undefined {
+  if (typeof value === 'string' && value.trim() !== '') return value;
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+  return undefined;
+}
+
+function scalarValue(value: unknown): number | string | undefined {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string' && value.trim() !== '') return value;
+  return undefined;
+}
+
+function extractSupportSignals(groupData: Record<string, unknown>): ExtractedSupportSignals {
+  const result: ExtractedSupportSignals = { hasFacTask: false };
+  const route = getValue(groupData, ['route']);
+  const points = isObject(route) ? getArray(route, ['points']) : [];
+  const visited = new Set<object>();
+
+  const visit = (value: unknown): void => {
+    if (Array.isArray(value)) {
+      for (const item of value) visit(item);
+      return;
+    }
+    if (!isObject(value) || visited.has(value)) return;
+    visited.add(value);
+
+    const action = isObject(value.action) ? value.action : value;
+    const actionId = getString(action, ['id']) || getString(value, ['id']) || getString(value, ['type']);
+    if (/FAC|JTAC/i.test(actionId)) result.hasFacTask = true;
+
+    const params = isObject(action.params) ? action.params : isObject(value.params) ? value.params : undefined;
+    if (actionId === 'ActivateBeacon') {
+      const beaconParams = params ?? {};
+      const channel = scalarString(getValue(beaconParams, ['channel']) ?? getValue(beaconParams, ['channelNumber'])) ?? '';
+      const mode = scalarString(getValue(beaconParams, ['modeChannel']) ?? getValue(beaconParams, ['mode'])) ?? '';
+      const callsign = scalarString(getValue(beaconParams, ['callsign']));
+      const system = scalarValue(getValue(beaconParams, ['system']) ?? getValue(beaconParams, ['type']));
+      result.tacan = { channel, mode, callsign, system, latlon: [0, 0] };
+    } else if (actionId === 'ActivateICLS') {
+      const iclsParams = params ?? {};
+      const channelValue = scalarValue(getValue(iclsParams, ['channel']) ?? getValue(iclsParams, ['channelNumber'])) ?? '';
+      const callsign = scalarString(getValue(iclsParams, ['callsign']));
+      result.icls = { channel: channelValue, callsign, latlon: [0, 0] };
+    } else if (actionId === 'ActivateLink4') {
+      const linkParams = params ?? {};
+      result.link4 = {
+        frequency: getNumber(linkParams, ['frequency']) || undefined,
+        channel: scalarValue(getValue(linkParams, ['channel'])),
+        callsign: scalarString(getValue(linkParams, ['callsign'])),
+      };
+    }
+
+    for (const [key, child] of Object.entries(value)) {
+      if (/laser(?:_?code)?|designation|lase_code/i.test(key)) {
+        const candidate = scalarValue(child);
+        if (candidate !== undefined) result.laserCode = candidate;
+      }
+      if (/datalink|data_link/i.test(key)) {
+        const candidate = scalarValue(child);
+        if (candidate !== undefined) result.datalink = candidate;
+      }
+      visit(child);
+    }
+  };
+
+  visit(points);
+  return result;
+}
+
+function normalizeAIGroups(sideData: Record<string, unknown>, _dictionary: Record<string, string>, _theatre: string, warnings: string[]): AIGroup[] {
+  const countries = getValue(sideData, ['country']) as unknown[] || [];
   const groups: AIGroup[] = [];
   
   for (const country of countries) {
@@ -570,13 +782,25 @@ function normalizeAIGroups(sideData: Record<string, unknown>, _dictionary: Recor
         
         const x = getNumber(unit, ['x']);
         const y = getNumber(unit, ['y']);
+        const type = getString(unit, ['type']);
+        const threat = threatRanges[type];
+        const threatRange = threat?.threatRange > 0 ? threat.threatRange : threat?.detectionRange > 0 ? threat.detectionRange : 0;
+        const threatRangeSource: AIGroup['threatRangeSource'] = !threat
+          ? 'unknown'
+          : threat.threatRange > 0
+            ? 'reference'
+            : threat.detectionRange > 0
+              ? 'detection'
+              : 'reference';
+        if (!threat) addWarning(warnings, `未知の脅威半径: ${type}`);
         
         groups.push({
           category: getString(group, ['category'], 'unknown'),
-          type: getString(unit, ['type']),
+          type,
           count: units.length,
           position: [x, y],
-          threatRange: 0,
+          threatRange,
+          threatRangeSource,
           hidden: getValue(groupData, ['hidden']) === true,
           lateActivation: getValue(groupData, ['lateActivation']) === true,
           startTime: getNumber(groupData, ['start_time']),

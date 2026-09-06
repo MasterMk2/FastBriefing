@@ -14,9 +14,11 @@ export interface MissionMeta {
 
 export interface Weather {
   temperature: number;
+  /** Optional DCS/dew-point source field; METAR omits it when unavailable. */
+  dewPoint?: number;
   qnh: { mmHg: number; hPa: number; inHg: number };
   wind: WindLayer[];
-  clouds: { preset: string; label: string; base: number };
+  clouds: { preset: string; label: string; base: number; density?: number; coverage?: string; weather?: string };
   visibility: number;
   fog: { thickness: number; visibility: number; enabled: boolean };
   dust: { density: number; enabled: boolean };
@@ -78,6 +80,8 @@ export interface TACAN {
   channel: string;
   mode: string;
   latlon: [number, number];
+  callsign?: string;
+  system?: number | string;
 }
 
 export interface ILS {
@@ -124,6 +128,7 @@ export interface Pylon {
   station: string;
   clsid: string;
   name: string;
+  /** One entry per source pylon; count is 1 so the UI can address stations directly. */
   count: number;
   weight: number;
 }
@@ -181,13 +186,31 @@ export interface SupportAsset {
   frequency: number;
   tacan?: TACAN;
   icls?: ICLS;
+  link4?: Link4;
+  laserCode?: number | string;
+  datalink?: string | number;
+  jtac?: JTACInfo;
   orbit?: OrbitInfo;
   position: [number, number];
 }
 
 export interface ICLS {
-  channel: number;
+  channel: number | string;
   latlon: [number, number];
+  callsign?: string;
+}
+
+export interface Link4 {
+  frequency?: number;
+  channel?: number | string;
+  callsign?: string;
+}
+
+export interface JTACInfo {
+  unitType?: string;
+  frequency?: number;
+  laserCode?: number | string;
+  datalink?: string | number;
 }
 
 export interface OrbitInfo {
@@ -203,6 +226,7 @@ export interface AIGroup {
   count: number;
   position: [number, number];
   threatRange?: number;
+  threatRangeSource?: 'reference' | 'detection' | 'unknown';
   hidden: boolean;
   lateActivation: boolean;
   startTime: number;
