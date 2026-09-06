@@ -125,10 +125,10 @@ export default function MapTab({ mission, settings }: MapTabProps) {
           {layers.zones && (
             <LayerGroup>
               {mission.coalitions.blue.zones.map(zone => (
-                <TriggerZone key={zone.zoneId} zone={zone} color="#0066ff" />
+                <TriggerZone key={zone.zoneId} zone={zone} color="#0066ff" theatre={mission.meta.theatre} />
               ))}
               {mission.coalitions.red.zones.map(zone => (
-                <TriggerZone key={`red-${zone.zoneId}`} zone={zone} color="#ff0000" />
+                <TriggerZone key={`red-${zone.zoneId}`} zone={zone} color="#ff0000" theatre={mission.meta.theatre} />
               ))}
             </LayerGroup>
           )}
@@ -136,10 +136,10 @@ export default function MapTab({ mission, settings }: MapTabProps) {
           {layers.drawings && (
             <LayerGroup>
               {mission.coalitions.blue.drawings.map((drawing, i) => (
-                <DrawingLayer key={i} drawing={drawing} />
+                <DrawingLayer key={i} drawing={drawing} theatre={mission.meta.theatre} />
               ))}
               {mission.coalitions.red.drawings.map((drawing, i) => (
-                <DrawingLayer key={`red-${i}`} drawing={drawing} />
+                <DrawingLayer key={`red-${i}`} drawing={drawing} theatre={mission.meta.theatre} />
               ))}
             </LayerGroup>
           )}
@@ -147,10 +147,10 @@ export default function MapTab({ mission, settings }: MapTabProps) {
           {layers.support && (
             <LayerGroup>
               {mission.coalitions.blue.support.map((s, i) => (
-                <SupportMarker key={i} support={s} label="Blue" />
+                <SupportMarker key={i} support={s} label="Blue" theatre={mission.meta.theatre} />
               ))}
               {mission.coalitions.red.support.map((s, i) => (
-                <SupportMarker key={`red-${i}`} support={s} label="Red" />
+                <SupportMarker key={`red-${i}`} support={s} label="Red" theatre={mission.meta.theatre} />
               ))}
             </LayerGroup>
           )}
@@ -210,8 +210,8 @@ function FlightPath({ flight, color }: { flight: { route: { latlon: [number, num
   );
 }
 
-function TriggerZone({ zone, color }: { zone: { xy: [number, number]; radius: number; type: number; vertices?: [number, number][]; name: string }; color: string }) {
-  const center = dcsToLatLon('Caucasus', zone.xy[0], zone.xy[1]) || [0, 0];
+function TriggerZone({ zone, color, theatre }: { zone: { xy: [number, number]; radius: number; type: number; vertices?: [number, number][]; name: string }; color: string; theatre: string }) {
+  const center = dcsToLatLon(theatre, zone.xy[0], zone.xy[1]) || [0, 0];
   
   if (zone.type === 0) {
     return (
@@ -230,7 +230,7 @@ function TriggerZone({ zone, color }: { zone: { xy: [number, number]; radius: nu
   }
   
   if (zone.vertices && zone.vertices.length > 0) {
-    const positions = zone.vertices.map(v => dcsToLatLon('Caucasus', v[0], v[1]) as [number, number]);
+    const positions = zone.vertices.map(v => dcsToLatLon(theatre, v[0], v[1]) as [number, number]);
     return (
       <Polyline positions={positions} color={color} weight={2} fillColor={color} fillOpacity={0.1} />
     );
@@ -239,13 +239,13 @@ function TriggerZone({ zone, color }: { zone: { xy: [number, number]; radius: nu
   return null;
 }
 
-function DrawingLayer({ drawing }: { drawing: { layer: string; visible: boolean; objects: { primitiveType: string; points: [number, number][]; color: string; fillColor?: string; thickness: number; name: string }[] } }) {
+function DrawingLayer({ drawing, theatre }: { drawing: { layer: string; visible: boolean; objects: { primitiveType: string; points: [number, number][]; color: string; fillColor?: string; thickness: number; name: string }[] }; theatre: string }) {
   if (!drawing.visible) return null;
   
   return (
     <LayerGroup>
       {drawing.objects.map((obj, i) => {
-        const positions = obj.points.map(p => dcsToLatLon('Caucasus', p[0], p[1]) as [number, number]);
+        const positions = obj.points.map(p => dcsToLatLon(theatre, p[0], p[1]) as [number, number]);
         
         if (obj.primitiveType === 'Line') {
           return <Polyline key={i} positions={positions} color={obj.color} weight={obj.thickness} />;
@@ -266,8 +266,8 @@ function DrawingLayer({ drawing }: { drawing: { layer: string; visible: boolean;
   );
 }
 
-function SupportMarker({ support, label }: { support: { kind: string; callsign: string; position: [number, number] }; label: string }) {
-  const position = dcsToLatLon('Caucasus', support.position[0], support.position[1]) as [number, number];
+function SupportMarker({ support, label, theatre }: { support: { kind: string; callsign: string; position: [number, number] }; label: string; theatre: string }) {
+  const position = dcsToLatLon(theatre, support.position[0], support.position[1]) as [number, number];
   
   return (
     <Marker position={position} icon={createSupportIcon(support.kind)}>

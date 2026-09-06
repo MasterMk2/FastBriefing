@@ -1,6 +1,13 @@
 import { unzipSync, strFromU8 } from 'fflate';
 import { parse } from 'luaparse';
 
+const ZIP_LIMITS = {
+  MAX_ENTRIES: 100,
+  MAX_TOTAL_SIZE: 50 * 1024 * 1024, // 50 MB
+  MAX_ENTRY_SIZE: 10 * 1024 * 1024, // 10 MB
+  MAX_COMPRESSION_RATIO: 100,
+} as const;
+
 interface ParsedMissionFile {
   mission: unknown;
   theatre: string;
@@ -114,7 +121,29 @@ function parseMapResource(content: string): Record<string, string> {
 self.onmessage = async (e: MessageEvent<{ file: ArrayBuffer }>) => {
   try {
     const { file } = e.data;
-    const zip = unzipSync(new Uint8Array(file)) as Record<string, Uint8Array>;
+    const uint8Array = new Uint8Array(file);
+    const zip = unzipSync(uint8Array) as Record<string, Uint8Array>;
+    
+    const entries = Object.keys(zip);
+    if (entries.length > ZIP_LIMITS.MAX_ENTRIES) {
+      throw new Error(`ZIP contains too many entries: ${entries.length} > ${ZIP_LIMITS.MAX_ENTRIES}`);
+    }
+    
+    let totalSize = 0;
+    for (const name of entries) {
+      const entry = zip[name];
+      if (entry.length > ZIP_LIMITS.MAX_ENTRY_SIZE) {
+        throw new Error(`ZIP entry too large: ${name} (${entry.length} bytes > ${ZIP_LIMITS.MAX_ENTRY_SIZE} bytes)`);
+      }
+      totalSize += entry.length;
+      if (totalSize > ZIP_LIMITS.MAX_TOTAL_SIZE) {
+        throw new Error(`ZIP total uncompressed size exceeds limit: ${totalSize} > ${ZIP_LIMITS.MAX_TOTAL_SIZE}`);
+      }
+      const compressionRatio = uint8Array.length / entry.length;
+      if (compressionRatio > ZIP_LIMITS.MAX_COMPRESSION_RATIO) {
+        throw new Error(`Suspicious compression ratio for ${name}: ${compressionRatio.toFixed(1)} > ${ZIP_LIMITS.MAX_COMPRESSION_RATIO}`);
+      }
+    }
     
     const result: ParsedMissionFile = {
       mission: null,

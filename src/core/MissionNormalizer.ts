@@ -189,7 +189,7 @@ function normalizeCoalition(
   
   return {
     bullseye: { xy: [bullseyeX, bullseyeY], latlon: bullseyeLatLon },
-    navPoints: normalizeNavPoints(sideData),
+    navPoints: normalizeNavPoints(sideData, theatre),
     airbases: normalizeAirbases(sideData, warehouses, dictionary, _mapResource, theatre),
     flights: normalizeFlights(sideData, dictionary, _mapResource, theatre),
     support: normalizeSupport(sideData, dictionary, _mapResource, theatre),
@@ -199,7 +199,7 @@ function normalizeCoalition(
   };
 }
 
-function normalizeNavPoints(sideData: Record<string, unknown>): NavPoint[] {
+function normalizeNavPoints(sideData: Record<string, unknown>, theatre: string): NavPoint[] {
   const navPoints = getArray(sideData, ['nav_points']);
   return navPoints.map((np, i) => {
     const point = np as Record<string, unknown>;
@@ -209,7 +209,7 @@ function normalizeNavPoints(sideData: Record<string, unknown>): NavPoint[] {
       index: i + 1,
       name: getString(point, ['name']),
       xy: [x, y],
-      latlon: [0, 0],
+      latlon: dcsToLatLon(theatre, x, y) || [0, 0],
     };
   });
 }
@@ -587,8 +587,27 @@ function normalizeAIGroups(sideData: Record<string, unknown>, _dictionary: Recor
   return groups;
 }
 
-function normalizeZones(_sideData: Record<string, unknown>, _theatre: string): TriggerZone[] {
-  return [];
+function normalizeZones(sideData: Record<string, unknown>, _theatre: string): TriggerZone[] {
+  const zones = getArray(sideData, ['zones']);
+  return zones.map((zone, i) => {
+    const z = zone as Record<string, unknown>;
+    const x = getNumber(z, ['x']);
+    const y = getNumber(z, ['y']);
+    const zoneType = getNumber(z, ['type'], 0);
+    const vertices = getArray(z, ['vertices']).map(v => [getNumber(v as Record<string, unknown>, ['x']), getNumber(v as Record<string, unknown>, ['y'])] as [number, number]);
+    const color = getArray(z, ['color']);
+    
+    return {
+      zoneId: getNumber(z, ['zoneId'], i + 1),
+      name: getString(z, ['name']),
+      xy: [x, y],
+      radius: getNumber(z, ['radius']),
+      type: zoneType as 0 | 2,
+      vertices: vertices.length > 0 ? vertices : undefined,
+      color,
+      hidden: getValue(z, ['hidden']) === true,
+    };
+  });
 }
 
 function normalizeDrawings(sideData: Record<string, unknown>): Drawing[] {
