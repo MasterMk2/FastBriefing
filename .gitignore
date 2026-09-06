@@ -1,0 +1,60 @@
+# dependencies
+node_modules/
+.pnp/
+.pnp.js
+
+# build outputs
+dist/
+dist-ssr/
+*.local
+.vite/
+
+# logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# editor
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# research snapshots (ED forum HTML) - keep URLs in docs/research-notes.md, not raw HTML
+# uncomment to exclude if re-scraped: *.html is too broad because index.html is required
+# so exclude only research dumps explicitly:
+brief.html
+clouds.html
+draken.html
+dtcloc.html
+dtcmay.html
+forum_dtc.html
+jtac.html
+kbgen.html
+kbplace.html
+kbres.html
+mbr.html
+mpdtc.html
+wombat.html
+
+# env / secrets
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# coverage
+coverage/
+
+# OS
+Thumbs.db
+ehthumbs.db
+Desktop.ini
