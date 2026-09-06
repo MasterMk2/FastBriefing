@@ -277,10 +277,91 @@ export async function unzipWithLimits(
   return extractZipEntries(data, metadata, shouldExtract);
 }
 
+function decodeUtf8Entry(data: Uint8Array): string {
+  const text = strFromU8(data);
+  return text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
+}
+
+function decodeLuaLongString(raw: string): string {
+  let level = 0;
+  while (raw.charAt(level + 1) === '=') level += 1;
+
+  let contentStart = level + 2;
+  if (raw.charCodeAt(contentStart) === 13) {
+    contentStart += raw.charCodeAt(contentStart + 1) === 10 ? 2 : 1;
+  } else if (raw.charCodeAt(contentStart) === 10) {
+    contentStart += 1;
+  }
+
+  const contentEnd = raw.length - level - 2;
+  return raw.slice(contentStart, contentEnd);
+}
+
+function decodeLuaQuotedString(raw: string): string {
+  const contentEnd = raw.length - 1;
+  let contentStart = 1;
+  let result = '';
+
+  for (let index = 1; index < contentEnd;) {
+    if (raw.charCodeAt(index) !== 92) {
+      index += 1;
+      continue;
+    }
+
+    result += raw.slice(contentStart, index);
+    index += 1;
+    const escape = raw.charAt(index);
+
+    switch (escape) {
+      case 'a': result += '\x07'; index += 1; break;
+      case 'b': result += '\b'; index += 1; break;
+      case 'f': result += '\f'; index += 1; break;
+      case 'n': result += '\n'; index += 1; break;
+      case 'r': result += '\r'; index += 1; break;
+      case 't': result += '\t'; index += 1; break;
+      case 'v': result += '\x0b'; index += 1; break;
+      case '\r':
+        index += raw.charAt(index + 1) === '\n' ? 2 : 1;
+        result += '\n';
+        break;
+      case '\n':
+        index += 1;
+        result += '\n';
+        break;
+      case '0': case '1': case '2': case '3': case '4':
+      case '5': case '6': case '7': case '8': case '9': {
+        const digitStart = index;
+        while (index < contentEnd && index - digitStart < 3) {
+          const code = raw.charCodeAt(index);
+          if (code < 48 || code > 57) break;
+          index += 1;
+        }
+        result += String.fromCharCode(Number.parseInt(raw.slice(digitStart, index), 10));
+        break;
+      }
+      default:
+        result += escape;
+        index += 1;
+        break;
+    }
+
+    contentStart = index;
+  }
+
+  return result + raw.slice(contentStart, contentEnd);
+}
+
+function decodeLuaStringLiteral(raw: string): string {
+  return raw.charAt(0) === '[' ? decodeLuaLongString(raw) : decodeLuaQuotedString(raw);
+}
+
 export function parseLuaTable(luaCode: string): unknown {
   let ast: { type: string; body: unknown[] };
   try {
-    ast = parse(luaCode, { encodingMode: 'pseudo-latin1' }) as unknown as { type: string; body: unknown[] };
+    // `none` is luaparse 0.3.1's only mode that accepts arbitrary UTF-16 input.
+    // It intentionally sets StringLiteral.value to null, so conversion below
+    // restores string values from each literal's raw source text.
+    ast = parse(luaCode, { encodingMode: 'none' }) as unknown as { type: string; body: unknown[] };
   } catch (error) {
     console.error('Lua parse error:', error);
     throw new Error(`Luaファイルを解析できませんでした: ${asError(error).message}`);
@@ -364,6 +445,8 @@ export function convertLuaNode(node: unknown): unknown {
 
     case 'NumericLiteral':
     case 'StringLiteral':
+      if (n.value === null && typeof n.raw === 'string') return decodeLuaStringLiteral(n.raw);
+      return n.value;
     case 'BooleanLiteral':
       return n.value;
 
@@ -427,17 +510,17 @@ export async function parseMissionArchive(data: Uint8Array): Promise<ParsedMissi
     const entry = zip[name];
 
     if (name === 'mission') {
-      result.mission = parseLuaTable(strFromU8(entry));
+      result.mission = parseLuaTable(decodeUtf8Entry(entry));
     } else if (name === 'theatre') {
-      result.theatre = strFromU8(entry).trim();
+      result.theatre = decodeUtf8Entry(entry).trim();
     } else if (name === 'warehouses') {
-      result.warehouses = parseLuaTable(strFromU8(entry));
+      result.warehouses = parseLuaTable(decodeUtf8Entry(entry));
     } else if (name === 'options') {
-      result.options = parseLuaTable(strFromU8(entry));
+      result.options = parseLuaTable(decodeUtf8Entry(entry));
     } else if (name === 'l10n/DEFAULT/dictionary') {
-      result.dictionary = parseDictionary(strFromU8(entry));
+      result.dictionary = parseDictionary(decodeUtf8Entry(entry));
     } else if (name === 'l10n/DEFAULT/mapResource') {
-      result.mapResource = parseMapResource(strFromU8(entry));
+      result.mapResource = parseMapResource(decodeUtf8Entry(entry));
     } else if (name.startsWith('KNEEBOARD/')) {
       result.kneeboardFiles.set(name, entry);
     } else if (isBriefingImageEntry(name)) {
