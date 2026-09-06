@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import type { MissionData, DisplaySettings, Flight } from '../types/mission';
-import { formatAltitude, formatSpeed, formatDistance } from '../utils/coordinates';
+import { formatAltitude, formatSpeed, formatDistance } from '../utils/units';
 
 interface FlightsTabProps {
   mission: MissionData;

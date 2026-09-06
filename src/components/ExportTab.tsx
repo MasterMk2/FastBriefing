@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { MissionData, DisplaySettings } from '../types/mission';
-import { formatAltitude, formatSpeed, formatDistance, formatPressure, formatTemperature } from '../utils/coordinates';
+import { formatAltitude, formatSpeed, formatDistance, formatPressure, formatTemperature } from '../utils/units';
 
 interface ExportTabProps {
   mission: MissionData;

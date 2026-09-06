@@ -1,5 +1,6 @@
 import type { MissionData, MissionMeta, Weather, Coalition, Flight, Unit, RoutePoint, SupportAsset, AIGroup, TriggerZone, Drawing, NavPoint, Airbase, Payload, Pylon, RadioPreset, WindLayer, UserNotes } from '../types/mission';
-import { dcsToLatLon, windFromTo } from '../utils/coordinates';
+import { dcsToLatLon } from '../utils/coordinates';
+import { windFromTo } from '../utils/units';
 
 function getValue(obj: unknown, path: string[]): unknown {
   let current: unknown = obj;

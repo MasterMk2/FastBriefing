@@ -1,5 +1,5 @@
 import type { MissionData, DisplaySettings } from '../types/mission';
-import { formatAltitude, formatSpeed } from '../utils/coordinates';
+import { formatAltitude, formatSpeed } from '../utils/units';
 
 interface SupportTabProps {
   mission: MissionData;

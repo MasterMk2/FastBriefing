@@ -1,5 +1,5 @@
 import type { MissionData, DisplaySettings } from '../types/mission';
-import { formatDistance } from '../utils/coordinates';
+import { formatDistance } from '../utils/units';
 
 interface ThreatsTabProps {
   mission: MissionData;
