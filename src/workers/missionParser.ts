@@ -7,6 +7,7 @@ export const ZIP_LIMITS = {
   MAX_ENTRIES: 100,
   MAX_TOTAL_SIZE: 50 * 1024 * 1024,
   MAX_ENTRY_SIZE: 10 * 1024 * 1024,
+  MAX_IMAGE_SIZE: 5 * 1024 * 1024,
   MAX_COMPRESSION_RATIO: 100,
 } as const;
 
@@ -20,6 +21,7 @@ export interface ParsedMissionFile {
   dictionary: Record<string, string>;
   mapResource: Record<string, string>;
   kneeboardFiles: Map<string, Uint8Array>;
+  briefingImages: Map<string, Uint8Array>;
 }
 
 type ZipEntryMetadata = Pick<UnzipFileInfo, 'name' | 'size' | 'originalSize' | 'compression'>;
@@ -42,11 +44,21 @@ function formatBytes(bytes: number): string {
   return `${bytes.toLocaleString('ja-JP')}バイト`;
 }
 
+const BRIEFING_IMAGE_PATTERN = /^l10n\/DEFAULT\/.*\.(?:png|jpe?g|gif|bmp)$/i;
+
+function isBriefingImageEntry(name: string): boolean {
+  return BRIEFING_IMAGE_PATTERN.test(name);
+}
+
+function entrySizeLimit(name: string): number {
+  return isBriefingImageEntry(name) ? ZIP_LIMITS.MAX_IMAGE_SIZE : ZIP_LIMITS.MAX_ENTRY_SIZE;
+}
+
 function validateZipEntryMetadata(entry: {
   name: string;
   size?: number;
   originalSize?: number;
-}): Error | null {
+}, maxEntrySize = ZIP_LIMITS.MAX_ENTRY_SIZE): Error | null {
   const { name, size: compressedSize, originalSize } = entry;
   const shownName = `「${displayEntryName(name)}」`;
 
@@ -56,9 +68,9 @@ function validateZipEntryMetadata(entry: {
   if (compressedSize !== undefined && (!Number.isFinite(compressedSize) || compressedSize < 0)) {
     return zipError(`エントリ${shownName}の圧縮サイズが不正です。`);
   }
-  if (originalSize !== undefined && originalSize > ZIP_LIMITS.MAX_ENTRY_SIZE) {
+  if (originalSize !== undefined && originalSize > maxEntrySize) {
     return zipError(
-      `エントリ${shownName}の展開後サイズ（${formatBytes(originalSize)}）が上限（${formatBytes(ZIP_LIMITS.MAX_ENTRY_SIZE)}）を超えています。`
+      `エントリ${shownName}の展開後サイズ（${formatBytes(originalSize)}）が上限（${formatBytes(maxEntrySize)}）を超えています。`
     );
   }
 
@@ -93,7 +105,7 @@ function inspectZip(data: Uint8Array): Promise<ZipEntryMetadata[]> {
             );
           }
 
-          const entryError = validateZipEntryMetadata(entry);
+          const entryError = validateZipEntryMetadata(entry, entrySizeLimit(entry.name));
           if (entryError && !validationError) {
             validationError = entryError;
           }
@@ -171,20 +183,21 @@ function extractZipEntries(
         name: file.name,
         size: file.size ?? declared?.size,
         originalSize: file.originalSize ?? declared?.originalSize,
-      });
+      }, entrySizeLimit(file.name));
       if (entryError) throw entryError;
       if (!shouldExtract(file.name)) return;
 
       const chunks: Uint8Array[] = [];
       let entrySize = 0;
+      const maxEntrySize = entrySizeLimit(file.name);
       file.ondata = (error, chunk, final) => {
         if (error) throw zipError(`エントリ「${displayEntryName(file.name)}」を展開できませんでした: ${asError(error).message}`);
         if (chunk && chunk.length > 0) {
           entrySize += chunk.length;
           extractedSize += chunk.length;
-          if (entrySize > ZIP_LIMITS.MAX_ENTRY_SIZE) {
+          if (entrySize > maxEntrySize) {
             throw zipError(
-              `エントリ「${displayEntryName(file.name)}」の展開後サイズが上限（${formatBytes(ZIP_LIMITS.MAX_ENTRY_SIZE)}）を超えたため、展開を中断しました。`
+              `エントリ「${displayEntryName(file.name)}」の展開後サイズが上限（${formatBytes(maxEntrySize)}）を超えたため、展開を中断しました。`
             );
           }
           if (extractedSize > ZIP_LIMITS.MAX_TOTAL_SIZE) {
@@ -334,9 +347,6 @@ export function convertLuaNode(node: unknown): unknown {
             result[String(key)] = convertLuaNode(f.value);
           }
         } else if (f.type === 'TableValue') {
-          while (Object.prototype.hasOwnProperty.call(result, String(implicitIndex))) {
-            implicitIndex += 1;
-          }
           result[String(implicitIndex)] = convertLuaNode(f.value);
           implicitIndex += 1;
         }
@@ -369,78 +379,81 @@ export function convertLuaNode(node: unknown): unknown {
   }
 }
 
-function parseDictionary(content: string): Record<string, string> {
-  const dict: Record<string, string> = {};
-  const lines = content.split('\n');
-  
-  for (const line of lines) {
-    const match = line.match(/^\[(\d+)\]\s*=\s*"(.*)"$/);
-    if (match) {
-      dict[`DictKey_${match[1]}`] = match[2].replace(/\\"/g, '"').replace(/\\\\/g, '\\');
-    }
+function parseStringTable(content: string): Record<string, string> {
+  const parsed = parseLuaTable(content);
+  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+
+  const result: Record<string, string> = {};
+  for (const [key, value] of Object.entries(parsed)) {
+    if (typeof value === 'string') result[key] = value;
   }
-  return dict;
+  return result;
 }
 
-function parseMapResource(content: string): Record<string, string> {
-  const map: Record<string, string> = {};
-  const lines = content.split('\n');
-  
-  for (const line of lines) {
-    const match = line.match(/^\[(\d+)\]\s*=\s*"(.*)"$/);
-    if (match) {
-      map[`ResKey_${match[1]}`] = match[2].replace(/\\"/g, '"').replace(/\\\\/g, '\\');
-    }
-  }
-  return map;
+export function parseDictionary(content: string): Record<string, string> {
+  return parseStringTable(content);
 }
 
-function shouldExtractEntry(name: string): boolean {
+export function parseMapResource(content: string): Record<string, string> {
+  return parseStringTable(content);
+}
+
+export function shouldExtractEntry(name: string): boolean {
   return name === 'mission'
     || name === 'theatre'
     || name === 'warehouses'
     || name === 'options'
     || name === 'l10n/DEFAULT/dictionary'
     || name === 'l10n/DEFAULT/mapResource'
+    || isBriefingImageEntry(name)
     || name.startsWith('KNEEBOARD/');
 }
 
-if (typeof self !== 'undefined') {
+export async function parseMissionArchive(data: Uint8Array): Promise<ParsedMissionFile> {
+  const zip = await unzipWithLimits(data, shouldExtractEntry);
+
+  const result: ParsedMissionFile = {
+    mission: null,
+    theatre: '',
+    warehouses: null,
+    options: null,
+    dictionary: {},
+    mapResource: {},
+    kneeboardFiles: new Map(),
+    briefingImages: new Map(),
+  };
+
+  for (const name of Object.keys(zip)) {
+    const entry = zip[name];
+
+    if (name === 'mission') {
+      result.mission = parseLuaTable(strFromU8(entry));
+    } else if (name === 'theatre') {
+      result.theatre = strFromU8(entry).trim();
+    } else if (name === 'warehouses') {
+      result.warehouses = parseLuaTable(strFromU8(entry));
+    } else if (name === 'options') {
+      result.options = parseLuaTable(strFromU8(entry));
+    } else if (name === 'l10n/DEFAULT/dictionary') {
+      result.dictionary = parseDictionary(strFromU8(entry));
+    } else if (name === 'l10n/DEFAULT/mapResource') {
+      result.mapResource = parseMapResource(strFromU8(entry));
+    } else if (name.startsWith('KNEEBOARD/')) {
+      result.kneeboardFiles.set(name, entry);
+    } else if (isBriefingImageEntry(name)) {
+      result.briefingImages.set(name, entry);
+    }
+  }
+
+  return result;
+}
+
+// Importing this module from the main thread to share ZIP_LIMITS must not
+// install a main-thread message handler. Dedicated workers do not expose document.
+if (typeof self !== 'undefined' && typeof document === 'undefined') {
   self.onmessage = async (e: MessageEvent<{ file: ArrayBuffer }>) => {
     try {
-      const { file } = e.data;
-      const zip = await unzipWithLimits(new Uint8Array(file), shouldExtractEntry);
-    
-      const result: ParsedMissionFile = {
-        mission: null,
-        theatre: '',
-        warehouses: null,
-        options: null,
-        dictionary: {},
-        mapResource: {},
-        kneeboardFiles: new Map(),
-      };
-    
-      for (const name of Object.keys(zip)) {
-        const entry = zip[name];
-      
-        if (name === 'mission') {
-          result.mission = parseLuaTable(strFromU8(entry));
-        } else if (name === 'theatre') {
-          result.theatre = strFromU8(entry).trim();
-        } else if (name === 'warehouses') {
-          result.warehouses = parseLuaTable(strFromU8(entry));
-        } else if (name === 'options') {
-          result.options = parseLuaTable(strFromU8(entry));
-        } else if (name === 'l10n/DEFAULT/dictionary') {
-          result.dictionary = parseDictionary(strFromU8(entry));
-        } else if (name === 'l10n/DEFAULT/mapResource') {
-          result.mapResource = parseMapResource(strFromU8(entry));
-        } else if (name.startsWith('KNEEBOARD/')) {
-          result.kneeboardFiles.set(name, entry);
-        }
-      }
-    
+      const result = await parseMissionArchive(new Uint8Array(e.data.file));
       self.postMessage({ type: 'success', data: result });
     } catch (error) {
       self.postMessage({ type: 'error', error: asError(error).message });
