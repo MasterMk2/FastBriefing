@@ -361,6 +361,66 @@ describe('MissionNormalizer reference-backed layers', () => {
     expect(normalized.coalitions.blue.aiGroups.map(group => group.type)).toContain('House1');
   });
 
+  it('emits one airbase per field, positioned from the waypoint, for a real warehouses table', () => {
+    // The fixture above hands warehouses.airports a `name` and an `x`/`y`.
+    // DCS writes NEITHER: an airports entry holds only supply state
+    // (coalition, fuel levels, size, ...), which is why that test passed while
+    // every real mission produced nameless airbases stacked on one point.
+    // Verified against a real .miz: zero ["name"], zero ["x"], zero ["y"] keys
+    // under ["airports"], and 30 airdromeId references for 3 distinct fields.
+    const takeoff = (airdromeId: number, x: number, y: number) => ({ x, y, airdromeId });
+    const normalized = normalizeMission(makeMission({
+      coalition: {
+        blue: {
+          country: [{
+            plane: {
+              group: [{
+                groupId: 601,
+                name: 'First',
+                callsign: { name: 'First' },
+                units: [unit('F-16C_50', 'Client', { x: 5000, y: 6000 })],
+                // Same field on departure and recovery, as DCS writes it.
+                route: { points: [takeoff(21, 5000, 6000), { x: 9000, y: 9000 }, takeoff(21, 5000, 6000)] },
+              }, {
+                groupId: 602,
+                name: 'Second',
+                callsign: { name: 'Second' },
+                units: [unit('F-16C_50', 'Client', { x: 5000, y: 6000 })],
+                // A different group departing the SAME field must not add a
+                // second entry -- dedup has to span groups, not just points.
+                route: { points: [takeoff(21, 5000, 6000), takeoff(44, 7000, 8000)] },
+              }],
+            },
+          }],
+        },
+        red: {},
+        neutrals: {},
+      },
+      warehouses: {
+        airports: {
+          21: { coalition: 'BLUE', size: 100, speed: 16.666666 },
+          44: { coalition: 'BLUE', size: 100, speed: 16.666666 },
+        },
+      },
+    }), settings);
+
+    const airbases = normalized.coalitions.blue.airbases;
+    // Five airdromeId references, two fields.
+    expect(airbases.map(base => base.id)).toEqual([21, 44]);
+
+    // Each field keeps its own position instead of collapsing onto the
+    // projection of x=0, y=0.
+    const positions = new Set(airbases.map(base => JSON.stringify(base.latlon)));
+    expect(positions.size).toBe(2);
+    for (const base of airbases) {
+      expect(base.latlon).not.toEqual([0, 0]);
+      expect(base.latlonResolved).toBe(true);
+    }
+
+    // No name is recoverable from a .miz; the map supplies the fallback label.
+    expect(airbases.map(base => base.name)).toEqual(['', '']);
+  });
+
   it('normalizes mission-level zones and drawings once, retaining coalition fields for the UI', () => {
     const missionZone = {
       zoneId: 101,

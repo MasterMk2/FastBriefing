@@ -197,6 +197,7 @@
     },
     "blueBullseye": "Blue Bullseye",
     "redBullseye": "Red Bullseye",
+    "airbaseFallback": "飛行場 {{id}}",
     "blueNavPoint": "Blue NavPoint {{index}}: {{name}}",
     "redNavPoint": "Red NavPoint {{index}}: {{name}}",
     "waypoint": "{{name}} ({{action}})",

@@ -386,6 +386,8 @@ function normalizeAirbases(
   const countries = getCollection(getValue(sideData, ['country']));
   const airports = getValue(warehouses, ['airports']) as Record<string, unknown> || {};
   const airbases: Airbase[] = [];
+  // Shared across every country and group on this side: one entry per field.
+  const seen = new Set<number>();
 
   for (const country of countries) {
     const c = country as Record<string, unknown>;
@@ -405,24 +407,50 @@ function normalizeAirbases(
       for (const point of points) {
         const p = point as Record<string, unknown>;
         const airdromeId = getNumber(p, ['airdromeId']);
-        if (airdromeId > 0 && airports[airdromeId]) {
-          const airport = airports[airdromeId] as Record<string, unknown>;
-          const coordinate = normalizeLatLon(theatre, getNumber(airport, ['x']), getNumber(airport, ['y']));
-          airbases.push({
-            id: airdromeId,
-            name: resolveDictKey(getString(airport, ['name']), dictionary),
-            ...coordinate,
-            owner: getString(airport, ['coalition'], 'NEUTRAL'),
-            runways: [],
-            atc: [],
-            tacan: undefined,
-            ils: undefined,
-          });
-        }
+        if (airdromeId <= 0 || !airports[airdromeId]) continue;
+        // Every takeoff and landing waypoint of every group repeats the same
+        // airdromeId, so without this the same field is emitted once per
+        // waypoint -- 30 entries for 3 fields on a small mission, and the map
+        // stacks that many markers on one spot (with duplicate React keys,
+        // since the key is derived from the id).
+        if (seen.has(airdromeId)) continue;
+        seen.add(airdromeId);
+
+        const airport = airports[airdromeId] as Record<string, unknown>;
+        // The warehouses entry carries NO coordinates in a real .miz -- it
+        // holds only supply state (coalition, fuel, size, ...). Reading x/y
+        // from it yielded 0/0 for every field, so normalizeLatLon projected
+        // the theatre origin and every airbase in the mission collapsed onto
+        // one point while still reporting latlonResolved: true.
+        // The waypoint that references the airdrome sits on the field, so it
+        // is the real source. A fixture that does supply airport coordinates
+        // still wins, which keeps hand-written mission tables working.
+        const airportX = getNumber(airport, ['x']);
+        const airportY = getNumber(airport, ['y']);
+        const hasAirportCoordinate = airportX !== 0 || airportY !== 0;
+        const coordinate = normalizeLatLon(
+          theatre,
+          hasAirportCoordinate ? airportX : getNumber(p, ['x']),
+          hasAirportCoordinate ? airportY : getNumber(p, ['y'])
+        );
+
+        airbases.push({
+          id: airdromeId,
+          // DCS does not write airfield names into a .miz at all, so this is
+          // empty for every real mission. The map falls back to the airdrome
+          // id rather than rendering a bare coalition name.
+          name: resolveDictKey(getString(airport, ['name']), dictionary),
+          ...coordinate,
+          owner: getString(airport, ['coalition'], 'NEUTRAL'),
+          runways: [],
+          atc: [],
+          tacan: undefined,
+          ils: undefined,
+        });
       }
     }
   }
-  
+
   return airbases;
 }
 
