@@ -1,5 +1,8 @@
 import type { MissionData, DisplaySettings } from '../types/mission';
 import { formatAltitude, formatPressure, formatTemperature, formatSpeed, formatDistance } from '../utils/units';
+import { getMoonInfo, getSunTimes, type SunTimes } from '../utils/astro';
+import { buildMetar } from '../utils/metar';
+import { addSeconds, formatDateYMD, formatTimeHHMM, formatUtcOffset, missionLocalDate, missionZuluDate } from '../utils/time';
 
 interface OverviewTabProps {
   mission: MissionData;
@@ -11,14 +14,18 @@ export default function OverviewTab({ mission, settings }: OverviewTabProps) {
   const blueFlights = coalitions.blue.flights.length;
   const redFlights = coalitions.red.flights.length;
   const totalFlights = blueFlights + redFlights;
-  
-  const startDate = new Date(
-    meta.date.Year,
-    meta.date.Month - 1,
-    meta.date.Day,
-    Math.floor(meta.startTime / 3600),
-    Math.floor((meta.startTime % 3600) / 60)
-  );
+
+  const localDate = missionLocalDate(meta);
+  const zuluDate = missionZuluDate(meta);
+  const referencePoint = coalitions.blue.bullseye.latlon;
+  const hasValidReferencePoint = isValidReferencePoint(referencePoint);
+  const sunTimes = hasValidReferencePoint
+    ? getSunTimes(zuluDate, referencePoint[0], referencePoint[1])
+    : null;
+  const moonInfo = hasValidReferencePoint
+    ? getMoonInfo(zuluDate, referencePoint[0], referencePoint[1])
+    : null;
+  const metar = buildMetar(weather, { time: zuluDate });
   
   return (
     <div className="tab-panel overview">
@@ -32,13 +39,13 @@ export default function OverviewTab({ mission, settings }: OverviewTabProps) {
           <dd>{meta.theatre}</dd>
           
           <dt>日付</dt>
-          <dd>{meta.date.Year}-{String(meta.date.Month).padStart(2, '0')}-{String(meta.date.Day).padStart(2, '0')}</dd>
+          <dd>{formatDateYMD(localDate)}</dd>
           
           <dt>開始時刻 (Local)</dt>
-          <dd>{startDate.toLocaleString()}</dd>
+          <dd>{formatDateYMD(localDate)} {formatTimeHHMM(localDate)} ({formatUtcOffset(meta.utcOffset)})</dd>
           
           <dt>開始時刻 (Zulu)</dt>
-          <dd>{new Date(startDate.getTime() - meta.utcOffset * 3600000).toISOString().slice(11, 16)}Z</dd>
+          <dd>{formatDateYMD(zuluDate)} {formatTimeHHMM(zuluDate)}Z</dd>
           
           <dt>MEバージョン</dt>
           <dd>{meta.meVersion}</dd>
@@ -61,13 +68,16 @@ export default function OverviewTab({ mission, settings }: OverviewTabProps) {
           <dd>{formatTemperature(weather.temperature, settings.temperatureUnit)}</dd>
           
           <dt>QNH</dt>
-          <dd>{formatPressure(weather.qnh.mmHg, settings.pressureUnit)}</dd>
+          <dd>{formatPressure(weather.qnh, settings.pressureUnit)}</dd>
           
           <dt>視程</dt>
           <dd>{formatDistance(weather.visibility, settings.distanceUnit)}</dd>
           
           <dt>雲</dt>
           <dd>{weather.clouds.label} (底: {formatAltitude(weather.clouds.base, settings.altitudeUnit)})</dd>
+
+          <dt>METAR</dt>
+          <dd><code>{metar}</code></dd>
           
           {weather.fog.enabled && (
             <>
@@ -109,6 +119,29 @@ export default function OverviewTab({ mission, settings }: OverviewTabProps) {
           </tbody>
         </table>
       </section>
+
+      <section className="section astro">
+        <h2>天文情報</h2>
+        <dl className="info-grid">
+          <dt>基準点 (Blue Bullseye)</dt>
+          <dd>{hasValidReferencePoint ? `${referencePoint[0].toFixed(4)}°, ${referencePoint[1].toFixed(4)}°` : '—'}</dd>
+
+          <dt>日の出</dt>
+          <dd>{formatAstroTime(sunTimes?.sunrise, meta.utcOffset)}</dd>
+
+          <dt>日の入り</dt>
+          <dd>{formatAstroTime(sunTimes?.sunset, meta.utcOffset)}</dd>
+
+          <dt>市民薄明</dt>
+          <dd>{formatAstroRange(sunTimes, 'dawn', 'dusk', meta.utcOffset)}</dd>
+
+          <dt>航空薄明</dt>
+          <dd>{formatAstroRange(sunTimes, 'nauticalDawn', 'nauticalDusk', meta.utcOffset)}</dd>
+
+          <dt>月齢</dt>
+          <dd>{moonInfo ? `${moonInfo.ageDays.toFixed(1)} 日` : '—'}</dd>
+        </dl>
+      </section>
       
       {(meta.descriptionBlueTask || meta.descriptionRedTask || meta.descriptionNeutralTask) && (
         <section className="section">
@@ -144,4 +177,32 @@ export default function OverviewTab({ mission, settings }: OverviewTabProps) {
       )}
     </div>
   );
+}
+
+function isValidReferencePoint(latlon: [number, number]): boolean {
+  const [lat, lon] = latlon;
+  return Number.isFinite(lat)
+    && Number.isFinite(lon)
+    && lat >= -90
+    && lat <= 90
+    && lon >= -180
+    && lon <= 180
+    && (lat !== 0 || lon !== 0);
+}
+
+function formatAstroTime(date: Date | null | undefined, utcOffset: number): string {
+  if (!date) return '—';
+
+  const localDate = addSeconds(date, utcOffset * 3600);
+  return `Local ${formatDateYMD(localDate)} ${formatTimeHHMM(localDate)} / Zulu ${formatDateYMD(date)} ${formatTimeHHMM(date)}Z`;
+}
+
+function formatAstroRange(
+  times: SunTimes | null,
+  startKey: 'dawn' | 'nauticalDawn',
+  endKey: 'dusk' | 'nauticalDusk',
+  utcOffset: number,
+): string {
+  if (!times) return '—';
+  return `${formatAstroTime(times[startKey], utcOffset)} ～ ${formatAstroTime(times[endKey], utcOffset)}`;
 }
