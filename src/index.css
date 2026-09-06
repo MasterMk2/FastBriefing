@@ -21,15 +21,102 @@ body {
   width: 100%;
 }
 
+.print-briefing {
+  display: none;
+}
+
 @media print {
-  .no-print {
+  @page {
+    size: A4 portrait;
+    margin: 12mm;
+  }
+
+  html,
+  body {
+    background: #fff;
+  }
+
+  .no-print,
+  .tab-nav,
+  .header,
+  .map-controls,
+  .export-actions,
+  .tab-button,
+  .btn,
+  button,
+  input,
+  select,
+  .side-selector,
+  .flight-list,
+  .leaflet-control-container {
     display: none !important;
   }
-  .tab-nav, .header, .map-controls, .export-actions {
+
+  .mission-view {
+    box-shadow: none;
+    border-radius: 0;
+    overflow: visible;
+  }
+
+  .main,
+  .tab-content {
+    padding: 0;
+  }
+
+  /* ExportTab owns the print-only copy of every briefing section. */
+  .tab-panel.export > .markdown-preview,
+  .tab-panel.export > .export-help {
     display: none !important;
   }
-  .tab-panel {
+
+  .print-briefing {
     display: block !important;
+  }
+
+  .print-briefing .tab-panel {
+    display: block !important;
+    animation: none;
+  }
+
+  .print-briefing .map-tab {
+    height: auto;
+  }
+
+  .print-briefing .map-container {
+    height: 600px !important;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .leaflet-container {
+    height: 100% !important;
+  }
+
+  .section,
+  .task-text,
+  .support-asset,
+  .flight-detail-content,
+  .data-table,
+  pre {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  h2,
+  h3,
+  h4 {
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+
+  .data-table {
+    break-inside: auto;
+    page-break-inside: auto;
+  }
+
+  .data-table tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
 }
 
