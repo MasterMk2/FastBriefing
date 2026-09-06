@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
+import L from 'leaflet';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, Circle, LayerGroup } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import type { MissionData, DisplaySettings } from '../types/mission';
@@ -28,8 +29,6 @@ export default function MapTab({ mission, settings }: MapTabProps) {
     airbases: true,
   });
   
-  const mapRef = useRef<L.Map | null>(null);
-  
   useEffect(() => {
     if (mission.coalitions.blue.flights.length > 0) {
       const firstWp = mission.coalitions.blue.flights[0].route[0];
@@ -53,13 +52,15 @@ export default function MapTab({ mission, settings }: MapTabProps) {
       <div className="map-controls">
         <div className="layer-controls">
           {Object.entries(layers).map(([key, value]) => (
-            <label key={key} className="layer-toggle">
+            <label key={key} htmlFor={`map-layer-${key}`} className="layer-toggle">
               <input
+                id={`map-layer-${key}`}
                 type="checkbox"
+                aria-label={getLayerLabel(key)}
                 checked={value}
                 onChange={(e) => setLayers(prev => ({ ...prev, [key]: e.target.checked }))}
               />
-              <span>{getLayerLabel(key)}</span>
+              <span id={`map-layer-${key}-label`}>{getLayerLabel(key)}</span>
             </label>
           ))}
         </div>
@@ -70,7 +71,6 @@ export default function MapTab({ mission, settings }: MapTabProps) {
           center={center}
           zoom={zoom}
           scrollWheelZoom={true}
-          ref={mapRef as React.RefObject<L.Map>}
         >
           <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
@@ -277,7 +277,7 @@ function SupportMarker({ support, label, theatre }: { support: { kind: string; c
 }
 
 function createWaypointIcon(number: number) {
-  return new (window as any).L.DivIcon({
+  return L.divIcon({
     className: 'waypoint-marker',
     html: `<div style="background: #333; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold; border: 2px solid white; box-shadow: 0 1px 3px rgba(0,0,0,0.3);">${number}</div>`,
     iconSize: [24, 24],
@@ -286,7 +286,7 @@ function createWaypointIcon(number: number) {
 }
 
 function createAirbaseIcon() {
-  return new (window as any).L.DivIcon({
+  return L.divIcon({
     className: 'airbase-marker',
     html: '<div style="background: #4CAF50; color: white; width: 20px; height: 20px; border-radius: 4px; transform: rotate(45deg); display: flex; align-items: center; justify-content: center; font-size: 10px;">✈</div>',
     iconSize: [20, 20],
@@ -295,7 +295,7 @@ function createAirbaseIcon() {
 }
 
 function createEnemyIcon() {
-  return new (window as any).L.DivIcon({
+  return L.divIcon({
     className: 'enemy-marker',
     html: '<div style="background: #f44336; color: white; width: 16px; height: 16px; border-radius: 50%; border: 2px solid white; box-shadow: 0 1px 3px rgba(0,0,0,0.3);"></div>',
     iconSize: [16, 16],
@@ -310,7 +310,7 @@ function createSupportIcon(kind: string) {
     carrier: '🚢',
     jtac: '🎯',
   };
-  return new (window as any).L.DivIcon({
+  return L.divIcon({
     className: 'support-marker',
     html: `<div style="background: #FF9800; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; border: 2px solid white; box-shadow: 0 1px 3px rgba(0,0,0,0.3);">${icons[kind] || '📍'}</div>`,
     iconSize: [24, 24],
