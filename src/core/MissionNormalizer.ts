@@ -65,6 +65,38 @@ function getArray(obj: unknown, path: string[]): unknown[] {
   return Array.isArray(val) ? val : [];
 }
 
+function getCollection(value: unknown): unknown[] {
+  if (Array.isArray(value)) return value;
+  if (!isObject(value)) return [];
+
+  const entries = Object.entries(value);
+  if (entries.length > 0 && entries.every(([key]) => /^\d+$/.test(key))) {
+    return entries.map(([, item]) => item);
+  }
+  return [value];
+}
+
+function getCountryCategoryGroups(country: Record<string, unknown>, category: string): unknown[] {
+  const categoryValue = getValue(country, [category]);
+  if (Array.isArray(categoryValue)) {
+    const groups = categoryValue.flatMap(value => getGroupValues(value));
+    return groups.length > 0 ? groups : categoryValue;
+  }
+  return getGroupValues(categoryValue);
+}
+
+function getGroupValues(value: unknown): unknown[] {
+  if (!isObject(value)) return [];
+  const groupValue = getValue(value, ['group']);
+  return getCollection(groupValue);
+}
+
+function getStringArray(obj: unknown, path: string[]): string[] {
+  const value = getValue(obj, path);
+  const values = Array.isArray(value) ? value : [value];
+  return values.filter((item): item is string => typeof item === 'string' && item.trim() !== '');
+}
+
 function resolveDictKey(key: string, dictionary: Record<string, string>): string {
   if (key.startsWith('DictKey_')) {
     return dictionary[key] || key;
@@ -130,12 +162,9 @@ function normalizeMeta(mission: Record<string, unknown>, dictionary: Record<stri
     startTime,
     utcOffset,
     meVersion: getNumber(mission, ['version']),
-    images: [
-      resolveResKey(getString(mission, ['pictureFileNameB']), mapResource),
-      resolveResKey(getString(mission, ['pictureFileNameR']), mapResource),
-      resolveResKey(getString(mission, ['pictureFileNameN']), mapResource),
-      resolveResKey(getString(mission, ['pictureFileNameServer']), mapResource),
-    ].filter(Boolean),
+    images: ['pictureFileNameB', 'pictureFileNameR', 'pictureFileNameN', 'pictureFileNameServer']
+      .flatMap(field => getStringArray(mission, [field]))
+      .map(key => resolveResKey(key, mapResource)),
   };
 }
 
@@ -325,43 +354,41 @@ function normalizeAirbases(
   _mapResource: Record<string, string>,
   theatre: string
 ): Airbase[] {
-  const countries = getValue(sideData, ['country']) as unknown[] || [];
+  const countries = getCollection(getValue(sideData, ['country']));
   const airports = getValue(warehouses, ['airports']) as Record<string, unknown> || {};
   const airbases: Airbase[] = [];
-  
+
   for (const country of countries) {
     const c = country as Record<string, unknown>;
-    const planes = getArray(c, ['plane']);
-    const helicopters = getArray(c, ['helicopter']);
-    const ships = getArray(c, ['ship']);
-    const vehicles = getArray(c, ['vehicle']);
-    const statics = getArray(c, ['static']);
-    
-    for (const group of [...planes, ...helicopters, ...ships, ...vehicles, ...statics]) {
-      const g = group as Record<string, unknown>;
-      const groups = getArray(g, ['group']);
-      for (const grp of groups) {
-        const groupData = grp as Record<string, unknown>;
-        const route = getValue(groupData, ['route']) as Record<string, unknown> || {};
-        const points = getArray(route, ['points']);
-        
-        for (const point of points) {
-          const p = point as Record<string, unknown>;
-          const airdromeId = getNumber(p, ['airdromeId']);
-          if (airdromeId > 0 && airports[airdromeId]) {
-            const airport = airports[airdromeId] as Record<string, unknown>;
-            const coordinate = normalizeLatLon(theatre, getNumber(airport, ['x']), getNumber(airport, ['y']));
-            airbases.push({
-              id: airdromeId,
-              name: resolveDictKey(getString(airport, ['name']), dictionary),
-              ...coordinate,
-              owner: getString(airport, ['coalition'], 'NEUTRAL'),
-              runways: [],
-              atc: [],
-              tacan: undefined,
-              ils: undefined,
-            });
-          }
+    const groups = [
+      ...getCountryCategoryGroups(c, 'plane'),
+      ...getCountryCategoryGroups(c, 'helicopter'),
+      ...getCountryCategoryGroups(c, 'ship'),
+      ...getCountryCategoryGroups(c, 'vehicle'),
+      ...getCountryCategoryGroups(c, 'static'),
+    ];
+
+    for (const group of groups) {
+      const groupData = group as Record<string, unknown>;
+      const route = getValue(groupData, ['route']) as Record<string, unknown> || {};
+      const points = getArray(route, ['points']);
+
+      for (const point of points) {
+        const p = point as Record<string, unknown>;
+        const airdromeId = getNumber(p, ['airdromeId']);
+        if (airdromeId > 0 && airports[airdromeId]) {
+          const airport = airports[airdromeId] as Record<string, unknown>;
+          const coordinate = normalizeLatLon(theatre, getNumber(airport, ['x']), getNumber(airport, ['y']));
+          airbases.push({
+            id: airdromeId,
+            name: resolveDictKey(getString(airport, ['name']), dictionary),
+            ...coordinate,
+            owner: getString(airport, ['coalition'], 'NEUTRAL'),
+            runways: [],
+            atc: [],
+            tacan: undefined,
+            ils: undefined,
+          });
         }
       }
     }
@@ -377,49 +404,46 @@ function normalizeFlights(
   theatre: string,
   warnings: string[]
 ): Flight[] {
-  const countries = getValue(sideData, ['country']) as unknown[] || [];
+  const countries = getCollection(getValue(sideData, ['country']));
   const flights: Flight[] = [];
-  
+
   for (const country of countries) {
     const c = country as Record<string, unknown>;
-    const planes = getArray(c, ['plane']);
-    const helicopters = getArray(c, ['helicopter']);
-    
-    for (const group of [...planes, ...helicopters]) {
-      const g = group as Record<string, unknown>;
-      const groups = getArray(g, ['group']);
-      
-      for (const grp of groups) {
-        const groupData = grp as Record<string, unknown>;
-        const units = getArray(groupData, ['units']);
-        
-        const hasClient = units.some(u => {
-          const unit = u as Record<string, unknown>;
-          const skill = getString(unit, ['skill']);
-          return skill === 'Client' || skill === 'Player';
-        });
-        
-        if (!hasClient) continue;
-        
-        const route = getValue(groupData, ['route']) as Record<string, unknown> || {};
-        const routePoints = getArray(route, ['points']);
-        
-        flights.push({
-          groupId: getNumber(groupData, ['groupId']),
-          name: resolveDictKey(getString(groupData, ['name']), dictionary),
-          callsign: normalizeCallsign(getValue(groupData, ['callsign']), dictionary),
-          type: getString(units[0] as Record<string, unknown>, ['type']),
-          task: resolveDictKey(getString(groupData, ['task']), dictionary),
-          frequency: getNumber(groupData, ['frequency']),
-          modulation: getNumber(groupData, ['modulation']),
-          hidden: getValue(groupData, ['hidden']) === true,
-          units: normalizeUnits(units, dictionary, theatre, warnings),
-          route: normalizeRoutePoints(routePoints, theatre),
-        });
-      }
+    const groups = [
+      ...getCountryCategoryGroups(c, 'plane'),
+      ...getCountryCategoryGroups(c, 'helicopter'),
+    ];
+
+    for (const group of groups) {
+      const groupData = group as Record<string, unknown>;
+      const units = getArray(groupData, ['units']);
+
+      const hasClient = units.some(u => {
+        const unit = u as Record<string, unknown>;
+        const skill = getString(unit, ['skill']);
+        return skill === 'Client' || skill === 'Player';
+      });
+
+      if (!hasClient) continue;
+
+      const route = getValue(groupData, ['route']) as Record<string, unknown> || {};
+      const routePoints = getArray(route, ['points']);
+
+      flights.push({
+        groupId: getNumber(groupData, ['groupId']),
+        name: resolveDictKey(getString(groupData, ['name']), dictionary),
+        callsign: normalizeCallsign(getValue(groupData, ['callsign']), dictionary),
+        type: getString(units[0] as Record<string, unknown>, ['type']),
+        task: resolveDictKey(getString(groupData, ['task']), dictionary),
+        frequency: getNumber(groupData, ['frequency']),
+        modulation: getNumber(groupData, ['modulation']),
+        hidden: getValue(groupData, ['hidden']) === true,
+        units: normalizeUnits(units, dictionary, theatre, warnings),
+        route: normalizeRoutePoints(routePoints, theatre),
+      });
     }
   }
-  
+
   return flights;
 }
 
@@ -564,41 +588,38 @@ function normalizeSupport(
   _mapResource: Record<string, string>,
   theatre: string
 ): SupportAsset[] {
-  const countries = getValue(sideData, ['country']) as unknown[] || [];
+  const countries = getCollection(getValue(sideData, ['country']));
   const support: SupportAsset[] = [];
-  
+
   for (const country of countries) {
     const c = country as Record<string, unknown>;
-    const planes = getArray(c, ['plane']);
-    const helicopters = getArray(c, ['helicopter']);
-    const ships = getArray(c, ['ship']);
-    const vehicles = getArray(c, ['vehicle']);
-    
+    const groups = [
+      ...getCountryCategoryGroups(c, 'plane'),
+      ...getCountryCategoryGroups(c, 'helicopter'),
+      ...getCountryCategoryGroups(c, 'ship'),
+      ...getCountryCategoryGroups(c, 'vehicle'),
+    ];
+
     // Every source group is visited exactly once, including ships.  A carrier
     // with a task such as Tanker is classified by the task branch and cannot
     // be appended a second time by a separate ship pass.
-    for (const group of [...planes, ...helicopters, ...ships, ...vehicles]) {
-      const g = group as Record<string, unknown>;
-      const groups = getArray(g, ['group']);
-      
-      for (const grp of groups) {
-        const groupData = grp as Record<string, unknown>;
-        const task = getString(groupData, ['task']);
-        const units = getArray(groupData, ['units']);
-        const unitType = getString(units[0], ['type']) || getString(groupData, ['type']);
-        const signals = extractSupportSignals(groupData);
-        const carrier = isCarrierType(unitType);
-        const jtac = isJTACGroup(unitType, signals.hasFacTask || /JTAC|FAC/i.test(task));
-        
-        if (task === 'Tanker') {
-          support.push(normalizeTanker(groupData, dictionary, theatre, signals));
-        } else if (task === 'AWACS') {
-          support.push(normalizeAWACS(groupData, dictionary, theatre, signals));
-        } else if (carrier) {
-          support.push(normalizeCarrier(groupData, dictionary, theatre, signals));
-        } else if (jtac) {
-          support.push(normalizeJTAC(groupData, dictionary, theatre, signals, unitType));
-        }
+    for (const group of groups) {
+      const groupData = group as Record<string, unknown>;
+      const task = getString(groupData, ['task']);
+      const units = getArray(groupData, ['units']);
+      const unitType = getString(units[0], ['type']) || getString(groupData, ['type']);
+      const signals = extractSupportSignals(groupData);
+      const carrier = isCarrierType(unitType);
+      const jtac = isJTACGroup(unitType, signals.hasFacTask || /JTAC|FAC/i.test(task));
+
+      if (task === 'Tanker') {
+        support.push(normalizeTanker(groupData, dictionary, theatre, signals));
+      } else if (task === 'AWACS') {
+        support.push(normalizeAWACS(groupData, dictionary, theatre, signals));
+      } else if (carrier) {
+        support.push(normalizeCarrier(groupData, dictionary, theatre, signals));
+      } else if (jtac) {
+        support.push(normalizeJTAC(groupData, dictionary, theatre, signals, unitType));
       }
     }
   }
@@ -798,58 +819,47 @@ function extractSupportSignals(groupData: Record<string, unknown>): ExtractedSup
 }
 
 function normalizeAIGroups(sideData: Record<string, unknown>, _dictionary: Record<string, string>, theatre: string, warnings: string[]): AIGroup[] {
-  const countries = getValue(sideData, ['country']) as unknown[] || [];
+  const countries = getCollection(getValue(sideData, ['country']));
   const groups: AIGroup[] = [];
-  
+
   for (const country of countries) {
     const c = country as Record<string, unknown>;
-    const planes = getArray(c, ['plane']);
-    const helicopters = getArray(c, ['helicopter']);
-    const ships = getArray(c, ['ship']);
-    const vehicles = getArray(c, ['vehicle']);
-    const statics = getArray(c, ['static']);
-    
     const groupsByCategory = [
-      { category: 'plane', groups: planes },
-      { category: 'helicopter', groups: helicopters },
-      { category: 'ship', groups: ships },
-      { category: 'vehicle', groups: vehicles },
-      { category: 'static', groups: statics },
+      { category: 'plane', groups: getCountryCategoryGroups(c, 'plane') },
+      { category: 'helicopter', groups: getCountryCategoryGroups(c, 'helicopter') },
+      { category: 'ship', groups: getCountryCategoryGroups(c, 'ship') },
+      { category: 'vehicle', groups: getCountryCategoryGroups(c, 'vehicle') },
+      { category: 'static', groups: getCountryCategoryGroups(c, 'static') },
     ];
 
     for (const { category: categoryHint, groups: categoryGroups } of groupsByCategory) {
       for (const group of categoryGroups) {
-        const g = group as Record<string, unknown>;
-        const unitGroups = getArray(g, ['group']);
+        const groupData = group as Record<string, unknown>;
+        const units = getArray(groupData, ['units']);
+        if (units.length === 0) continue;
 
-        for (const grp of unitGroups) {
-          const groupData = grp as Record<string, unknown>;
-          const units = getArray(groupData, ['units']);
-          if (units.length === 0) continue;
+        const unit = units[0] as Record<string, unknown>;
+        const skill = getString(unit, ['skill']);
+        if (skill === 'Client' || skill === 'Player') continue;
 
-          const unit = units[0] as Record<string, unknown>;
-          const skill = getString(unit, ['skill']);
-          if (skill === 'Client' || skill === 'Player') continue;
+        const x = getNumber(unit, ['x']);
+        const y = getNumber(unit, ['y']);
+        const coordinate = normalizeLatLon(theatre, x, y);
+        const type = getString(unit, ['type']);
+        const category = getString(groupData, ['category'], categoryHint);
+        const threatResolution = resolveGroupThreat(units, isThreatCandidateCategory(category), warnings);
 
-          const x = getNumber(unit, ['x']);
-          const y = getNumber(unit, ['y']);
-          const coordinate = normalizeLatLon(theatre, x, y);
-          const type = getString(unit, ['type']);
-          const category = getString(group, ['category'], categoryHint);
-          const threatResolution = resolveGroupThreat(units, isThreatCandidateCategory(category), warnings);
-
-          groups.push({
-            category,
-            type,
-            count: units.length,
-            position: [x, y],
-            ...coordinate,
-            ...threatResolution,
-            hidden: getValue(groupData, ['hidden']) === true,
-            lateActivation: getValue(groupData, ['lateActivation']) === true,
-            startTime: getNumber(groupData, ['start_time']),
-          });
-        }
+        groups.push({
+          category,
+          type,
+          count: units.length,
+          position: [x, y],
+          ...coordinate,
+          ...threatResolution,
+          hidden: getValue(groupData, ['hidden']) === true,
+          lateActivation: getValue(groupData, ['lateActivation']) === true,
+          startTime: getNumber(groupData, ['start_time']),
+        });
       }
     }
   }

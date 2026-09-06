@@ -13,6 +13,8 @@ function makeMission(overrides: {
   coalition?: Record<string, unknown>;
   mission?: Record<string, unknown>;
   theatre?: string;
+  mapResource?: Record<string, string>;
+  warehouses?: Record<string, unknown>;
 } = {}) {
   const samTypes = [
     'S_75M_Volhov', 'Kub', 'Hawk', 'NASAMS', 'Strela-1', 'ZSU-23-4',
@@ -98,9 +100,9 @@ function makeMission(overrides: {
       coalition: { blue: coalitionSide, red: {}, neutrals: {}, ...overrides.coalition },
     },
     theatre: overrides.theatre ?? 'Caucasus',
-    warehouses: { airports: {} },
+    warehouses: overrides.warehouses ?? { airports: {} },
     dictionary: {},
-    mapResource: {},
+    mapResource: overrides.mapResource ?? {},
   };
 }
 
@@ -164,6 +166,115 @@ describe('MissionNormalizer reference-backed layers', () => {
 
     const unknown = normalizeMission(makeMission({ weather: { clouds: { preset: 'RainyPreset99', base: 900 } } }), settings);
     expect(unknown.warnings).toContain('未知の雲プリセット: RainyPreset99');
+  });
+
+  it('resolves all briefing image resource keys when DCS provides Lua arrays', () => {
+    const normalized = normalizeMission(makeMission({
+      mission: {
+        pictureFileNameB: ['ResKey_blue_1', 'ResKey_blue_2'],
+        pictureFileNameR: ['ResKey_red_1'],
+        pictureFileNameN: ['ResKey_neutral_1'],
+        pictureFileNameServer: ['ResKey_server_1'],
+      },
+      mapResource: {
+        ResKey_blue_1: 'brief-blue-1.png',
+        ResKey_blue_2: 'brief-blue-2.png',
+        ResKey_red_1: 'brief-red.png',
+        ResKey_neutral_1: 'brief-neutral.png',
+        ResKey_server_1: 'brief-server.png',
+      },
+    }), settings);
+
+    expect(normalized.meta.images).toEqual([
+      'brief-blue-1.png',
+      'brief-blue-2.png',
+      'brief-red.png',
+      'brief-neutral.png',
+      'brief-server.png',
+    ]);
+  });
+
+  it('keeps supporting the legacy direct-string briefing image fields', () => {
+    const normalized = normalizeMission(makeMission({
+      mission: {
+        pictureFileNameB: 'ResKey_blue',
+        pictureFileNameR: 'ResKey_red',
+        pictureFileNameN: 'brief-neutral.png',
+        pictureFileNameServer: 'ResKey_server',
+      },
+      mapResource: {
+        ResKey_blue: 'brief-blue.png',
+        ResKey_red: 'brief-red.png',
+        ResKey_server: 'brief-server.png',
+      },
+    }), settings);
+
+    expect(normalized.meta.images).toEqual([
+      'brief-blue.png',
+      'brief-red.png',
+      'brief-neutral.png',
+      'brief-server.png',
+    ]);
+  });
+
+  it('returns no briefing images when all image fields are absent', () => {
+    const normalized = normalizeMission(makeMission(), settings);
+
+    expect(normalized.meta.images).toEqual([]);
+  });
+
+  it('normalizes the actual DCS country category shape, including static groups', () => {
+    const normalized = normalizeMission(makeMission({
+      coalition: {
+        blue: {
+          country: [{
+            plane: {
+              group: [{
+                groupId: 501,
+                name: 'Actual flight',
+                callsign: { name: 'Actual' },
+                units: [unit('F-16C_50', 'Client', { x: 1000, y: 2000 })],
+                route: { points: [{ x: 1000, y: 2000, airdromeId: 77 }] },
+              }, {
+                groupId: 502,
+                task: 'Tanker',
+                callsign: { name: 'Texaco actual' },
+                units: [unit('KC-135', 'Excellent', { x: 1100, y: 2100 })],
+                route: { points: [{ x: 1100, y: 2100 }] },
+              }],
+            },
+            vehicle: {
+              group: [{
+                groupId: 503,
+                units: [unit('SA-10', 'Excellent', { x: 1200, y: 2200 })],
+              }],
+            },
+            static: {
+              group: [{
+                groupId: 504,
+                units: [unit('House1', 'Excellent', { x: 1300, y: 2300 })],
+              }],
+            },
+          }],
+        },
+        red: {},
+        neutrals: {},
+      },
+      warehouses: {
+        airports: {
+          77: { x: 1000, y: 2000, name: 'Actual Airbase', coalition: 'BLUE' },
+        },
+      },
+    }), settings);
+
+    expect(normalized.coalitions.blue.flights).toHaveLength(1);
+    expect(normalized.coalitions.blue.flights[0].callsign).toBe('Actual');
+    expect(normalized.coalitions.blue.support).toHaveLength(1);
+    expect(normalized.coalitions.blue.support[0].callsign).toBe('Texaco actual');
+    expect(normalized.coalitions.blue.airbases).toHaveLength(1);
+    expect(normalized.coalitions.blue.airbases[0].name).toBe('Actual Airbase');
+    expect(normalized.coalitions.blue.aiGroups.map(group => group.type)).toContain('SA-10');
+    expect(normalized.coalitions.blue.aiGroups.map(group => group.type)).toContain('House1');
   });
 
   it('normalizes mission-level zones and drawings once, retaining coalition fields for the UI', () => {
