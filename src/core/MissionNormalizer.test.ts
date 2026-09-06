@@ -14,6 +14,7 @@ function makeMission(overrides: {
   mission?: Record<string, unknown>;
   theatre?: string;
   mapResource?: Record<string, string>;
+  dictionary?: Record<string, string>;
   warehouses?: Record<string, unknown>;
 } = {}) {
   const samTypes = [
@@ -101,7 +102,7 @@ function makeMission(overrides: {
     },
     theatre: overrides.theatre ?? 'Caucasus',
     warehouses: overrides.warehouses ?? { airports: {} },
-    dictionary: {},
+    dictionary: overrides.dictionary ?? {},
     mapResource: overrides.mapResource ?? {},
   };
 }
@@ -119,7 +120,7 @@ describe('MissionNormalizer reference-backed layers', () => {
     for (const type of expectedTypes) {
       expect(groups.find(group => group.type === type)?.threatRange, type).toBeGreaterThan(0);
     }
-    expect(normalized.warnings).toContain('未知の脅威半径: UnknownSAM');
+    expect(normalized.warnings).toContain('脅威半径が未収録のため地図に描画できません: UnknownSAM');
   });
 
   it('normalizes payload resources, readable weapon names, weight, and warnings', () => {
@@ -135,6 +136,89 @@ describe('MissionNormalizer reference-backed layers', () => {
     expect(normalizedPayload.pylons[2].name).toBe('UNLISTED (未収録)');
     expect(normalizedPayload.weight).toBeCloseTo(1402.48, 2);
     expect(normalized.warnings).toContain('未知の兵装 CLSID: {CLSID_UNLISTED}');
+  });
+
+  it('returns empty dictionary values instead of leaking raw keys into the UI', () => {
+    const normalized = normalizeMission(makeMission({
+      mission: {
+        sortie: 'DictKey_sortie_5',
+        descriptionText: 'DictKey_descriptionText_1',
+        pictureFileNameB: ['ResKey_empty', 'ResKey_missing'],
+      },
+      dictionary: {
+        DictKey_sortie_5: '',
+        DictKey_descriptionText_1: '',
+      },
+      mapResource: {
+        ResKey_empty: '',
+      },
+    }), settings);
+
+    expect(normalized.meta.sortie).toBe('');
+    expect(normalized.meta.description).toBe('');
+    expect(normalized.meta.sortie).not.toMatch(/^DictKey_/);
+    expect(normalized.meta.description).not.toMatch(/^DictKey_/);
+    expect(normalized.meta.images).toEqual(['', 'ResKey_missing']);
+  });
+
+  it('normalizes sparse numeric-key collections and preserves source indexes', () => {
+    const flightGroup = {
+      groupId: 900,
+      name: 'Sparse flight',
+      callsign: { name: 'Sparse' },
+      units: {
+        '1': unit('F-15E', 'Client', {
+          payload: {
+            pylons: {
+              '1': { CLSID: '{AIM-9L}' },
+              '3': { CLSID: 'AIM-120C' },
+            },
+          },
+          Radio: {
+            channels: {
+              '1': { frequency: 251000000, modulation: 0 },
+              '3': { frequency: 305000000, modulation: 1 },
+            },
+          },
+        }),
+        '3': unit('F-15E', 'Excellent'),
+      },
+      route: {
+        points: {
+          '1': { x: 100, y: 200 },
+          '3': { x: 300, y: 400 },
+        },
+      },
+    };
+    const normalized = normalizeMission(makeMission({
+      coalition: {
+        blue: {
+          nav_points: {
+            '2': { name: 'Sparse nav', x: 500, y: 600 },
+          },
+          country: {
+            '1': {
+              plane: {
+                group: {
+                  '1': flightGroup,
+                },
+              },
+            },
+          },
+        },
+        red: {},
+        neutrals: {},
+      },
+    }), settings);
+
+    const flight = normalized.coalitions.blue.flights[0];
+    expect(flight.units).toHaveLength(2);
+    expect(flight.route.map(point => point.index)).toEqual([1, 3]);
+    expect(flight.units[0].radios.map(radio => radio.channel)).toEqual([1, 3]);
+    expect(flight.units[0].payload.pylons.map(pylon => pylon.station)).toEqual(['1', '3']);
+    expect(flight.units[0].payload.pylons[0].name).toContain('AIM-9L');
+    expect(flight.units[0].payload.pylons[1].name).toContain('AIM-120C');
+    expect(normalized.coalitions.blue.navPoints.map(point => point.index)).toEqual([2]);
   });
 
   it('extracts TACAN and does not duplicate a carrier classified as Tanker', () => {
@@ -386,8 +470,34 @@ describe('MissionNormalizer reference-backed layers', () => {
       },
     }), settings);
 
-    expect(normalized.warnings).not.toContain('未知の脅威半径: F-16C_50');
+    expect(normalized.warnings).not.toContain('脅威半径が未収録のため地図に描画できません: F-16C_50');
     expect(normalized.coalitions.blue.aiGroups[0].threatRangeSource).toBeUndefined();
+  });
+
+  it('recognizes confirmed non-threat vehicles and gives Bradley a weapon range', () => {
+    const vehicleGroups = {
+      group: [
+        { units: [unit('Hummer')] },
+        { units: [unit('M978 HEMTT Tanker')] },
+        { units: [unit('M 818')] },
+        { units: [unit('M-2 Bradley')] },
+      ],
+    };
+    const normalized = normalizeMission(makeMission({
+      coalition: {
+        blue: { country: [{ vehicle: vehicleGroups }] },
+        red: {},
+        neutrals: {},
+      },
+    }), settings);
+    const groups = normalized.coalitions.blue.aiGroups;
+
+    for (const type of ['Hummer', 'M978 HEMTT Tanker', 'M 818']) {
+      expect(groups.find(group => group.type === type)?.threatRange, type).toBe(0);
+      expect(normalized.warnings).not.toContain(`脅威半径が未収録のため地図に描画できません: ${type}`);
+    }
+    expect(groups.find(group => group.type === 'M-2 Bradley')?.threatRange).toBeGreaterThan(0);
+    expect(normalized.warnings).not.toContain('脅威半径が未収録のため地図に描画できません: M-2 Bradley');
   });
 
   it('resolves UTC offset from the theatre table and produces Caucasus Zulu 04:00', () => {

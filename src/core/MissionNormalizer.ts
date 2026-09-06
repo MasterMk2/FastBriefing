@@ -60,19 +60,39 @@ function getString(obj: unknown, path: string[], defaultValue = ''): string {
   return typeof val === 'string' ? val : defaultValue;
 }
 
-function getArray(obj: unknown, path: string[]): unknown[] {
-  const val = getValue(obj, path);
-  return Array.isArray(val) ? val : [];
+interface CollectionEntry {
+  key: string;
+  value: unknown;
 }
 
-function getCollection(value: unknown): unknown[] {
-  if (Array.isArray(value)) return value;
+function getCollectionEntries(value: unknown): CollectionEntry[] {
+  if (Array.isArray(value)) {
+    return value.map((item, index) => ({ key: String(index + 1), value: item }));
+  }
   if (!isObject(value)) return [];
 
   const entries = Object.entries(value);
-  if (entries.length > 0 && entries.every(([key]) => /^\d+$/.test(key))) {
-    return entries.map(([, item]) => item);
-  }
+  if (entries.length === 0 || !entries.every(([key]) => /^\d+$/.test(key))) return [];
+  return entries
+    .sort(([left], [right]) => Number(left) - Number(right))
+    .map(([key, item]) => ({ key, value: item }));
+}
+
+function getArrayEntries(obj: unknown, path: string[]): CollectionEntry[] {
+  return getCollectionEntries(getValue(obj, path));
+}
+
+function getArray(obj: unknown, path: string[]): unknown[] {
+  return getArrayEntries(obj, path).map(entry => entry.value);
+}
+
+function getCollection(value: unknown): unknown[] {
+  if (Array.isArray(value)) return getCollectionEntries(value).map(entry => entry.value);
+  if (!isObject(value)) return [];
+
+  const entries = getCollectionEntries(value);
+  if (entries.length > 0) return entries.map(entry => entry.value);
+  if (Object.keys(value).length === 0) return [];
   return [value];
 }
 
@@ -88,25 +108,34 @@ function getCountryCategoryGroups(country: Record<string, unknown>, category: st
 function getGroupValues(value: unknown): unknown[] {
   if (!isObject(value)) return [];
   const groupValue = getValue(value, ['group']);
-  return getCollection(groupValue);
+  if (groupValue !== undefined) return getCollection(groupValue);
+  return getCollectionEntries(value).map(entry => entry.value);
 }
 
 function getStringArray(obj: unknown, path: string[]): string[] {
   const value = getValue(obj, path);
-  const values = Array.isArray(value) ? value : [value];
+  const entries = getCollectionEntries(value);
+  const values = Array.isArray(value) || entries.length > 0
+    ? entries.map(entry => entry.value)
+    : [value];
   return values.filter((item): item is string => typeof item === 'string' && item.trim() !== '');
+}
+
+function collectionIndex(key: string, fallback: number): number {
+  const index = Number(key);
+  return Number.isInteger(index) && index > 0 ? index : fallback;
 }
 
 function resolveDictKey(key: string, dictionary: Record<string, string>): string {
   if (key.startsWith('DictKey_')) {
-    return dictionary[key] || key;
+    return Object.prototype.hasOwnProperty.call(dictionary, key) ? dictionary[key] : key;
   }
   return key;
 }
 
 function resolveResKey(key: string, mapResource: Record<string, string>): string {
   if (key.startsWith('ResKey_')) {
-    return mapResource[key] || key;
+    return Object.prototype.hasOwnProperty.call(mapResource, key) ? mapResource[key] : key;
   }
   return key;
 }
@@ -333,13 +362,13 @@ function normalizeLatLon(theatre: string, x: number, y: number): { latlon: [numb
 }
 
 function normalizeNavPoints(sideData: Record<string, unknown>, theatre: string): NavPoint[] {
-  const navPoints = getArray(sideData, ['nav_points']);
-  return navPoints.map((np, i) => {
-    const point = np as Record<string, unknown>;
+  const navPoints = getArrayEntries(sideData, ['nav_points']);
+  return navPoints.map((entry, i) => {
+    const point = entry.value as Record<string, unknown>;
     const x = getNumber(point, ['x']);
     const y = getNumber(point, ['y']);
     return {
-      index: i + 1,
+      index: collectionIndex(entry.key, i + 1),
       name: getString(point, ['name']),
       xy: [x, y],
       ...normalizeLatLon(theatre, x, y),
@@ -427,7 +456,7 @@ function normalizeFlights(
       if (!hasClient) continue;
 
       const route = getValue(groupData, ['route']) as Record<string, unknown> || {};
-      const routePoints = getArray(route, ['points']);
+      const routePoints = getArrayEntries(route, ['points']);
 
       flights.push({
         groupId: getNumber(groupData, ['groupId']),
@@ -465,8 +494,8 @@ function normalizeUnits(units: unknown[], dictionary: Record<string, string>, _t
   return units.map((u) => {
     const unit = u as Record<string, unknown>;
     const payload = getValue(unit, ['payload']) as Record<string, unknown> || {};
-    const primaryRadios = getArray(unit, ['Radio', 'channels']);
-    const radios = primaryRadios.length > 0 ? primaryRadios : getArray(unit, ['radioSet', 'channels']);
+    const primaryRadios = getArrayEntries(unit, ['Radio', 'channels']);
+    const radios = primaryRadios.length > 0 ? primaryRadios : getArrayEntries(unit, ['radioSet', 'channels']);
     
     return {
       unitId: getNumber(unit, ['unitId']),
@@ -483,7 +512,7 @@ function normalizeUnits(units: unknown[], dictionary: Record<string, string>, _t
 }
 
 export function normalizePayload(payload: Record<string, unknown>, warnings: string[] = []): Payload {
-  const pylons = getArray(payload, ['pylons']);
+  const pylons = getArrayEntries(payload, ['pylons']);
   const pylonList: Pylon[] = [];
   const fuel = getNumber(payload, ['fuel']);
   const chaff = getNumber(payload, ['chaff']);
@@ -491,16 +520,15 @@ export function normalizePayload(payload: Record<string, unknown>, warnings: str
   const gun = getNumber(payload, ['gun']);
   let totalWeight = fuel;
   
-  for (const pylon of pylons) {
-    const p = pylon as Record<string, unknown>;
-    const n = getNumber(p, ['n']);
+  for (const { key, value } of pylons) {
+    const p = value as Record<string, unknown>;
     const clsid = getString(p, ['CLSID']);
     if (clsid) {
-      const reference = weapons[clsid];
+      const reference = findWeaponReference(clsid);
       const weight = reference?.weight ?? 0;
       if (!reference) addWarning(warnings, `未知の兵装 CLSID: ${clsid}`);
       pylonList.push({
-        station: String(n),
+        station: key,
         clsid,
         name: reference?.name ?? fallbackWeaponName(clsid),
         count: 1,
@@ -520,6 +548,17 @@ export function normalizePayload(payload: Record<string, unknown>, warnings: str
   };
 }
 
+function findWeaponReference(clsid: string): WeaponReference | undefined {
+  const trimmed = clsid.trim();
+  const unbraced = trimmed.replace(/^\{/, '').replace(/\}$/, '');
+  const candidates = [trimmed, unbraced, `{${unbraced}}`];
+  for (const candidate of candidates) {
+    const reference = Object.prototype.hasOwnProperty.call(weapons, candidate) ? weapons[candidate] : undefined;
+    if (reference) return reference;
+  }
+  return undefined;
+}
+
 function fallbackWeaponName(clsid: string): string {
   const readable = clsid
     .replace(/^\{/, '')
@@ -528,11 +567,11 @@ function fallbackWeaponName(clsid: string): string {
   return `${readable || clsid} (未収録)`;
 }
 
-function normalizeRadios(radios: unknown[]): RadioPreset[] {
-  return radios.map((r, i) => {
-    const radio = r as Record<string, unknown>;
+function normalizeRadios(radios: CollectionEntry[]): RadioPreset[] {
+  return radios.map((entry, i) => {
+    const radio = entry.value as Record<string, unknown>;
     return {
-      channel: i + 1,
+      channel: collectionIndex(entry.key, i + 1),
       frequency: getNumber(radio, ['frequency']) / 1000000,
       modulation: getNumber(radio, ['modulation']),
       name: getString(radio, ['name']),
@@ -553,9 +592,9 @@ function normalizeDatalink(datalinks: unknown): { link16?: { flightLead: boolean
   };
 }
 
-function normalizeRoutePoints(routePoints: unknown[], theatre: string): RoutePoint[] {
-  return routePoints.map((rp, i) => {
-    const point = rp as Record<string, unknown>;
+function normalizeRoutePoints(routePoints: CollectionEntry[], theatre: string): RoutePoint[] {
+  return routePoints.map((entry, i) => {
+    const point = entry.value as Record<string, unknown>;
     const x = getNumber(point, ['x']);
     const y = getNumber(point, ['y']);
     const alt = getNumber(point, ['alt']);
@@ -564,7 +603,7 @@ function normalizeRoutePoints(routePoints: unknown[], theatre: string): RoutePoi
     const coordinate = normalizeLatLon(theatre, x, y);
     
     return {
-      index: i + 1,
+      index: collectionIndex(entry.key, i + 1),
       name: getString(point, ['name']),
       action: getString(point, ['action']),
       xy: [x, y],
@@ -888,7 +927,7 @@ function resolveGroupThreat(units: unknown[], isThreatCandidate: boolean, warnin
     const type = getString(unit, ['type']);
     const threat = threatRanges[type];
     if (!threat) {
-      if (isThreatCandidate && type) addWarning(warnings, `未知の脅威半径: ${type}`);
+      if (isThreatCandidate && type) addWarning(warnings, `脅威半径が未収録のため地図に描画できません: ${type}`);
       continue;
     }
 
