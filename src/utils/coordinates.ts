@@ -1,4 +1,15 @@
 import proj4 from 'proj4';
+import mgrs from 'mgrs';
+import aircraftCoordinateDefaults from '../data/aircraftCoordinateDefaults.json';
+import type { CoordinateFormat } from '../types/mission';
+
+/**
+ * MGRS accuracy is the number of digits used for each of the easting and
+ * northing values.  Therefore accuracy 4 produces the FR-12 eight-digit
+ * reference (four digits east and four digits north).
+ */
+export type MGRSAccuracy = 1 | 2 | 3 | 4 | 5;
+export const DEFAULT_MGRS_ACCURACY: MGRSAccuracy = 4;
 
 export interface ProjectionParams {
   central_meridian: number;
@@ -111,7 +122,12 @@ export function latLonToDCS(theatre: string, lat: number, lon: number): [number,
   return [result[1], result[0]];
 }
 
-export function formatCoordinate(lat: number, lon: number, format: 'DDM' | 'DMS' | 'MGRS' | 'DEC'): string {
+export function formatCoordinate(
+  lat: number,
+  lon: number,
+  format: CoordinateFormat,
+  mgrsAccuracy: number = DEFAULT_MGRS_ACCURACY,
+): string {
   switch (format) {
     case 'DEC':
       return `${lat.toFixed(6)}°, ${lon.toFixed(6)}°`;
@@ -120,7 +136,7 @@ export function formatCoordinate(lat: number, lon: number, format: 'DDM' | 'DMS'
     case 'DMS':
       return formatDMS(lat, lon);
     case 'MGRS':
-      return formatMGRS(lat, lon);
+      return formatMGRS(lat, lon, mgrsAccuracy);
     default:
       return formatDDM(lat, lon);
   }
@@ -155,9 +171,55 @@ function formatDMS(lat: number, lon: number): string {
   return `${latDeg}°${latMin.toString().padStart(2, '0')}′${latSec.toFixed(2).padStart(5, '0')}″${latDir} ${lonDeg}°${lonMin.toString().padStart(2, '0')}′${lonSec.toFixed(2).padStart(5, '0')}″${lonDir}`;
 }
 
-function formatMGRS(lat: number, lon: number): string {
-  return `MGRS: ${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+function normalizeMGRSAccuracy(accuracy: number): MGRSAccuracy {
+  if (accuracy >= 1 && accuracy <= 5 && Number.isInteger(accuracy)) {
+    return accuracy as MGRSAccuracy;
+  }
+  return DEFAULT_MGRS_ACCURACY;
 }
+
+function formatMGRSFallback(lat: number, lon: number): string {
+  const formatValue = (value: number): string => Number.isFinite(value) ? value.toFixed(4) : 'invalid';
+  return `MGRS unavailable: ${formatValue(lat)}°, ${formatValue(lon)}°`;
+}
+
+/**
+ * Convert WGS84 latitude/longitude to MGRS.
+ *
+ * The npm implementation also emits UPS references near the poles, but DCS
+ * coordinate entry and this utility's FR-12 contract are UTM-oriented.  Keep
+ * a deterministic decimal fallback for polar, invalid, or library-failure
+ * inputs instead of allowing a conversion exception to reach the UI.
+ */
+export function formatMGRS(lat: number, lon: number, accuracy: number = DEFAULT_MGRS_ACCURACY): string {
+  if (!Number.isFinite(lat) || !Number.isFinite(lon) || lat < -84 || lat > 84 || lon < -180 || lon > 180) {
+    return formatMGRSFallback(lat, lon);
+  }
+
+  try {
+    return mgrs.forward([lon, lat], normalizeMGRSAccuracy(accuracy));
+  } catch {
+    return formatMGRSFallback(lat, lon);
+  }
+}
+
+const AIRCRAFT_DEFAULTS = aircraftCoordinateDefaults as Record<string, string>;
+
+function isCoordinateFormat(value: string | undefined): value is CoordinateFormat {
+  return value === 'DDM' || value === 'DMS' || value === 'MGRS' || value === 'DEC';
+}
+
+/**
+ * Return the coordinate format normally used by a DCS unit type.
+ * Unknown or empty types intentionally fall back to the application default.
+ */
+export function getDefaultCoordinateFormat(aircraftType: string | null | undefined): CoordinateFormat {
+  const value = typeof aircraftType === 'string' ? AIRCRAFT_DEFAULTS[aircraftType.trim()] : undefined;
+  return isCoordinateFormat(value) ? value : 'DDM';
+}
+
+/** Alias kept explicit for callers that phrase the lookup as aircraft format. */
+export const getAircraftCoordinateFormat = getDefaultCoordinateFormat;
 
 export function formatAltitude(meters: number, unit: 'ft' | 'm'): string {
   if (unit === 'ft') {
