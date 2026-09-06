@@ -1,4 +1,5 @@
-import type { MissionData, DisplaySettings } from '../types/mission';
+import type { MissionData, DisplaySettings, SupportAsset } from '../types/mission';
+import { dcsToLatLon, formatCoordinate } from '../utils/coordinates';
 import { formatAltitude, formatSpeed } from '../utils/units';
 
 interface SupportTabProps {
@@ -63,10 +64,19 @@ export default function SupportTab({ mission, settings }: SupportTabProps) {
             )}
             
             <dt>位置</dt>
-            <dd>{s.position[0].toFixed(2)}, {s.position[1].toFixed(2)}</dd>
+            <dd>{formatSupportPosition(s, mission.meta.theatre, settings.coordinateFormat)}</dd>
           </dl>
         </section>
       ))}
     </div>
   );
+}
+
+function formatSupportPosition(
+  support: SupportAsset,
+  theatre: string,
+  coordinateFormat: DisplaySettings['coordinateFormat'],
+): string {
+  const latlon = dcsToLatLon(theatre, support.position[0], support.position[1]) || [0, 0];
+  return formatCoordinate(latlon[0], latlon[1], coordinateFormat);
 }

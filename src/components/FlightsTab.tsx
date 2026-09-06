@@ -1,5 +1,8 @@
 import React, { useState } from 'react';
-import type { MissionData, DisplaySettings, Flight } from '../types/mission';
+import type { MissionData, DisplaySettings, Flight, MissionMeta } from '../types/mission';
+import { calculateBearing, formatCoordinate, getDefaultCoordinateFormat } from '../utils/coordinates';
+import { getMagneticVariation, trueToMagnetic } from '../utils/magvar';
+import { formatEtaLocal, formatEtaZulu, missionZuluDate } from '../utils/time';
 import { formatAltitude, formatSpeed, formatDistance } from '../utils/units';
 
 interface FlightsTabProps {
@@ -42,7 +45,7 @@ export default function FlightsTab({ mission, settings }: FlightsTabProps) {
         
         {selectedFlight && (
           <main className="flight-detail">
-            <FlightDetail flight={selectedFlight} settings={settings} startTime={mission.meta.startTime} />
+            <FlightDetail flight={selectedFlight} settings={settings} meta={mission.meta} />
           </main>
         )}
         
@@ -62,8 +65,10 @@ export default function FlightsTab({ mission, settings }: FlightsTabProps) {
   );
 }
 
-function FlightDetail({ flight, settings, startTime }: { flight: Flight; settings: DisplaySettings; startTime: number }) {
+function FlightDetail({ flight, settings, meta }: { flight: Flight; settings: DisplaySettings; meta: MissionMeta }) {
   const leadUnit = flight.units[0];
+  const aircraftDefaultCoordinateFormat = getDefaultCoordinateFormat(flight.type);
+  const missionDate = missionZuluDate(meta);
   
   return (
     <div className="flight-detail-content">
@@ -156,6 +161,9 @@ function FlightDetail({ flight, settings, startTime }: { flight: Flight; setting
       
       <section className="section">
         <h3>経路 (ナビログ)</h3>
+        <p className="coordinate-note" title="DisplaySettings に機体既定を表す値がないため、現在の表示設定を優先しています。">
+          座標形式: {settings.coordinateFormat}（機種別既定: {aircraftDefaultCoordinateFormat}）
+        </p>
         <table className="data-table">
           <thead>
             <tr>
@@ -165,25 +173,28 @@ function FlightDetail({ flight, settings, startTime }: { flight: Flight; setting
               <th>座標</th>
               <th>高度</th>
               <th>速度</th>
-              <th>ETA</th>
+              <th>ETA (Local / Zulu)</th>
               <th>距離</th>
-              <th>方位</th>
+              <th title="磁気偏差はマップ代表値による近似です">方位 (真 / 磁)</th>
             </tr>
           </thead>
           <tbody>
-            {flight.route.map((wp) => (
+            {flight.route.map((wp, routeIndex) => {
+              const bearing = getDisplayedBearing(flight.route, routeIndex, meta, missionDate);
+              return (
               <tr key={wp.index}>
                 <td>{wp.index}</td>
                 <td>{wp.name}</td>
                 <td>{wp.action}</td>
-                <td>{wp.latlon[0].toFixed(4)}, {wp.latlon[1].toFixed(4)}</td>
+                <td>{formatCoordinate(wp.latlon[0], wp.latlon[1], settings.coordinateFormat)}</td>
                 <td>{formatAltitude(wp.alt, settings.altitudeUnit)}</td>
                 <td>{formatSpeed(wp.speed, settings.speedUnit)}</td>
-                <td>{formatETA(wp.eta, startTime)}</td>
+                <td>{formatETA(wp.eta, meta)}</td>
                 <td>{wp.leg ? formatDistance(wp.leg.distance, settings.distanceUnit) : '-'}</td>
-                <td>{wp.leg ? `${wp.leg.trueBearing.toFixed(0)}°T / ${wp.leg.magneticBearing.toFixed(0)}°M` : '-'}</td>
+                <td>{bearing ? `${bearing.trueBearing.toFixed(0)}°T / ${bearing.magneticBearing.toFixed(0)}°M` : '-'}</td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </section>
@@ -217,7 +228,41 @@ function FlightDetail({ flight, settings, startTime }: { flight: Flight; setting
   );
 }
 
-function formatETA(eta: number, startTime: number): string {
-  const date = new Date((startTime + eta) * 1000);
-  return date.toISOString().slice(11, 19) + 'Z';
+function formatETA(eta: number, meta: MissionMeta): string {
+  return `${formatEtaLocal(meta, eta)} Local / ${formatEtaZulu(meta, eta)}Z`;
+}
+
+interface DisplayBearing {
+  trueBearing: number;
+  magneticBearing: number;
+}
+
+function getDisplayedBearing(
+  route: Flight['route'],
+  routeIndex: number,
+  meta: MissionMeta,
+  missionDate: Date,
+): DisplayBearing | null {
+  const waypoint = route[routeIndex];
+  const previousWaypoint = route[routeIndex - 1];
+  if (!waypoint || !previousWaypoint) {
+    return null;
+  }
+
+  const [fromLat, fromLon] = previousWaypoint.latlon;
+  const [toLat, toLon] = waypoint.latlon;
+  if (![fromLat, fromLon, toLat, toLon].every(Number.isFinite)) {
+    return null;
+  }
+
+  const trueBearing = calculateBearing(fromLat, fromLon, toLat, toLon);
+  if (!Number.isFinite(trueBearing)) {
+    return null;
+  }
+
+  const variation = getMagneticVariation(meta.theatre, toLat, toLon, missionDate);
+  return {
+    trueBearing,
+    magneticBearing: trueToMagnetic(trueBearing, variation),
+  };
 }
