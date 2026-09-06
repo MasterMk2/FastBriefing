@@ -777,3 +777,47 @@ body {
   justify-content: center;
   color: #666;
 }
+
+/* Keep each overview label/value pair together while allowing multiple columns. */
+.overview .info-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 28rem), 1fr));
+  align-items: start;
+}
+
+.overview .info-grid-item {
+  display: grid;
+  grid-template-columns: minmax(7rem, max-content) minmax(0, 1fr);
+  gap: 0.75rem;
+  align-items: baseline;
+  min-width: 0;
+}
+
+.overview .info-grid-item dt,
+.overview .info-grid-item dd {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.map-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.25rem;
+  margin-top: 0.75rem;
+}
+
+.map-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  white-space: nowrap;
+}
+
+.map-legend-item > [aria-hidden="true"] {
+  flex: 0 0 auto;
+}
+
+@media (max-width: 768px) {
+  .overview .info-grid {
+    grid-template-columns: 1fr;
+  }
+}
