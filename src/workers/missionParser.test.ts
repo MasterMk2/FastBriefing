@@ -99,6 +99,45 @@ describe('Lua table conversion', () => {
       ResKey_map_2: 'map,with,comma.jpg',
     });
   });
+
+  it('日本語のミッション名・説明・グループ名を保持する', () => {
+    const result = parseLuaTable(`mission = {
+      name = "日本語のミッション",
+      descriptionText = "敵部隊を確認",
+      groupName = "第一飛行隊",
+    }`);
+
+    expect(result).toEqual({
+      name: '日本語のミッション',
+      descriptionText: '敵部隊を確認',
+      groupName: '第一飛行隊',
+    });
+  });
+
+  it('キリル文字を文字列リテラルから保持する', () => {
+    expect(parseLuaTable('mission = { groupName = "Группа Л" }')).toEqual({
+      groupName: 'Группа Л',
+    });
+  });
+
+  it('サロゲートペアを含む絵文字を分割せず保持する', () => {
+    const result = parseLuaTable('mission = { groupName = "飛行隊 🚀🛩️" }') as { groupName: string };
+
+    expect(result.groupName).toBe('飛行隊 🚀🛩️');
+    const emojiOffset = result.groupName.indexOf('🚀');
+    expect(result.groupName.codePointAt(emojiOffset)).toBe(0x1f680);
+    expect(result.groupName.slice(emojiOffset, emojiOffset + 2)).toBe('🚀');
+  });
+
+  it('Luaエスケープと非ASCII文字を同じ文字列で復元する', () => {
+    const content = String.raw`mission = {
+      text = "日本語\n\"引用符\" \\ \101",
+    }`;
+
+    expect(parseLuaTable(content)).toEqual({
+      text: '日本語\n"引用符" \\ e',
+    });
+  });
 });
 
 describe('ZIP展開ガード', () => {
@@ -163,6 +202,20 @@ describe('ZIP展開ガード', () => {
     expect(result.mapResource).toEqual({ ResKey_briefing_1: 'brief.png' });
     expect(result.briefingImages.get('l10n/DEFAULT/brief.png')).toEqual(strToU8('png-bytes'));
     expect(result.briefingImages.has('l10n/DEFAULT/brief.txt')).toBe(false);
+  });
+
+  it('ZIP内のUTF-8文字列を復号し、UTF-8 BOMを除去してから解析する', async () => {
+    const archive = zipSync({
+      mission: strToU8('\uFEFFmission = { name = "日本語 🚀" }'),
+      theatre: strToU8('\uFEFFCaucasus'),
+      'l10n/DEFAULT/dictionary': strToU8('\uFEFFdictionary = { ["DictKey_sortie_1"] = "Лётная группа" }'),
+    });
+
+    const result = await parseMissionArchive(archive);
+
+    expect(result.mission).toEqual({ name: '日本語 🚀' });
+    expect(result.theatre).toBe('Caucasus');
+    expect(result.dictionary).toEqual({ DictKey_sortie_1: 'Лётная группа' });
   });
 
   it('画像は専用の1ファイル上限を超えると拒否する', async () => {
