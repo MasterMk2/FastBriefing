@@ -18,6 +18,8 @@ export interface ProjectionParams {
   scale_factor: number;
 }
 
+// These values mirror pydcs master dcs/terrain/*/projection.py.  Keep the
+// false-northing sign exactly as published; Falklands is intentionally positive.
 export const PROJECTIONS: Record<string, ProjectionParams> = {
   Caucasus: {
     central_meridian: 33,
@@ -39,50 +41,50 @@ export const PROJECTIONS: Record<string, ProjectionParams> = {
   },
   Nevada: {
     central_meridian: -117,
-    false_easting: 292500,
-    false_northing: -4265000,
+    false_easting: -193996.80999964548,
+    false_northing: -4410028.063999966,
     scale_factor: 0.9996,
   },
   Normandy: {
     central_meridian: -3,
-    false_easting: 300000,
-    false_northing: -5200000,
+    false_easting: -195526.00000000204,
+    false_northing: -5484812.999999951,
     scale_factor: 0.9996,
   },
   PersianGulf: {
-    central_meridian: 51,
-    false_easting: 300000,
-    false_northing: -3000000,
+    central_meridian: 57,
+    false_easting: 75755.99999999645,
+    false_northing: -2894933.0000000377,
     scale_factor: 0.9996,
   },
   TheChannel: {
-    central_meridian: -2,
-    false_easting: 300000,
-    false_northing: -5700000,
+    central_meridian: 3,
+    false_easting: 99376.00000000288,
+    false_northing: -5636889.00000001,
     scale_factor: 0.9996,
   },
   Falklands: {
-    central_meridian: -60,
-    false_easting: 300000,
-    false_northing: -5700000,
+    central_meridian: -57,
+    false_easting: 147639.99999997593,
+    false_northing: 5815417.000000032,
     scale_factor: 0.9996,
   },
   Sinai: {
     central_meridian: 33,
-    false_easting: 300000,
-    false_northing: -3400000,
+    false_easting: 169221.9999999585,
+    false_northing: -3325312.9999999693,
     scale_factor: 0.9996,
   },
   Kola: {
-    central_meridian: 33,
-    false_easting: 300000,
-    false_northing: -7500000,
+    central_meridian: 21,
+    false_easting: -62702.00000000087,
+    false_northing: -7543624.999999979,
     scale_factor: 0.9996,
   },
   GermanyCW: {
-    central_meridian: 10.5,
-    false_easting: 300000,
-    false_northing: -5500000,
+    central_meridian: 21,
+    false_easting: 35427.619999985734,
+    false_northing: -6061633.128000011,
     scale_factor: 0.9996,
   },
 };
@@ -143,32 +145,79 @@ export function formatCoordinate(
 }
 
 function formatDDM(lat: number, lon: number): string {
-  const latDeg = Math.floor(Math.abs(lat));
-  const latMin = (Math.abs(lat) - latDeg) * 60;
-  const lonDeg = Math.floor(Math.abs(lon));
-  const lonMin = (Math.abs(lon) - lonDeg) * 60;
+  const latComponent = formatDDMComponent(lat, 90);
+  const lonComponent = formatDDMComponent(lon, 180);
   
   const latDir = lat >= 0 ? 'N' : 'S';
   const lonDir = lon >= 0 ? 'E' : 'W';
   
-  return `${latDeg}°${latMin.toFixed(2).padStart(5, '0')}′${latDir} ${lonDeg}°${lonMin.toFixed(2).padStart(5, '0')}′${lonDir}`;
+  return `${latComponent.degrees}°${latComponent.minutes.toFixed(2).padStart(5, '0')}′${latDir} ${lonComponent.degrees}°${lonComponent.minutes.toFixed(2).padStart(5, '0')}′${lonDir}`;
 }
 
 function formatDMS(lat: number, lon: number): string {
-  const latDeg = Math.floor(Math.abs(lat));
-  const latMinFull = (Math.abs(lat) - latDeg) * 60;
-  const latMin = Math.floor(latMinFull);
-  const latSec = (latMinFull - latMin) * 60;
-  
-  const lonDeg = Math.floor(Math.abs(lon));
-  const lonMinFull = (Math.abs(lon) - lonDeg) * 60;
-  const lonMin = Math.floor(lonMinFull);
-  const lonSec = (lonMinFull - lonMin) * 60;
+  const latComponent = formatDMSComponent(lat, 90);
+  const lonComponent = formatDMSComponent(lon, 180);
   
   const latDir = lat >= 0 ? 'N' : 'S';
   const lonDir = lon >= 0 ? 'E' : 'W';
   
-  return `${latDeg}°${latMin.toString().padStart(2, '0')}′${latSec.toFixed(2).padStart(5, '0')}″${latDir} ${lonDeg}°${lonMin.toString().padStart(2, '0')}′${lonSec.toFixed(2).padStart(5, '0')}″${lonDir}`;
+  return `${latComponent.degrees}°${latComponent.minutes.toString().padStart(2, '0')}′${latComponent.seconds.toFixed(2).padStart(5, '0')}″${latDir} ${lonComponent.degrees}°${lonComponent.minutes.toString().padStart(2, '0')}′${lonComponent.seconds.toFixed(2).padStart(5, '0')}″${lonDir}`;
+}
+
+interface DDMComponent {
+  degrees: number;
+  minutes: number;
+}
+
+function formatDDMComponent(value: number, maximumDegrees: number): DDMComponent {
+  const magnitude = Math.min(Math.abs(value), maximumDegrees);
+  let degrees = Math.floor(magnitude);
+  let minutes = Number(((magnitude - degrees) * 60).toFixed(2));
+
+  // Round first, then carry 60.00 minutes into the degree component.
+  if (minutes >= 60) {
+    degrees += 1;
+    minutes = 0;
+  }
+
+  if (degrees >= maximumDegrees) {
+    degrees = maximumDegrees;
+    minutes = 0;
+  }
+
+  return { degrees, minutes };
+}
+
+interface DMSComponent {
+  degrees: number;
+  minutes: number;
+  seconds: number;
+}
+
+function formatDMSComponent(value: number, maximumDegrees: number): DMSComponent {
+  const magnitude = Math.min(Math.abs(value), maximumDegrees);
+  let degrees = Math.floor(magnitude);
+  const minutesFull = (magnitude - degrees) * 60;
+  let minutes = Math.floor(minutesFull);
+  let seconds = Number(((minutesFull - minutes) * 60).toFixed(2));
+
+  // Round first, then carry 60.00 seconds through minutes and degrees.
+  if (seconds >= 60) {
+    seconds = 0;
+    minutes += 1;
+  }
+  if (minutes >= 60) {
+    minutes = 0;
+    degrees += 1;
+  }
+
+  if (degrees >= maximumDegrees) {
+    degrees = maximumDegrees;
+    minutes = 0;
+    seconds = 0;
+  }
+
+  return { degrees, minutes, seconds };
 }
 
 function normalizeMGRSAccuracy(accuracy: number): MGRSAccuracy {
