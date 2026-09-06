@@ -5,6 +5,7 @@ import { normalizeMission } from './core/MissionNormalizer';
 import type { DisplaySettings, MissionData, ParsedMissionFile } from './types/mission';
 import MissionView from './components/MissionView';
 import { useSettings } from './hooks/useSettings';
+import { useTranslation } from 'react-i18next';
 
 function App() {
   const [missionData, setMissionData] = useState<MissionData | null>(null);
@@ -14,6 +15,7 @@ function App() {
   const [notice, setNotice] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const { settings, setViewMode, setLanguage } = useSettings();
+  const { t } = useTranslation();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dragCounterRef = useRef(0);
   const parserRef = useRef<MissionParser | null>(null);
@@ -34,7 +36,7 @@ function App() {
 
   const handleFileDrop = useCallback(async (file: File) => {
     if (!file.name.toLowerCase().endsWith('.miz')) {
-      setError('.mizファイルを選択してください');
+      setError(t('app.invalidMiz'));
       return;
     }
 
@@ -52,7 +54,7 @@ function App() {
       setMissionData(normalizeForSettings(parsed));
     } catch (err) {
       if (parserRef.current === parser) {
-        setError(err instanceof Error ? err.message : 'ミッションファイルの解析に失敗しました');
+        setError(err instanceof Error ? err.message : t('app.parseError'));
       }
     } finally {
       if (parserRef.current === parser) {
@@ -60,31 +62,31 @@ function App() {
         setLoading(false);
       }
     }
-  }, [normalizeForSettings]);
+  }, [normalizeForSettings, t]);
 
   const handleFiles = useCallback((fileList: FileList | readonly File[]) => {
     const files = Array.from(fileList);
     if (files.length === 0) {
-      setError('.mizファイルを選択してください');
+      setError(t('app.invalidMiz'));
       return;
     }
 
     const mizFiles = files.filter(file => file.name.toLowerCase().endsWith('.miz'));
     if (mizFiles.length === 0) {
-      setError('.mizファイルを選択してください（他の形式は読み込めません）');
+      setError(t('app.invalidMizOnly'));
       setNotice(null);
       return;
     }
 
     if (files.length > 1) {
       const ignoredCount = files.length - 1;
-      setNotice(`複数ファイルが選択されたため、最初の.mizファイル「${mizFiles[0].name}」だけを解析します（${ignoredCount}件は無視）。`);
+      setNotice(t('app.multipleFiles', { fileName: mizFiles[0].name, count: ignoredCount }));
     } else {
       setNotice(null);
     }
 
     void handleFileDrop(mizFiles[0]);
-  }, [handleFileDrop]);
+  }, [handleFileDrop, t]);
 
   const handleWindowDragEnter = useCallback((event: globalThis.DragEvent) => {
     event.preventDefault();
@@ -180,11 +182,11 @@ function App() {
         <div className="header-controls">
           <label>
             <input type="checkbox" checked={settings.viewMode === 'creator'} onChange={() => setViewMode(settings.viewMode === 'creator' ? 'pilot' : 'creator')} />
-            {settings.viewMode === 'creator' ? '作成者ビュー' : 'パイロットビュー'}
+            {settings.viewMode === 'creator' ? t('app.creatorView') : t('app.pilotView')}
           </label>
-          <select value={settings.language} onChange={(event) => setLanguage(event.target.value as DisplaySettings['language'])} aria-label="表示言語">
-            <option value="ja">日本語</option>
-            <option value="en">English</option>
+          <select value={settings.language} onChange={(event) => setLanguage(event.target.value as DisplaySettings['language'])} aria-label={t('app.displayLanguage')}>
+            <option value="ja">{t('app.japanese')}</option>
+            <option value="en">{t('app.english')}</option>
           </select>
         </div>
       </header>
@@ -197,14 +199,14 @@ function App() {
           onChange={handleFileSelect}
           id="file-input"
           className="visually-hidden"
-          aria-label=".mizミッションファイルを選択"
+          aria-label={t('app.selectMiz')}
         />
 
         {!missionData ? (
           <div
             className={`drop-zone${isDragging ? ' dragging' : ''}`}
             onDragOver={handleDropZoneDragOver}
-            aria-label=".mizミッションファイルのドロップ領域"
+            aria-label={t('app.dropZone')}
             aria-busy={loading}
           >
             <label
@@ -216,8 +218,8 @@ function App() {
               aria-describedby="drop-hint"
             >
               <div className="drop-icon" aria-hidden="true">📁</div>
-              <p>.mizファイルをここにドロップ</p>
-              <p className="drop-hint" id="drop-hint">またはクリック、Enter、Spaceで選択</p>
+              <p>{t('app.dropFile')}</p>
+              <p className="drop-hint" id="drop-hint">{t('app.dropHint')}</p>
             </label>
           </div>
         ) : (
@@ -226,7 +228,7 @@ function App() {
 
         {isDragging && missionData && (
           <div className="drop-overlay" role="status" aria-live="polite">
-            .mizファイルをここにドロップ
+            {t('app.dropFile')}
           </div>
         )}
 
@@ -236,8 +238,8 @@ function App() {
           <div className="error app-error" role="alert">
             <p>{error}</p>
             <div className="error-actions">
-              <button type="button" className="btn btn-secondary" onClick={handleRetrySelection}>別のファイルを選ぶ</button>
-              <button type="button" className="btn btn-secondary" onClick={resetMission}>やり直す</button>
+              <button type="button" className="btn btn-secondary" onClick={handleRetrySelection}>{t('app.retry')}</button>
+              <button type="button" className="btn btn-secondary" onClick={resetMission}>{t('app.reset')}</button>
             </div>
           </div>
         )}
@@ -245,7 +247,7 @@ function App() {
         {loading && (
           <div className="loading-overlay" role="status" aria-live="polite">
             <div className="spinner" aria-hidden="true"></div>
-            <p>ミッションを解析中...</p>
+            <p>{t('app.loading')}</p>
           </div>
         )}
       </main>

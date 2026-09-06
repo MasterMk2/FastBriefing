@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import type { MissionData, DisplaySettings, Flight, SupportAsset } from '../types/mission';
 
 /** Frequency comparison tolerance in MHz (1 kHz). */
@@ -36,9 +38,9 @@ export interface FrequencyConflict {
 }
 
 export const FREQUENCY_CONFLICT_LABELS: Record<FrequencyConflictType, string> = {
-  'same-aircraft-preset': '同一機体内のプリセット重複',
-  'different-flight': '異なる編隊が同じ周波数を使用（意図的な場合もある）',
-  support: '支援機（Tanker/AWACS/JTAC）との衝突',
+  'same-aircraft-preset': 'comms.sameAircraftPreset',
+  'different-flight': 'comms.differentFlight',
+  support: 'comms.supportCollision',
 };
 
 interface KeyedItem<T> {
@@ -142,6 +144,7 @@ function classifyFrequencyCluster(entries: CommunicationFrequency[]): FrequencyC
 }
 
 export default function CommsTab({ mission, settings }: CommsTabProps) {
+  const { t } = useTranslation();
   void settings;
   const allFlights = [...mission.coalitions.blue.flights, ...mission.coalitions.red.flights];
   const allSupport = [...mission.coalitions.blue.support, ...mission.coalitions.red.support];
@@ -161,14 +164,17 @@ export default function CommsTab({ mission, settings }: CommsTabProps) {
     <div className="tab-panel comms">
       {frequencyConflicts.length > 0 && (
         <section className="section warning">
-          <h3>⚠️ 周波数重複</h3>
-          <p>同一変調（AM/FM）で、0.001 MHz（1 kHz）以内を同一周波数として判定しています。変調が異なる場合は衝突扱いしません。</p>
+          <h3>{t('comms.frequencyOverlap')}</h3>
+          <p>{t('comms.overlapExplanation', {
+            tolerance: FREQUENCY_MATCH_TOLERANCE_MHZ.toFixed(3),
+            kilohertz: FREQUENCY_MATCH_TOLERANCE_MHZ * 1000,
+          })}</p>
           <table className="data-table">
             <thead>
               <tr>
-                <th>周波数</th>
-                <th>分類</th>
-                <th>使用者</th>
+                <th>{t('comms.frequency')}</th>
+                <th>{t('comms.classification')}</th>
+                <th>{t('comms.users')}</th>
               </tr>
             </thead>
             <tbody>
@@ -177,10 +183,10 @@ export default function CommsTab({ mission, settings }: CommsTabProps) {
                   <td>{formatFrequencyMHz(conflict.frequencyMHz)} ({conflict.modulation})</td>
                   <td>
                     {conflict.types.map(type => (
-                      <div key={type}>{FREQUENCY_CONFLICT_LABELS[type]}</div>
+                      <div key={type}>{t(FREQUENCY_CONFLICT_LABELS[type])}</div>
                     ))}
                   </td>
-                  <td>{conflict.users.map(formatFrequencyUser).join(', ')}</td>
+                  <td>{conflict.users.map(user => formatFrequencyUser(user, t)).join(', ')}</td>
                 </tr>
               ))}
             </tbody>
@@ -189,7 +195,7 @@ export default function CommsTab({ mission, settings }: CommsTabProps) {
       )}
 
       <section className="section">
-        <h3>フライト通信計画</h3>
+        <h3>{t('comms.flightPlan')}</h3>
         {flightRows.map(({ item: flight, key: flightKey }) => {
           const side = getFlightSide(mission, flight);
           const leadUnit = flight.units[0];
@@ -205,14 +211,17 @@ export default function CommsTab({ mission, settings }: CommsTabProps) {
                 </span>
                 {flight.callsign} - {flight.name} ({flight.type})
               </h4>
-              <p>グループ周波数: {formatFrequencyMHz(toMHz(flight.frequency))} ({formatModulation(flight.modulation)})</p>
+              <p>{t('comms.groupFrequency', {
+                frequency: formatFrequencyMHz(toMHz(flight.frequency)),
+                modulation: formatModulation(flight.modulation),
+              })}</p>
               <table className="data-table small">
                 <thead>
                   <tr>
                     <th>CH</th>
-                    <th>周波数 (MHz)</th>
-                    <th>変調</th>
-                    <th>名称</th>
+                    <th>{t('comms.frequencyMHz')}</th>
+                    <th>{t('flights.modulation')}</th>
+                    <th>{t('flights.name')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -232,14 +241,14 @@ export default function CommsTab({ mission, settings }: CommsTabProps) {
       </section>
 
       <section className="section">
-        <h3>支援機周波数</h3>
+        <h3>{t('comms.supportFrequency')}</h3>
         <table className="data-table">
           <thead>
             <tr>
-              <th>種類</th>
-              <th>コールサイン</th>
-              <th>周波数 (MHz)</th>
-              <th>TACAN</th>
+              <th>{t('comms.type')}</th>
+              <th>{t('comms.callsign')}</th>
+              <th>{t('comms.frequencyMHz')}</th>
+              <th>{t('comms.tacan')}</th>
             </tr>
           </thead>
           <tbody>
@@ -256,7 +265,7 @@ export default function CommsTab({ mission, settings }: CommsTabProps) {
       </section>
 
       <section className="section">
-        <h3>共通周波数</h3>
+        <h3>{t('comms.commonFrequency')}</h3>
         <dl className="info-grid">
           <dt>Guard (UHF)</dt>
           <dd>{formatFrequencyMHz(GUARD_FREQUENCIES_MHZ.UHF)} (AM)</dd>
@@ -349,7 +358,12 @@ function formatModulation(modulation: number): CommunicationModulation {
   return modulation === 0 ? 'AM' : 'FM';
 }
 
-function formatFrequencyUser(user: CommunicationFrequency): string {
-  const source = user.source === 'support' ? user.supportKind?.toUpperCase() ?? 'Support' : user.side;
-  return `${source} ${user.callsign} (CH${user.channel}: ${user.name})`;
+function formatFrequencyUser(user: CommunicationFrequency, t: TFunction): string {
+  const source = user.source === 'support' ? user.supportKind?.toUpperCase() ?? t('common.support') : user.side;
+  return t('comms.frequencyUser', {
+    source,
+    callsign: user.callsign,
+    channel: user.channel,
+    name: user.name,
+  });
 }

@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import type { DisplaySettings } from '../types/mission';
+import i18n from '../i18n';
 
 export const SETTINGS_STORAGE_KEY = 'fastbriefing-settings';
 export const SETTINGS_VERSION = 1;
@@ -136,6 +137,10 @@ const SettingsContext = createContext<SettingsContextType | null>(null);
 
 export function SettingsProvider({ children }: { children: ReactNode }) {
   const [settings, setSettings] = useState<DisplaySettings>(() => loadSettings());
+
+  useEffect(() => {
+    void i18n.changeLanguage(settings.language);
+  }, [settings.language]);
   
   useEffect(() => {
     saveSettings(settings);

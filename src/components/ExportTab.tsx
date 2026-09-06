@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import type { MissionData, DisplaySettings, MissionMeta } from '../types/mission';
 import { formatAltitude, formatSpeed, formatDistance, formatPressure, formatTemperature } from '../utils/units';
 import { formatCoordinate } from '../utils/coordinates';
@@ -18,6 +20,7 @@ import MapTab from './MapTab';
 import CommsTab from './CommsTab';
 import SupportTab from './SupportTab';
 import ThreatsTab from './ThreatsTab';
+import { useSettings } from '../hooks/useSettings';
 
 interface ExportTabProps {
   mission: MissionData;
@@ -25,9 +28,16 @@ interface ExportTabProps {
 }
 
 export default function ExportTab({ mission, settings }: ExportTabProps) {
+  const { t } = useTranslation();
+  const { setOutputLanguage } = useSettings();
   const [markdown, setMarkdown] = useState('');
   const [copyStatus, setCopyStatus] = useState('');
   const [pngStatus, setPngStatus] = useState('');
+
+  const outputT = (key: string, options?: Record<string, string | number>) => t(key, {
+    ...options,
+    lng: settings.outputLanguage,
+  });
 
   const generateMarkdown = () => {
     const { meta, weather, coalitions } = mission;
@@ -37,48 +47,49 @@ export default function ExportTab({ mission, settings }: ExportTabProps) {
     let md = '';
 
     md += `# ${meta.sortie}\n\n`;
-    md += `**マップ**: ${meta.theatre}  \n`;
-    md += `**日付**: ${formatDateYMD(localDate)}  \n`;
-    md += `**開始時刻 (Local)**: ${formatTimeHHMM(localDate)} (${formatUtcOffset(meta.utcOffset)})  \n`;
-    md += `**開始時刻 (Zulu)**: ${formatTimeHHMM(zuluDate)}Z  \n\n`;
+    md += `**${outputT('export.markdown.map')}**: ${meta.theatre}  \n`;
+    md += `**${outputT('export.markdown.date')}**: ${formatDateYMD(localDate)}  \n`;
+    md += `**${outputT('export.markdown.startLocal')}**: ${formatTimeHHMM(localDate)} (${formatUtcOffset(meta.utcOffset)})  \n`;
+    md += `**${outputT('export.markdown.startZulu')}**: ${formatTimeHHMM(zuluDate)}Z  \n\n`;
 
-    md += `## 天候\n\n`;
-    md += `- **気温**: ${formatTemperature(weather.temperature, settings.temperatureUnit)}  \n`;
-    md += `- **QNH**: ${formatPressure(weather.qnh, settings.pressureUnit)}  \n`;
-    md += `- **視程**: ${formatDistance(weather.visibility, settings.distanceUnit)}  \n`;
-    md += `- **雲**: ${weather.clouds.label} (底: ${formatAltitude(weather.clouds.base, settings.altitudeUnit)})  \n`;
-    md += `- **METAR**: ${metar}  \n`;
-    md += '\n### 風\n\n';
-    md += '| 高度 | 風向 (FROM) | 風速 |\n|------|-------------|------|\n';
+    md += `## ${outputT('export.markdown.weather')}\n\n`;
+    md += `- **${outputT('export.markdown.temperature')}**: ${formatTemperature(weather.temperature, settings.temperatureUnit)}  \n`;
+    md += `- **${outputT('export.markdown.qnh')}**: ${formatPressure(weather.qnh, settings.pressureUnit)}  \n`;
+    md += `- **${outputT('export.markdown.visibility')}**: ${formatDistance(weather.visibility, settings.distanceUnit)}  \n`;
+    md += `- **${outputT('export.markdown.clouds')}**: ${weather.clouds.label} (${outputT('export.markdown.cloudBase', { value: formatAltitude(weather.clouds.base, settings.altitudeUnit) })})  \n`;
+    md += `- **${outputT('export.markdown.metar')}**: ${metar}  \n`;
+    md += `\n### ${outputT('export.markdown.wind')}\n\n`;
+    md += `| ${outputT('export.markdown.altitude')} | ${outputT('export.markdown.windFrom')} | ${outputT('export.markdown.windSpeed')} |\n|------|-------------|------|\n`;
     weather.wind.forEach(w => {
-      md += `| ${w.level === 'ground' ? '地上' : w.level === '2000' ? '2000m' : '8000m'} | ${w.from}° | ${formatSpeed(w.speed, settings.speedUnit)} |\n`;
+      const level = w.level === 'ground' ? outputT('export.markdown.ground') : w.level === '2000' ? '2000m' : '8000m';
+      md += `| ${level} | ${w.from}° | ${formatSpeed(w.speed, settings.speedUnit)} |\n`;
     });
     md += '\n';
 
-    md += `## フライト一覧\n\n`;
+    md += `## ${outputT('export.markdown.flightList')}\n\n`;
     [...coalitions.blue.flights, ...coalitions.red.flights].forEach(flight => {
       const side = coalitions.blue.flights.includes(flight) ? 'Blue' : 'Red';
       md += `### ${side} - ${flight.callsign} (${flight.name}) [${flight.type} ×${flight.units.length}]\n\n`;
-      md += `- **Task**: ${flight.task}\n`;
-      md += `- **グループ周波数**: ${(flight.frequency / 1000000).toFixed(3)} MHz (${flight.modulation === 0 ? 'AM' : 'FM'})\n\n`;
+      md += `- **${outputT('export.markdown.task')}**: ${flight.task}\n`;
+      md += `- **${outputT('export.markdown.groupFrequency')}**: ${(flight.frequency / 1000000).toFixed(3)} MHz (${flight.modulation === 0 ? 'AM' : 'FM'})\n\n`;
 
-      md += `#### 経路\n\n`;
-      md += '| # | 名称 | 種別 | 座標 | 高度 | 速度 | ETA |\n|---|------|------|------|------|------|-----|\n';
+      md += `#### ${outputT('export.markdown.route')}\n\n`;
+      md += `| # | ${outputT('export.markdown.name')} | ${outputT('export.markdown.type')} | ${outputT('export.markdown.coordinate')} | ${outputT('export.markdown.altitude')} | ${outputT('export.markdown.speed')} | ${outputT('export.markdown.eta')} |\n|---|------|------|------|------|------|-----|\n`;
       flight.route.forEach(wp => {
         const coordinate = formatCoordinate(wp.latlon[0], wp.latlon[1], settings.coordinateFormat);
         md += `| ${wp.index} | ${wp.name} | ${wp.action} | ${coordinate} | ${formatAltitude(wp.alt, settings.altitudeUnit)} | ${formatSpeed(wp.speed, settings.speedUnit)} | ${formatETA(wp.eta, meta)} |\n`;
       });
       md += '\n';
 
-      md += `#### 無線プリセット\n\n`;
-      md += '| CH | 周波数 (MHz) | 変調 | 名称 |\n|----|--------------|------|------|\n';
+      md += `#### ${outputT('export.markdown.radioPreset')}\n\n`;
+      md += `| CH | ${outputT('export.markdown.frequencyMHz')} | ${outputT('export.markdown.modulation')} | ${outputT('export.markdown.name')} |\n|----|--------------|------|------|\n`;
       flight.units[0].radios.forEach(radio => {
         md += `| ${radio.channel} | ${radio.frequency.toFixed(3)} | ${radio.modulation === 0 ? 'AM' : 'FM'} | ${radio.name} |\n`;
       });
       md += '\n';
     });
 
-    md += `## 支援機\n\n`;
+    md += `## ${outputT('export.markdown.support')}\n\n`;
     [...coalitions.blue.support, ...coalitions.red.support].forEach(s => {
       md += `- **${s.kind.toUpperCase()}**: ${s.callsign}`;
       if (s.frequency) md += ` - ${(s.frequency / 1000000).toFixed(3)} MHz`;
@@ -87,16 +98,16 @@ export default function ExportTab({ mission, settings }: ExportTabProps) {
     });
     md += '\n';
 
-    md += `## 通信計画 (コムカード)\n\n`;
-    md += '| コールサイン | 側 | CH | 周波数 (MHz) | 変調 | 名称 |\n|--------------|----|----|--------------|------|------|\n';
+    md += `## ${outputT('export.markdown.commsPlan')}\n\n`;
+    md += `| ${outputT('export.markdown.callsign')} | ${outputT('export.markdown.side')} | CH | ${outputT('export.markdown.frequencyMHz')} | ${outputT('export.markdown.modulation')} | ${outputT('export.markdown.name')} |\n|--------------|----|----|--------------|------|------|\n`;
     [...coalitions.blue.flights, ...coalitions.red.flights].forEach(flight => {
       const side = coalitions.blue.flights.includes(flight) ? 'Blue' : 'Red';
       flight.units[0].radios.forEach(radio => {
         md += `| ${flight.callsign} | ${side} | ${radio.channel} | ${radio.frequency.toFixed(3)} | ${radio.modulation === 0 ? 'AM' : 'FM'} | ${radio.name} |\n`;
       });
     });
-    md += '| Guard (UHF) | All | - | 243.000 | AM | Guard |\n';
-    md += '| Guard (VHF) | All | - | 121.500 | AM | Guard |\n';
+    md += `| ${outputT('export.markdown.guardUhf')} | ${outputT('export.markdown.all')} | - | 243.000 | AM | ${outputT('export.markdown.guard')} |\n`;
+    md += `| ${outputT('export.markdown.guardVhf')} | ${outputT('export.markdown.all')} | - | 121.500 | AM | ${outputT('export.markdown.guard')} |\n`;
 
     setMarkdown(md);
     setCopyStatus('');
@@ -108,9 +119,9 @@ export default function ExportTab({ mission, settings }: ExportTabProps) {
     try {
       if (!navigator.clipboard) throw new Error('Clipboard API unavailable');
       await navigator.clipboard.writeText(markdown);
-      setCopyStatus('Markdownをコピーしました');
+      setCopyStatus(t('export.copied'));
     } catch {
-      setCopyStatus('コピーに失敗しました（ブラウザの権限を確認してください）');
+      setCopyStatus(t('export.copyFailed'));
     }
   };
 
@@ -119,7 +130,7 @@ export default function ExportTab({ mission, settings }: ExportTabProps) {
   };
 
   const exportPng = async () => {
-    setPngStatus('PNGを生成中…');
+    setPngStatus(t('export.pngGenerating'));
 
     try {
       const canvas = document.createElement('canvas');
@@ -128,7 +139,7 @@ export default function ExportTab({ mission, settings }: ExportTabProps) {
       const context = canvas.getContext('2d');
       if (!context) throw new Error('Canvas 2D context unavailable');
 
-      drawBriefingSummary(context, mission, settings);
+      drawBriefingSummary(context, mission, settings, t);
       const blob = await canvasToBlob(canvas);
       if (!blob) throw new Error('PNG blob unavailable');
 
@@ -138,34 +149,45 @@ export default function ExportTab({ mission, settings }: ExportTabProps) {
       link.download = `${safeFilename(mission.meta.sortie || 'briefing')}-briefing.png`;
       link.click();
       window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
-      setPngStatus('PNGを保存しました');
+      setPngStatus(t('export.pngSaved'));
     } catch {
-      setPngStatus('PNG生成に失敗しました');
+      setPngStatus(t('export.pngFailed'));
     }
   };
 
   return (
     <div className="tab-panel export">
       <div className="export-actions">
-        <button onClick={generateMarkdown} className="btn btn-primary">Markdown生成</button>
-        <button onClick={copyMarkdown} className="btn" disabled={!markdown}>コピー</button>
-        <button onClick={printBriefing} className="btn btn-secondary">印刷 / PDF</button>
-        <button onClick={exportPng} className="btn btn-secondary">PNG生成</button>
+        <button onClick={generateMarkdown} className="btn btn-primary">{t('export.generateMarkdown')}</button>
+        <button onClick={copyMarkdown} className="btn" disabled={!markdown}>{t('export.copy')}</button>
+        <button onClick={printBriefing} className="btn btn-secondary">{t('export.printPdf')}</button>
+        <button onClick={exportPng} className="btn btn-secondary">{t('export.generatePng')}</button>
+        <label>
+          {t('app.outputLanguage')}
+          <select
+            value={settings.outputLanguage}
+            onChange={(event) => setOutputLanguage(event.target.value as DisplaySettings['outputLanguage'])}
+            aria-label={t('app.outputLanguage')}
+          >
+            <option value="ja">{t('app.japanese')}</option>
+            <option value="en">{t('app.english')}</option>
+          </select>
+        </label>
         {copyStatus && <span className="hint" role="status">{copyStatus}</span>}
         {pngStatus && <span className="hint" role="status">{pngStatus}</span>}
       </div>
 
       {markdown && (
         <div className="markdown-preview">
-          <h3>プレビュー</h3>
+          <h3>{t('export.preview')}</h3>
           <pre>{markdown}</pre>
         </div>
       )}
 
       <section className="section export-help">
-        <h3>印刷・画像出力</h3>
-        <p>印刷用レイアウトには概要、フライト、地図、通信、支援機、脅威の各セクションが含まれます。ブラウザの印刷機能（Ctrl+P）で PDF として保存できます。</p>
-        <p className="hint">PNG はブリーフィング要約を 1536×2048 のキャンバスに描画して保存します。.miz への埋め込みは未対応です。</p>
+        <h3>{t('export.printImageExport')}</h3>
+        <p>{t('export.printHelp')}</p>
+        <p className="hint">{t('export.pngHelp')}</p>
       </section>
 
       <div className="print-briefing" aria-hidden="true">
@@ -188,6 +210,7 @@ function drawBriefingSummary(
   context: CanvasRenderingContext2D,
   mission: MissionData,
   settings: DisplaySettings,
+  t: TFunction,
 ): void {
   const { meta, weather } = mission;
   const localDate = missionLocalDate(meta);
@@ -202,23 +225,23 @@ function drawBriefingSummary(
   context.fillRect(0, 0, 1536, 2048);
   context.fillStyle = '#1a1a1a';
   context.font = 'bold 52px sans-serif';
-  y = drawWrappedCanvasText(context, meta.sortie || 'Briefing', margin, y, contentWidth, lineHeight + 12);
+  y = drawWrappedCanvasText(context, meta.sortie || t('export.canvas.briefing'), margin, y, contentWidth, lineHeight + 12);
 
   context.fillStyle = '#555555';
   context.font = '28px sans-serif';
   y += 24;
   const lines = [
-    `マップ: ${meta.theatre}`,
-    `日付: ${formatDateYMD(localDate)}`,
-    `Local: ${formatTimeHHMM(localDate)} (${formatUtcOffset(meta.utcOffset)})`,
-    `Zulu: ${formatTimeHHMM(zuluDate)}Z`,
+    t('export.canvas.map', { value: meta.theatre }),
+    t('export.canvas.date', { value: formatDateYMD(localDate) }),
+    t('export.canvas.local', { value: `${formatTimeHHMM(localDate)} (${formatUtcOffset(meta.utcOffset)})` }),
+    t('export.canvas.zulu', { value: `${formatTimeHHMM(zuluDate)}Z` }),
     '',
-    '天候',
-    `気温: ${formatTemperature(weather.temperature, settings.temperatureUnit)}`,
-    `QNH: ${formatPressure(weather.qnh, settings.pressureUnit)}`,
-    `視程: ${formatDistance(weather.visibility, settings.distanceUnit)}`,
-    `雲: ${weather.clouds.label}`,
-    `METAR: ${metar}`,
+    t('export.canvas.weather'),
+    t('export.canvas.temperature', { value: formatTemperature(weather.temperature, settings.temperatureUnit) }),
+    t('export.canvas.qnh', { value: formatPressure(weather.qnh, settings.pressureUnit) }),
+    t('export.canvas.visibility', { value: formatDistance(weather.visibility, settings.distanceUnit) }),
+    t('export.canvas.clouds', { value: weather.clouds.label }),
+    t('export.canvas.metar', { value: metar }),
   ];
 
   lines.forEach(line => {

@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { MissionData, DisplaySettings } from '../types/mission';
 
 const OverviewTab = lazy(() => import('./OverviewTab'));
@@ -16,18 +17,19 @@ interface MissionViewProps {
 }
 
 const tabs = [
-  { id: 'overview', label: '概要', component: OverviewTab },
-  { id: 'flights', label: 'フライト', component: FlightsTab },
-  { id: 'map', label: '地図', component: MapTab },
-  { id: 'comms', label: '通信', component: CommsTab },
-  { id: 'support', label: '支援機', component: SupportTab },
-  { id: 'threats', label: '脅威', component: ThreatsTab },
-  { id: 'export', label: '出力', component: ExportTab },
+  { id: 'overview', component: OverviewTab },
+  { id: 'flights', component: FlightsTab },
+  { id: 'map', component: MapTab },
+  { id: 'comms', component: CommsTab },
+  { id: 'support', component: SupportTab },
+  { id: 'threats', component: ThreatsTab },
+  { id: 'export', component: ExportTab },
 ] as const;
 
 export default function MissionView({ mission, settings }: MissionViewProps) {
   const [activeTab, setActiveTab] = useState(0);
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const { t } = useTranslation();
 
   useEffect(() => {
     tabRefs.current[activeTab]?.focus();
@@ -59,7 +61,7 @@ export default function MissionView({ mission, settings }: MissionViewProps) {
 
   return (
     <div className="mission-view">
-      <nav className="tab-nav" role="tablist" aria-label="ミッションセクション">
+      <nav className="tab-nav" role="tablist" aria-label={t('tabs.missionSections')}>
         {tabs.map((tab, index) => {
           const tabId = `mission-tab-${tab.id}`;
           const panelId = `mission-panel-${tab.id}`;
@@ -78,7 +80,7 @@ export default function MissionView({ mission, settings }: MissionViewProps) {
               onClick={() => setActiveTab(index)}
               onKeyDown={(event) => handleTabKeyDown(event, index)}
             >
-              {tab.label}
+              {t(`tabs.${tab.id}`)}
             </button>
           );
         })}
@@ -101,7 +103,7 @@ export default function MissionView({ mission, settings }: MissionViewProps) {
             hidden={!isActive}
           >
             {isActive && (
-              <Suspense fallback={<div className="tab-loading" role="status" aria-live="polite">タブを読み込み中...</div>}>
+              <Suspense fallback={<div className="tab-loading" role="status" aria-live="polite">{t('tabs.loading')}</div>}>
                 <Tab mission={mission} settings={settings} />
               </Suspense>
             )}

@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import L from 'leaflet';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, Circle, LayerGroup } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -14,6 +16,7 @@ const DEFAULT_CENTER: [number, number] = [42.0, 43.0];
 const DEFAULT_ZOOM = 7;
 
 export default function MapTab({ mission, settings }: MapTabProps) {
+  const { t } = useTranslation();
   void settings;
   const [center, setCenter] = useState<[number, number]>(DEFAULT_CENTER);
   const [zoom, setZoom] = useState(DEFAULT_ZOOM);
@@ -56,11 +59,11 @@ export default function MapTab({ mission, settings }: MapTabProps) {
               <input
                 id={`map-layer-${key}`}
                 type="checkbox"
-                aria-label={getLayerLabel(key)}
+                aria-label={getLayerLabel(key, t)}
                 checked={value}
                 onChange={(e) => setLayers(prev => ({ ...prev, [key]: e.target.checked }))}
               />
-              <span id={`map-layer-${key}-label`}>{getLayerLabel(key)}</span>
+              <span id={`map-layer-${key}-label`}>{getLayerLabel(key, t)}</span>
             </label>
           ))}
         </div>
@@ -80,10 +83,10 @@ export default function MapTab({ mission, settings }: MapTabProps) {
           {layers.bullseye && (
             <>
               <Marker position={mission.coalitions.blue.bullseye.latlon as [number, number]}>
-                <Popup>Blue Bullseye</Popup>
+                <Popup>{t('map.blueBullseye')}</Popup>
               </Marker>
               <Marker position={mission.coalitions.red.bullseye.latlon as [number, number]}>
-                <Popup>Red Bullseye</Popup>
+                <Popup>{t('map.redBullseye')}</Popup>
               </Marker>
             </>
           )}
@@ -92,12 +95,12 @@ export default function MapTab({ mission, settings }: MapTabProps) {
             <LayerGroup>
               {mission.coalitions.blue.navPoints.map(np => (
                 <Marker key={np.index} position={np.latlon as [number, number]}>
-                  <Popup>Blue NavPoint {np.index}: {np.name}</Popup>
+                  <Popup>{t('map.blueNavPoint', { index: np.index, name: np.name })}</Popup>
                 </Marker>
               ))}
               {mission.coalitions.red.navPoints.map(np => (
                 <Marker key={`red-${np.index}`} position={np.latlon as [number, number]}>
-                  <Popup>Red NavPoint {np.index}: {np.name}</Popup>
+                  <Popup>{t('map.redNavPoint', { index: np.index, name: np.name })}</Popup>
                 </Marker>
               ))}
             </LayerGroup>
@@ -147,10 +150,10 @@ export default function MapTab({ mission, settings }: MapTabProps) {
           {layers.support && (
             <LayerGroup>
               {mission.coalitions.blue.support.map((s, i) => (
-                <SupportMarker key={i} support={s} label="Blue" theatre={mission.meta.theatre} />
+                <SupportMarker key={i} support={s} label={t('common.blue')} theatre={mission.meta.theatre} t={t} />
               ))}
               {mission.coalitions.red.support.map((s, i) => (
-                <SupportMarker key={`red-${i}`} support={s} label="Red" theatre={mission.meta.theatre} />
+                <SupportMarker key={`red-${i}`} support={s} label={t('common.red')} theatre={mission.meta.theatre} t={t} />
               ))}
             </LayerGroup>
           )}
@@ -169,7 +172,7 @@ export default function MapTab({ mission, settings }: MapTabProps) {
                     fillOpacity={0.1}
                     weight={1}
                   >
-                    <Popup>{g.type} - {g.threatRange}m</Popup>
+                    <Popup>{t('map.threatPopup', { type: g.type, range: g.threatRange })}</Popup>
                   </Circle>
                 ))}
             </LayerGroup>
@@ -183,7 +186,7 @@ export default function MapTab({ mission, settings }: MapTabProps) {
                   position={dcsToLatLon(mission.meta.theatre, g.position[0], g.position[1]) as [number, number]}
                   icon={createEnemyIcon()}
                 >
-                  <Popup>{g.type} ×{g.count}</Popup>
+                  <Popup>{t('map.enemyPopup', { type: g.type, count: g.count })}</Popup>
                 </Marker>
               ))}
             </LayerGroup>
@@ -195,6 +198,7 @@ export default function MapTab({ mission, settings }: MapTabProps) {
 }
 
 function FlightPath({ flight, color }: { flight: { route: { latlon: [number, number]; name: string; action: string }[] }; color: string }) {
+  const { t } = useTranslation();
   const validWaypoints = flight.route.filter(wp => wp.latlon[0] !== 0 || wp.latlon[1] !== 0);
   const positions = validWaypoints.map(wp => wp.latlon as [number, number]);
   
@@ -203,7 +207,7 @@ function FlightPath({ flight, color }: { flight: { route: { latlon: [number, num
       <Polyline positions={positions} color={color} weight={2} opacity={0.8} />
       {validWaypoints.map((wp, i) => (
         <Marker key={i} position={wp.latlon as [number, number]} icon={createWaypointIcon(i + 1)}>
-          <Popup>{wp.name} ({wp.action})</Popup>
+          <Popup>{t('map.waypoint', { name: wp.name, action: wp.action })}</Popup>
         </Marker>
       ))}
     </>
@@ -211,6 +215,7 @@ function FlightPath({ flight, color }: { flight: { route: { latlon: [number, num
 }
 
 function TriggerZone({ zone, color, theatre }: { zone: { xy: [number, number]; radius: number; type: number; vertices?: [number, number][]; name: string }; color: string; theatre: string }) {
+  const { t } = useTranslation();
   const center = dcsToLatLon(theatre, zone.xy[0], zone.xy[1]) || [0, 0];
   
   if (zone.type === 0) {
@@ -224,7 +229,7 @@ function TriggerZone({ zone, color, theatre }: { zone: { xy: [number, number]; r
         weight={1}
         dashArray="5, 5"
       >
-        <Popup>Zone: {zone.name}</Popup>
+        <Popup>{t('map.zone', { name: zone.name })}</Popup>
       </Circle>
     );
   }
@@ -266,12 +271,12 @@ function DrawingLayer({ drawing, theatre }: { drawing: { layer: string; visible:
   );
 }
 
-function SupportMarker({ support, label, theatre }: { support: { kind: string; callsign: string; position: [number, number] }; label: string; theatre: string }) {
+function SupportMarker({ support, label, theatre, t }: { support: { kind: string; callsign: string; position: [number, number] }; label: string; theatre: string; t: TFunction }) {
   const position = dcsToLatLon(theatre, support.position[0], support.position[1]) as [number, number];
   
   return (
     <Marker position={position} icon={createSupportIcon(support.kind)}>
-      <Popup>{label} {support.kind}: {support.callsign}</Popup>
+      <Popup>{t('map.supportPopup', { side: label, kind: support.kind, callsign: support.callsign })}</Popup>
     </Marker>
   );
 }
@@ -318,17 +323,17 @@ function createSupportIcon(kind: string) {
   });
 }
 
-function getLayerLabel(key: string): string {
-  const labels: Record<string, string> = {
-    flights: 'フライト経路',
-    zones: 'トリガーゾーン',
-    drawings: 'ME描画',
-    threats: '脅威リング',
-    support: '支援機',
-    enemies: '敵ユニット',
-    bullseye: 'ブルズアイ',
-    navpoints: 'ナビポイント',
-    airbases: '飛行場',
+function getLayerLabel(key: string, t: TFunction): string {
+  const labelKeys: Record<string, string> = {
+    flights: 'map.layers.flights',
+    zones: 'map.layers.zones',
+    drawings: 'map.layers.drawings',
+    threats: 'map.layers.threats',
+    support: 'map.layers.support',
+    enemies: 'map.layers.enemies',
+    bullseye: 'map.layers.bullseye',
+    navpoints: 'map.layers.navpoints',
+    airbases: 'map.layers.airbases',
   };
-  return labels[key] || key;
+  return labelKeys[key] ? t(labelKeys[key]) : key;
 }
