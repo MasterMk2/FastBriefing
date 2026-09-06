@@ -2,14 +2,13 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ChangeEvent, DragEvent as ReactDragEvent, KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { MissionParser } from './core/MissionParser';
 import { normalizeMission } from './core/MissionNormalizer';
-import type { DisplaySettings, MissionData, ParsedMissionFile } from './types/mission';
+import type { DisplaySettings, MissionData } from './types/mission';
 import MissionView from './components/MissionView';
 import { useSettings } from './hooks/useSettings';
 import { useTranslation } from 'react-i18next';
 
 function App() {
   const [missionData, setMissionData] = useState<MissionData | null>(null);
-  const [parsedMission, setParsedMission] = useState<ParsedMissionFile | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -19,23 +18,14 @@ function App() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dragCounterRef = useRef(0);
   const parserRef = useRef<MissionParser | null>(null);
-
-  const normalizeForSettings = useCallback((parsed: ParsedMissionFile) => normalizeMission(parsed, {
-    coordinateFormat: settings.coordinateFormat,
-    unitSystem: settings.unitSystem,
-    viewMode: settings.viewMode,
-  }), [settings.coordinateFormat, settings.unitSystem, settings.viewMode]);
-
-  // Keep the parsed source in memory so display settings can be applied again
-  // without asking the user to select and parse the .miz file a second time.
-  useEffect(() => {
-    if (parsedMission) {
-      setMissionData(normalizeForSettings(parsedMission));
-    }
-  }, [parsedMission, normalizeForSettings]);
+  const parseGenerationRef = useRef(0);
 
   const handleFileDrop = useCallback(async (file: File) => {
     if (!file.name.toLowerCase().endsWith('.miz')) {
+      parserRef.current?.cancel();
+      parserRef.current = null;
+      parseGenerationRef.current += 1;
+      setLoading(false);
       setError(t('app.invalidMiz'));
       return;
     }
@@ -43,18 +33,19 @@ function App() {
     parserRef.current?.cancel();
     const parser = new MissionParser();
     parserRef.current = parser;
+    const generation = ++parseGenerationRef.current;
     setLoading(true);
     setError(null);
 
     try {
       const parsed = await parser.parse(file);
-      if (parserRef.current !== parser) return;
+      if (parserRef.current !== parser || parseGenerationRef.current !== generation) return;
 
-      setParsedMission(parsed);
-      setMissionData(normalizeForSettings(parsed));
+      setMissionData(normalizeMission(parsed, settings));
     } catch (err) {
-      if (parserRef.current === parser) {
-        setError(err instanceof Error ? err.message : t('app.parseError'));
+      if (parserRef.current === parser && parseGenerationRef.current === generation && !isAbortError(err)) {
+        const message = err instanceof Error ? err.message : '';
+        setError(message ? t('app.parseErrorDetails', { message }) : t('app.parseError'));
       }
     } finally {
       if (parserRef.current === parser) {
@@ -62,7 +53,7 @@ function App() {
         setLoading(false);
       }
     }
-  }, [normalizeForSettings, t]);
+  }, [settings, t]);
 
   const handleFiles = useCallback((fileList: FileList | readonly File[]) => {
     const files = Array.from(fileList);
@@ -168,10 +159,10 @@ function App() {
   const resetMission = useCallback(() => {
     parserRef.current?.cancel();
     parserRef.current = null;
+    parseGenerationRef.current += 1;
     setLoading(false);
     setError(null);
     setNotice(null);
-    setParsedMission(null);
     setMissionData(null);
   }, []);
 
@@ -257,6 +248,13 @@ function App() {
 
 function hasFiles(event: globalThis.DragEvent): boolean {
   return Array.from(event.dataTransfer?.types ?? []).includes('Files') || Boolean(event.dataTransfer?.files.length);
+}
+
+function isAbortError(error: unknown): boolean {
+  return typeof error === 'object'
+    && error !== null
+    && 'name' in error
+    && error.name === 'AbortError';
 }
 
 export default App;

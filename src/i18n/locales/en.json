@@ -16,6 +16,7 @@
     "invalidMiz": "Please select a .miz file",
     "invalidMizOnly": "Please select a .miz file (other formats cannot be loaded)",
     "parseError": "Failed to parse the mission file",
+    "parseErrorDetails": "Failed to parse the mission file. Details: {{message}}",
     "multipleFiles": "Multiple files were selected, so only the first .miz file \"{{fileName}}\" will be parsed ({{count}} ignored)."
   },
   "tabs": {
@@ -207,6 +208,8 @@
     "printPdf": "Print / PDF",
     "generatePng": "Generate PNG",
     "preview": "Preview",
+    "printFlights": "All Flight Details",
+    "mapPrintNote": "The map is omitted from the print view. Check the Map tab on screen.",
     "printImageExport": "Print and Image Export",
     "printHelp": "The print layout includes Overview, Flights, Map, Comms, Support Assets, and Threats sections. Use the browser print function (Ctrl+P) to save it as a PDF.",
     "pngHelp": "PNG renders a briefing summary to a 1536×2048 canvas and saves it. Embedding into .miz files is not supported.",

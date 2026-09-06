@@ -73,23 +73,8 @@ body {
     display: block !important;
   }
 
-  .print-briefing .tab-panel {
+  .print-briefing .print-view {
     display: block !important;
-    animation: none;
-  }
-
-  .print-briefing .map-tab {
-    height: auto;
-  }
-
-  .print-briefing .map-container {
-    height: 600px !important;
-    break-inside: avoid;
-    page-break-inside: avoid;
-  }
-
-  .leaflet-container {
-    height: 100% !important;
   }
 
   .section,
@@ -117,6 +102,18 @@ body {
   .data-table tr {
     break-inside: avoid;
     page-break-inside: avoid;
+  }
+
+  .print-view > .print-section,
+  .print-view > .print-flight-list,
+  .print-view .print-flight {
+    break-inside: auto;
+    page-break-inside: auto;
+  }
+
+  .print-view .print-flight {
+    break-before: page;
+    page-break-before: always;
   }
 }
 
@@ -330,6 +327,10 @@ body {
 .info-grid dd {
   margin: 0;
   color: #333;
+}
+
+.print-definition {
+  display: contents;
 }
 
 .data-table {
