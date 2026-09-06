@@ -3,6 +3,10 @@ import { describe, expect, it } from 'vitest';
 import {
   convertLuaNode,
   parseLuaTable,
+  parseDictionary,
+  parseMapResource,
+  parseMissionArchive,
+  shouldExtractEntry,
   unzipWithLimits,
   ZIP_LIMITS,
 } from './missionParser';
@@ -63,6 +67,38 @@ describe('Lua table conversion', () => {
     expect(convertLuaNode({ type: 'NilLiteral', value: null })).toBeNull();
     expect(convertLuaNode({ type: 'StringLiteral', value: 'text' })).toBe('text');
   });
+
+  it('明示数値キーと暗黙フィールドは独立した連番をソース順に代入する', () => {
+    expect(parseLuaTable('mission = { [1] = "first", "second" }')).toEqual({ '1': 'second' });
+  });
+
+  it('実DCS形式のdictionaryを引用符付きキーとエスケープ込みで解析する', () => {
+    const content = String.raw`dictionary =
+{
+    ["DictKey_sortie_1"] = "Sortie \"Name\"",
+    ["DictKey_descriptionText_2"] = "line one\nline two",
+    ["DictKey_nonString_3"] = { ["ignored"] = "nested" },
+} -- end of dictionary`;
+
+    expect(parseDictionary(content)).toEqual({
+      DictKey_sortie_1: 'Sortie "Name"',
+      DictKey_descriptionText_2: 'line one\nline two',
+    });
+  });
+
+  it('実DCS形式のmapResourceを最上位の文字列値だけ解析する', () => {
+    const content = String.raw`mapResource =
+{
+    ["ResKey_briefing_1"] = "brief.png",
+    ["ResKey_map_2"] = "map,with,comma.jpg",
+    ["ResKey_nested_3"] = { ["ignored"] = "nested" },
+} -- end of mapResource`;
+
+    expect(parseMapResource(content)).toEqual({
+      ResKey_briefing_1: 'brief.png',
+      ResKey_map_2: 'map,with,comma.jpg',
+    });
+  });
 });
 
 describe('ZIP展開ガード', () => {
@@ -92,5 +128,47 @@ describe('ZIP展開ガード', () => {
       mission: expect.any(Uint8Array),
       theatre: expect.any(Uint8Array),
     });
+  });
+
+  it('l10n/DEFAULT配下の許可拡張子画像を展開し、他のリソースは除外する', async () => {
+    const archive = zipSync({
+      'l10n/DEFAULT/brief.PNG': strToU8('png'),
+      'l10n/DEFAULT/map.jpg': strToU8('jpg'),
+      'l10n/DEFAULT/script.lua': strToU8('lua'),
+      'other/brief.png': strToU8('png'),
+    });
+
+    const extracted = await unzipWithLimits(archive, shouldExtractEntry);
+    expect(extracted['l10n/DEFAULT/brief.PNG']).toEqual(strToU8('png'));
+    expect(extracted['l10n/DEFAULT/map.jpg']).toEqual(strToU8('jpg'));
+    expect(extracted['l10n/DEFAULT/script.lua']).toBeUndefined();
+    expect(extracted['other/brief.png']).toBeUndefined();
+  });
+
+  it('解析結果に展開済みのブリーフィング画像Uint8Arrayを保持する', async () => {
+    const archive = zipSync({
+      mission: strToU8('mission = {}'),
+      'l10n/DEFAULT/dictionary': strToU8(`dictionary = {
+        ["DictKey_sortie_1"] = "Sortie Name",
+      }`),
+      'l10n/DEFAULT/mapResource': strToU8(`mapResource = {
+        ["ResKey_briefing_1"] = "brief.png",
+      }`),
+      'l10n/DEFAULT/brief.png': strToU8('png-bytes'),
+      'l10n/DEFAULT/brief.txt': strToU8('not-an-image'),
+    });
+
+    const result = await parseMissionArchive(archive);
+    expect(result.dictionary).toEqual({ DictKey_sortie_1: 'Sortie Name' });
+    expect(result.mapResource).toEqual({ ResKey_briefing_1: 'brief.png' });
+    expect(result.briefingImages.get('l10n/DEFAULT/brief.png')).toEqual(strToU8('png-bytes'));
+    expect(result.briefingImages.has('l10n/DEFAULT/brief.txt')).toBe(false);
+  });
+
+  it('画像は専用の1ファイル上限を超えると拒否する', async () => {
+    const oversizedImage = new Uint8Array(ZIP_LIMITS.MAX_IMAGE_SIZE + 1);
+    const archive = zipSync({ 'l10n/DEFAULT/brief.png': [oversizedImage, { level: 0 }] });
+
+    await expect(unzipWithLimits(archive, shouldExtractEntry)).rejects.toThrow('展開後サイズ');
   });
 });
