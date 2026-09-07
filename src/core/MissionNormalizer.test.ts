@@ -458,6 +458,55 @@ describe('MissionNormalizer reference-backed layers', () => {
     expect(group.threatRangeUnitType).toBe('S-300PS 5P85C ln');
   });
 
+  it('keeps a larger search radar detection range separate from a launcher threat range', () => {
+    const mixedGroup = {
+      group: [{
+        groupId: 701,
+        units: [unit('SNR_75V'), unit('S_75M_Volhov')],
+        hidden: false,
+        lateActivation: false,
+      }],
+    };
+    const normalized = normalizeMission(makeMission({
+      coalition: {
+        blue: { country: [{ vehicle: [mixedGroup] }] },
+        red: {},
+        neutrals: {},
+      },
+    }), settings);
+    const group = normalized.coalitions.blue.aiGroups[0];
+
+    expect(group.threatRange).toBe(43000);
+    expect(group.threatRangeSource).toBe('reference');
+    expect(group.threatRangeUnitType).toBe('S_75M_Volhov');
+    expect(group.detectionRange).toBe(100000);
+    expect(group.detectionRangeUnitType).toBe('SNR_75V');
+  });
+
+  it('does not fall back to a detection-only range for an EWR group', () => {
+    const ewrGroup = {
+      group: [{
+        groupId: 702,
+        units: [unit('55G6 EWR')],
+        hidden: false,
+        lateActivation: false,
+      }],
+    };
+    const normalized = normalizeMission(makeMission({
+      coalition: {
+        blue: { country: [{ vehicle: [ewrGroup] }] },
+        red: {},
+        neutrals: {},
+      },
+    }), settings);
+    const group = normalized.coalitions.blue.aiGroups[0];
+
+    expect(group.threatRange).toBe(0);
+    expect(group.detectionRange).toBe(400000);
+    expect(group.detectionRangeUnitType).toBe('55G6 EWR');
+    expect(normalized.warnings).not.toContain('脅威半径が未収録のため地図に描画できません: 55G6 EWR');
+  });
+
   it('does not warn about unrecorded threat radii for aircraft groups', () => {
     const aircraftGroup = {
       category: 'plane',
@@ -499,6 +548,100 @@ describe('MissionNormalizer reference-backed layers', () => {
     }
     expect(groups.find(group => group.type === 'M-2 Bradley')?.threatRange).toBeGreaterThan(0);
     expect(normalized.warnings).not.toContain('脅威半径が未収録のため地図に描画できません: M-2 Bradley');
+  });
+
+  it('does not warn for the confirmed non-threat units from the real mission', () => {
+    const nonThreatTypes = [
+      'house1arm',
+      'GAZ-3308',
+      'Ural-4320T',
+      'ZIL-131 KUNG',
+      'ATMZ-5',
+      'Ural-4320 APA-5D',
+      'ZiL-131 APA-80',
+      'Ship_Tilde_Supply',
+      'speedboat',
+      'ELNYA',
+    ];
+    const vehicleGroups = {
+      group: nonThreatTypes.map((type, index) => ({
+        groupId: 800 + index,
+        units: [unit(type)],
+        hidden: false,
+        lateActivation: false,
+      })),
+    };
+    const normalized = normalizeMission(makeMission({
+      coalition: {
+        blue: {
+          country: [{
+            vehicle: vehicleGroups,
+            ship: vehicleGroups,
+          }],
+        },
+        red: {},
+        neutrals: {},
+      },
+    }), settings);
+    const groups = normalized.coalitions.blue.aiGroups;
+
+    for (const type of nonThreatTypes) {
+      expect(groups.find(group => group.type === type), type).toMatchObject({ threatRange: 0, detectionRange: 0 });
+      expect(normalized.warnings).not.toContain(`脅威半径が未収録のため地図に描画できません: ${type}`);
+    }
+  });
+
+  it('separates unknown-unit warnings from missing-threat-range warnings', () => {
+    const unknownGroup = {
+      group: [{
+        groupId: 900,
+        units: [unit('UnknownSAM')],
+        hidden: false,
+        lateActivation: false,
+      }],
+    };
+    const normalized = normalizeMission(makeMission({
+      coalition: {
+        blue: { country: [{ vehicle: [unknownGroup] }] },
+        red: {},
+        neutrals: {},
+      },
+    }), settings);
+
+    expect(normalized.warnings).toContain('参照データに未収録のユニット: UnknownSAM');
+    expect(normalized.warnings).toContain('脅威半径が未収録のため地図に描画できません: UnknownSAM');
+    expect(normalized.warnings.filter(warning => warning.includes('UnknownSAM'))).toHaveLength(2);
+  });
+
+  it('uses the pydcs ship engagement and detection ranges for the four known armed ships', () => {
+    const shipTypes = ['CHAP_Project22160_TorM2KM', 'MOSCOW', 'REZKY', 'CV_1143_5'];
+    const shipGroups = {
+      group: shipTypes.map((type, index) => ({
+        groupId: 950 + index,
+        units: [unit(type)],
+        hidden: false,
+        lateActivation: false,
+      })),
+    };
+    const normalized = normalizeMission(makeMission({
+      coalition: {
+        blue: { country: [{ ship: [shipGroups] }] },
+        red: {},
+        neutrals: {},
+      },
+    }), settings);
+    const groups = normalized.coalitions.blue.aiGroups;
+    const expectedRanges: Record<string, [number, number]> = {
+      CHAP_Project22160_TorM2KM: [25000, 80000],
+      MOSCOW: [75000, 160000],
+      REZKY: [16000, 30000],
+      CV_1143_5: [12000, 25000],
+    };
+
+    for (const [type, [threatRange, detectionRange]] of Object.entries(expectedRanges)) {
+      expect(groups.find(group => group.type === type), type).toMatchObject({ threatRange, detectionRange });
+      expect(normalized.warnings).not.toContain(`脅威半径が未収録のため地図に描画できません: ${type}`);
+    }
   });
 
   it('matches all pydcs theatre UTC offsets', () => {

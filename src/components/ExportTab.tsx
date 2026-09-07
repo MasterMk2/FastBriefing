@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
-import type { MissionData, DisplaySettings, MissionMeta } from '../types/mission';
+import type { AIGroup, MissionData, DisplaySettings, MissionMeta } from '../types/mission';
 import { formatAltitude, formatSpeed, formatDistance, formatPressure, formatTemperature } from '../utils/units';
 import { formatCoordinate } from '../utils/coordinates';
 import { buildMetar } from '../utils/metar';
@@ -95,6 +95,33 @@ export default function ExportTab({ mission, settings }: ExportTabProps) {
       md += '\n';
     });
     md += '\n';
+
+    const threats = coalitions.red.aiGroups.filter(hasResolvedThreatRange);
+    const unrecordedThreats = coalitions.red.aiGroups.filter(isUnrecordedThreat);
+    md += `## ${outputT('export.markdown.threats')}\n\n`;
+    if (threats.length === 0) {
+      md += `${outputT('export.markdown.noThreats')}\n\n`;
+    } else {
+      md += `| ${outputT('export.markdown.type')} | ${outputT('export.markdown.count')} | ${outputT('export.markdown.engagementRange')} | ${outputT('export.markdown.detectionRange')} |\n|------|------:|--------------------|------------------|\n`;
+      threats.forEach(group => {
+        const engagementRange = group.threatRange && group.threatRange > 0
+          ? formatDistance(group.threatRange, settings.distanceUnit)
+          : outputT('export.markdown.none');
+        const detectionRange = group.detectionRange && group.detectionRange > 0
+          ? formatDistance(group.detectionRange, settings.distanceUnit)
+          : outputT('export.markdown.none');
+        md += `| ${group.type} | ${group.count} | ${engagementRange} | ${detectionRange} |\n`;
+      });
+      md += '\n';
+    }
+    if (unrecordedThreats.length > 0) {
+      md += `### ${outputT('export.markdown.unrecordedThreats')}\n\n`;
+      md += `| ${outputT('export.markdown.type')} | ${outputT('export.markdown.count')} | ${outputT('export.markdown.engagementRange')} | ${outputT('export.markdown.detectionRange')} |\n|------|------:|--------------------|------------------|\n`;
+      unrecordedThreats.forEach(group => {
+        md += `| ${group.type} | ${group.count} | ${outputT('export.markdown.unrecorded')} | ${outputT('export.markdown.unrecorded')} |\n`;
+      });
+      md += '\n';
+    }
 
     md += `## ${outputT('export.markdown.commsPlan')}\n\n`;
     md += `| ${outputT('export.markdown.callsign')} | ${outputT('export.markdown.side')} | CH | ${outputT('export.markdown.frequencyMHz')} | ${outputT('export.markdown.modulation')} | ${outputT('export.markdown.name')} |\n|--------------|----|----|--------------|------|------|\n`;
@@ -280,4 +307,25 @@ function canvasToBlob(canvas: HTMLCanvasElement): Promise<Blob | null> {
 function safeFilename(value: string): string {
   const filename = value.replace(/[\\/:*?"<>|]/g, '_').trim();
   return filename || 'briefing';
+}
+
+function hasResolvedThreatRange(group: AIGroup): boolean {
+  const hasEngagementRange = Number.isFinite(group.threatRange)
+    && (group.threatRange ?? 0) > 0;
+  const hasDetectionRange = Number.isFinite(group.detectionRange)
+    && (group.detectionRange ?? 0) > 0;
+  return hasEngagementRange || hasDetectionRange;
+}
+
+function isUnrecordedThreat(group: AIGroup): boolean {
+  if (hasResolvedThreatRange(group)) return false;
+  if (group.threatRangeSource === 'unknown') return true;
+  if (group.threatRangeSource === 'reference' || group.threatRangeSource === 'detection') return false;
+
+  const category = group.category.trim().toLowerCase();
+  const isThreatCandidate = category === 'vehicle' || category === 'ship';
+  if (!isThreatCandidate) return false;
+
+  return (!Number.isFinite(group.threatRange) || (group.threatRange ?? 0) <= 0)
+    && (!Number.isFinite(group.detectionRange) || (group.detectionRange ?? 0) <= 0);
 }

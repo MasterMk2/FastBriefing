@@ -580,7 +580,8 @@ function PrintThreats({ mission, settings, t }: { mission: MissionData; settings
   const threats = allEnemies.filter(hasResolvedThreatRange);
   const unrecordedThreats = allEnemies.filter(isUnrecordedThreat);
   const otherEnemies = allEnemies.filter(group => !hasResolvedThreatRange(group) && !isUnrecordedThreat(group));
-  const threatWarnings = [...new Set(mission.warnings.filter(warning => warning.includes('脅威半径')))].map(warning => warning);
+  const threatWarnings = [...new Set(mission.warnings.filter(warning => warning.startsWith('脅威半径が未収録')))].sort();
+  const unknownUnitWarnings = [...new Set(mission.warnings.filter(warning => warning.startsWith('参照データに未収録のユニット')))].sort();
   const showCreatorDetails = settings.viewMode === 'creator';
 
   return (
@@ -592,22 +593,31 @@ function PrintThreats({ mission, settings, t }: { mission: MissionData; settings
         {threats.length === 0 ? (
           <p>{t('threats.noThreats')}</p>
         ) : (
-          <ThreatTable threats={threats} mission={mission} settings={settings} t={t} showRadius showCreatorDetails={showCreatorDetails} />
+          <ThreatTable threats={threats} mission={mission} settings={settings} t={t} showUnrecorded={false} showCreatorDetails={showCreatorDetails} />
         )}
 
         {unrecordedThreats.length > 0 && (
           <div className="threats-unrecorded">
             <h4>{t('threats.unrecordedTitle')}</h4>
             <p>{t('threats.unrecordedDescription')}</p>
-            <ThreatTable threats={unrecordedThreats} mission={mission} settings={settings} t={t} showRadius={false} showCreatorDetails={showCreatorDetails} />
+            <ThreatTable threats={unrecordedThreats} mission={mission} settings={settings} t={t} showUnrecorded showCreatorDetails={showCreatorDetails} />
           </div>
         )}
 
         {threatWarnings.length > 0 && (
-          <aside className="warning" aria-label={t('threats.referenceWarningAria')}>
-            <strong>{t('threats.referenceWarning')}</strong>
+          <aside className="warning" aria-label={t('threats.threatRadiusWarningAria')}>
+            <strong>{t('threats.threatRadiusWarning')}</strong>
             <ul>
               {threatWarnings.map(warning => <li key={warning}>{warning}</li>)}
+            </ul>
+          </aside>
+        )}
+
+        {unknownUnitWarnings.length > 0 && (
+          <aside className="warning" aria-label={t('threats.unknownUnitWarningAria')}>
+            <strong>{t('threats.unknownUnitWarning')}</strong>
+            <ul>
+              {unknownUnitWarnings.map(warning => <li key={warning}>{warning}</li>)}
             </ul>
           </aside>
         )}
@@ -655,12 +665,12 @@ function PrintThreats({ mission, settings, t }: { mission: MissionData; settings
   );
 }
 
-function ThreatTable({ threats, mission, settings, t, showRadius, showCreatorDetails }: {
+function ThreatTable({ threats, mission, settings, t, showUnrecorded, showCreatorDetails }: {
   threats: AIGroup[];
   mission: MissionData;
   settings: DisplaySettings;
   t: PrintTranslator;
-  showRadius: boolean;
+  showUnrecorded: boolean;
   showCreatorDetails: boolean;
 }) {
   return (
@@ -669,7 +679,8 @@ function ThreatTable({ threats, mission, settings, t, showRadius, showCreatorDet
         <tr>
           <th>{t('threats.type')}</th>
           <th>{t('threats.count')}</th>
-          <th>{t('threats.threatRadius')}</th>
+          <th>{t('threats.engagementRange')}</th>
+          <th>{t('threats.detectionRange')}</th>
           <th>{t('threats.position')}</th>
           {showCreatorDetails && <th>{t('threats.hidden')}</th>}
           {showCreatorDetails && <th>{t('threats.lateActivation')}</th>}
@@ -680,7 +691,8 @@ function ThreatTable({ threats, mission, settings, t, showRadius, showCreatorDet
           <tr key={groupKey(threat, index)}>
             <td>{threat.type}</td>
             <td>{threat.count}</td>
-            <td>{showRadius ? formatDistance(threat.threatRange!, settings.distanceUnit) : t('threats.unrecorded')}</td>
+            <td>{showUnrecorded ? t('threats.unrecorded') : formatThreatRange(threat.threatRange, settings, t)}</td>
+            <td>{showUnrecorded ? t('threats.unrecorded') : formatThreatRange(threat.detectionRange, settings, t)}</td>
             <td>{formatThreatPosition(threat, mission.meta.theatre, settings.coordinateFormat)}</td>
             {showCreatorDetails && <td>{threat.hidden ? t('common.yes') : t('common.no')}</td>}
             {showCreatorDetails && <td>{threat.lateActivation ? t('common.yes') : t('common.no')}</td>}
@@ -735,12 +747,15 @@ function formatSupportPosition(support: SupportAsset, theatre: string, coordinat
 }
 
 function hasResolvedThreatRange(group: AIGroup): boolean {
-  return Number.isFinite(group.threatRange)
-    && (group.threatRange ?? 0) > 0
-    && group.threatRangeSource !== 'unknown';
+  const hasEngagementRange = Number.isFinite(group.threatRange)
+    && (group.threatRange ?? 0) > 0;
+  const hasDetectionRange = Number.isFinite(group.detectionRange)
+    && (group.detectionRange ?? 0) > 0;
+  return hasEngagementRange || hasDetectionRange;
 }
 
 function isUnrecordedThreat(group: AIGroup): boolean {
+  if (hasResolvedThreatRange(group)) return false;
   if (group.threatRangeSource === 'unknown') return true;
   if (group.threatRangeSource === 'reference' || group.threatRangeSource === 'detection') return false;
 
@@ -749,7 +764,17 @@ function isUnrecordedThreat(group: AIGroup): boolean {
   if (!isThreatCandidate || hasResolvedThreatRange(group)) return false;
 
   return !Number.isFinite(group.threatRange)
-    || (group.threatRange ?? 0) <= 0;
+    || ((group.threatRange ?? 0) <= 0
+      && (!Number.isFinite(group.detectionRange) || (group.detectionRange ?? 0) <= 0));
+}
+
+function formatThreatRange(
+  range: number | undefined,
+  settings: DisplaySettings,
+  t: PrintTranslator,
+): string {
+  if (Number.isFinite(range) && (range ?? 0) > 0) return formatDistance(range!, settings.distanceUnit);
+  return t('threats.none');
 }
 
 function groupKey(group: AIGroup, occurrence: number): string {

@@ -32,6 +32,7 @@ export default function MapTab({ mission, settings }: MapTabProps) {
     zones: true,
     drawings: true,
     threats: true,
+    detection: false,
     support: true,
     enemies: true,
     bullseye: true,
@@ -77,6 +78,14 @@ export default function MapTab({ mission, settings }: MapTabProps) {
             <span aria-hidden="true" style={{ display: 'inline-block', width: '2rem', borderTop: `2px dotted ${NEUTRAL_FLIGHT_COLOR}` }} />
             {t('common.neutral')}
           </span>
+          <span className="map-legend-item">
+            <span aria-hidden="true" className="map-legend-range-swatch map-legend-engagement-swatch" />
+            {t('threats.engagementRange')}
+          </span>
+          <span className="map-legend-item">
+            <span aria-hidden="true" className="map-legend-range-swatch map-legend-detection-swatch" />
+            {t('threats.detectionRange')}
+          </span>
         </div>
       </div>
 
@@ -90,7 +99,7 @@ export default function MapTab({ mission, settings }: MapTabProps) {
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
-          <MapViewport mission={viewMission} />
+          <MapViewport mission={viewMission} includeDetectionRange={layers.detection} />
 
           {layers.bullseye && (
             <>
@@ -285,6 +294,53 @@ export default function MapTab({ mission, settings }: MapTabProps) {
             </LayerGroup>
           )}
 
+          {layers.detection && (
+            <LayerGroup>
+              {viewMission.coalitions.red.aiGroups
+                .filter(g => g.detectionRange && g.detectionRange > 0)
+                .map((g, index) => {
+                  const position = resolveEntityPosition(viewMission.meta.theatre, g.latlon, g.latlonResolved, g.position);
+                  if (!position) return null;
+                  const markerLabel = `${t('common.red')} ${g.type} detection range`;
+                  return (
+                    <Circle
+                      key={`red-detection-${index}`}
+                      center={position}
+                      radius={g.detectionRange!}
+                      color={RED_FLIGHT_COLOR}
+                      fill={false}
+                      fillOpacity={0}
+                      dashArray="8 6"
+                      weight={1}
+                    >
+                      <Popup>{`${markerLabel}: ${t('map.detectionPopup', { type: g.type, range: g.detectionRange })}`}</Popup>
+                    </Circle>
+                  );
+                })}
+              {viewMission.coalitions.neutral.aiGroups
+                .filter(g => g.detectionRange && g.detectionRange > 0)
+                .map((g, index) => {
+                  const position = resolveEntityPosition(viewMission.meta.theatre, g.latlon, g.latlonResolved, g.position);
+                  if (!position) return null;
+                  const markerLabel = `${t('common.neutral')} ${g.type} detection range`;
+                  return (
+                    <Circle
+                      key={`neutral-detection-${index}`}
+                      center={position}
+                      radius={g.detectionRange!}
+                      color={NEUTRAL_FLIGHT_COLOR}
+                      fill={false}
+                      fillOpacity={0}
+                      dashArray="8 6"
+                      weight={1}
+                    >
+                      <Popup>{`${markerLabel}: ${t('map.detectionPopup', { type: g.type, range: g.detectionRange })}`}</Popup>
+                    </Circle>
+                  );
+                })}
+            </LayerGroup>
+          )}
+
           {layers.enemies && (
             <LayerGroup>
               {viewMission.coalitions.red.aiGroups.map((g, index) => {
@@ -327,22 +383,22 @@ export default function MapTab({ mission, settings }: MapTabProps) {
   );
 }
 
-function MapViewport({ mission }: { mission: MissionData }) {
+function MapViewport({ mission, includeDetectionRange }: { mission: MissionData; includeDetectionRange: boolean }) {
   const map = useMap();
 
   useEffect(() => {
-    const bounds = collectMissionBounds(mission);
+    const bounds = collectMissionBounds(mission, includeDetectionRange);
     if (bounds.isValid()) {
       map.fitBounds(bounds, { padding: [24, 24], maxZoom: 12 });
     } else {
       map.setView(DEFAULT_CENTER, DEFAULT_ZOOM);
     }
-  }, [map, mission]);
+  }, [includeDetectionRange, map, mission]);
 
   return null;
 }
 
-function collectMissionBounds(mission: MissionData): L.LatLngBounds {
+function collectMissionBounds(mission: MissionData, includeDetectionRange = false): L.LatLngBounds {
   const bounds = L.latLngBounds([]);
   const add = (coordinate: unknown, resolved?: boolean) => addLatLon(bounds, coordinate, resolved);
   const addDcs = (xy: LatLon) => {
@@ -372,6 +428,9 @@ function collectMissionBounds(mission: MissionData): L.LatLngBounds {
       if (coordinate) {
         bounds.extend(coordinate);
         if (group.threatRange && group.threatRange > 0) extendBoundsByMeters(bounds, coordinate, group.threatRange);
+        if (includeDetectionRange && group.detectionRange && group.detectionRange > 0) {
+          extendBoundsByMeters(bounds, coordinate, group.detectionRange);
+        }
       }
     }
   }
@@ -621,6 +680,7 @@ function getLayerLabel(key: string, t: TFunction): string {
     zones: 'map.layers.zones',
     drawings: 'map.layers.drawings',
     threats: 'map.layers.threats',
+    detection: 'map.layers.detection',
     support: 'map.layers.support',
     enemies: 'map.layers.enemies',
     bullseye: 'map.layers.bullseye',

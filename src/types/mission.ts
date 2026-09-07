@@ -237,6 +237,8 @@ export interface AIGroup {
   threatRange?: number;
   threatRangeSource?: 'reference' | 'detection' | 'unknown';
   threatRangeUnitType?: string;
+  detectionRange?: number;
+  detectionRangeUnitType?: string;
   hidden: boolean;
   lateActivation: boolean;
   startTime: number;

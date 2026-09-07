@@ -18,7 +18,8 @@ export default function ThreatsTab({ mission, settings }: ThreatsTabProps) {
   const threats = allEnemies.filter(hasResolvedThreatRange);
   const unrecordedThreats = allEnemies.filter(isUnrecordedThreat);
   const otherEnemies = allEnemies.filter(g => !hasResolvedThreatRange(g) && !isUnrecordedThreat(g));
-  const threatWarnings = [...new Set(mission.warnings.filter(warning => warning.includes(t('threats.threatRadius', { lng: 'ja' }))))];
+  const threatWarnings = [...new Set(mission.warnings.filter(warning => warning.startsWith('脅威半径が未収録')))].sort();
+  const unknownUnitWarnings = [...new Set(mission.warnings.filter(warning => warning.startsWith('参照データに未収録のユニット')))].sort();
   const showCreatorDetails = settings.viewMode === 'creator';
   
   return (
@@ -33,7 +34,8 @@ export default function ThreatsTab({ mission, settings }: ThreatsTabProps) {
               <tr>
                 <th>{t('threats.type')}</th>
                 <th>{t('threats.count')}</th>
-                <th>{t('threats.threatRadius')}</th>
+                <th>{t('threats.engagementRange')}</th>
+                <th>{t('threats.detectionRange')}</th>
                 <th>{t('threats.position')}</th>
                 {showCreatorDetails && <th>{t('threats.hidden')}</th>}
                 {showCreatorDetails && <th>{t('threats.lateActivation')}</th>}
@@ -44,7 +46,8 @@ export default function ThreatsTab({ mission, settings }: ThreatsTabProps) {
                 <tr key={groupKey(threat, i)}>
                   <td>{threat.type}</td>
                   <td>{threat.count}</td>
-                  <td>{formatDistance(threat.threatRange!, settings.distanceUnit)}</td>
+                  <td>{formatThreatRange(threat.threatRange, settings, t)}</td>
+                  <td>{formatThreatRange(threat.detectionRange, settings, t)}</td>
                   <td>{formatThreatPosition(threat, mission.meta.theatre, settings.coordinateFormat)}</td>
                   {showCreatorDetails && <td>{threat.hidden ? t('common.yes') : t('common.no')}</td>}
                   {showCreatorDetails && <td>{threat.lateActivation ? t('common.yes') : t('common.no')}</td>}
@@ -63,7 +66,8 @@ export default function ThreatsTab({ mission, settings }: ThreatsTabProps) {
                 <tr>
                   <th>{t('threats.type')}</th>
                   <th>{t('threats.count')}</th>
-                  <th>{t('threats.threatRadius')}</th>
+                  <th>{t('threats.engagementRange')}</th>
+                  <th>{t('threats.detectionRange')}</th>
                   <th>{t('threats.position')}</th>
                   {showCreatorDetails && <th>{t('threats.hidden')}</th>}
                   {showCreatorDetails && <th>{t('threats.lateActivation')}</th>}
@@ -74,6 +78,7 @@ export default function ThreatsTab({ mission, settings }: ThreatsTabProps) {
                   <tr key={groupKey(threat, i)}>
                     <td>{threat.type}</td>
                     <td>{threat.count}</td>
+                    <td>{t('threats.unrecorded')}</td>
                     <td>{t('threats.unrecorded')}</td>
                     <td>{formatThreatPosition(threat, mission.meta.theatre, settings.coordinateFormat)}</td>
                     {showCreatorDetails && <td>{threat.hidden ? t('common.yes') : t('common.no')}</td>}
@@ -86,10 +91,19 @@ export default function ThreatsTab({ mission, settings }: ThreatsTabProps) {
         )}
 
         {threatWarnings.length > 0 && (
-          <aside className="warning" aria-label={t('threats.referenceWarningAria')}>
-            <strong>{t('threats.referenceWarning')}</strong>
+          <aside className="warning" aria-label={t('threats.threatRadiusWarningAria')}>
+            <strong>{t('threats.threatRadiusWarning')}</strong>
             <ul>
               {threatWarnings.map(warning => <li key={warning}>{warning}</li>)}
+            </ul>
+          </aside>
+        )}
+
+        {unknownUnitWarnings.length > 0 && (
+          <aside className="warning" aria-label={t('threats.unknownUnitWarningAria')}>
+            <strong>{t('threats.unknownUnitWarning')}</strong>
+            <ul>
+              {unknownUnitWarnings.map(warning => <li key={warning}>{warning}</li>)}
             </ul>
           </aside>
         )}
@@ -138,12 +152,15 @@ export default function ThreatsTab({ mission, settings }: ThreatsTabProps) {
 }
 
 function hasResolvedThreatRange(group: AIGroup): boolean {
-  return Number.isFinite(group.threatRange)
-    && (group.threatRange ?? 0) > 0
-    && group.threatRangeSource !== 'unknown';
+  const hasEngagementRange = Number.isFinite(group.threatRange)
+    && (group.threatRange ?? 0) > 0;
+  const hasDetectionRange = Number.isFinite(group.detectionRange)
+    && (group.detectionRange ?? 0) > 0;
+  return hasEngagementRange || hasDetectionRange;
 }
 
 function isUnrecordedThreat(group: AIGroup): boolean {
+  if (hasResolvedThreatRange(group)) return false;
   if (group.threatRangeSource === 'unknown') return true;
   if (group.threatRangeSource === 'reference' || group.threatRangeSource === 'detection') return false;
 
@@ -151,8 +168,14 @@ function isUnrecordedThreat(group: AIGroup): boolean {
   const isThreatCandidate = category === 'vehicle' || category === 'ship';
   if (!isThreatCandidate || hasResolvedThreatRange(group)) return false;
 
-  return !Number.isFinite(group.threatRange)
-    || (group.threatRange ?? 0) <= 0;
+  const hasNoEngagementRange = !Number.isFinite(group.threatRange) || (group.threatRange ?? 0) <= 0;
+  const hasNoDetectionRange = !Number.isFinite(group.detectionRange) || (group.detectionRange ?? 0) <= 0;
+  return hasNoEngagementRange && hasNoDetectionRange;
+}
+
+function formatThreatRange(range: number | undefined, settings: DisplaySettings, t: TFunction): string {
+  if (Number.isFinite(range) && (range ?? 0) > 0) return formatDistance(range!, settings.distanceUnit);
+  return t('threats.none');
 }
 
 function groupKey(group: AIGroup, occurrence: number): string {
