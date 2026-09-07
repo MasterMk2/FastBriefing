@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { AIGroup, DisplaySettings, Flight, MissionData, MissionMeta, SupportAsset } from '../types/mission';
 import { calculateBearing, dcsToLatLon, formatCoordinate, getDefaultCoordinateFormat } from '../utils/coordinates';
@@ -6,6 +7,7 @@ import { formatAltitude, formatDistance, formatPressure, formatSpeed, formatTemp
 import { getMoonInfo, getSunTimes, type SunTimes } from '../utils/astro';
 import { buildMetar } from '../utils/metar';
 import { addSeconds, formatDateYMD, formatEtaLocal, formatEtaZulu, formatTimeHHMM, formatUtcOffset, missionLocalDate, missionZuluDate } from '../utils/time';
+import { applyViewMode } from '../utils/viewMode';
 
 interface PrintViewProps {
   mission: MissionData;
@@ -26,19 +28,20 @@ const GUARD_FREQUENCIES_MHZ = {
 
 export default function PrintView({ mission, settings }: PrintViewProps) {
   const { t } = useTranslation();
+  const viewMission = useMemo(() => applyViewMode(mission, settings.viewMode), [mission, settings.viewMode]);
   const printT: PrintTranslator = (key, options) => t(key, {
     ...options,
     lng: settings.outputLanguage,
   });
-  const flights = getAllFlights(mission);
+  const flights = getAllFlights(viewMission);
 
   return (
     <div className="print-view">
       <header className="print-title">
-        <h1>{mission.meta.sortie || printT('export.canvas.briefing')}</h1>
+        <h1>{viewMission.meta.sortie || printT('export.canvas.briefing')}</h1>
       </header>
 
-      <PrintOverview mission={mission} settings={settings} t={printT} />
+      <PrintOverview mission={viewMission} settings={settings} t={printT} />
 
       <p className="print-map-note hint">{printT('export.mapPrintNote')}</p>
 
@@ -48,14 +51,14 @@ export default function PrintView({ mission, settings }: PrintViewProps) {
           <p>{printT('flights.empty')}</p>
         ) : (
           flights.map(({ flight, side }) => (
-            <PrintFlight key={`${side}:${flight.groupId}`} flight={flight} side={side} meta={mission.meta} settings={settings} t={printT} />
+            <PrintFlight key={`${side}:${flight.groupId}`} flight={flight} side={side} meta={viewMission.meta} settings={settings} t={printT} />
           ))
         )}
       </section>
 
-      <PrintComms mission={mission} t={printT} />
-      <PrintSupport mission={mission} settings={settings} t={printT} />
-      <PrintThreats mission={mission} settings={settings} t={printT} />
+      <PrintComms mission={viewMission} t={printT} />
+      <PrintSupport mission={viewMission} settings={settings} t={printT} />
+      <PrintThreats mission={viewMission} settings={settings} t={printT} />
     </div>
   );
 }
@@ -578,6 +581,7 @@ function PrintThreats({ mission, settings, t }: { mission: MissionData; settings
   const unrecordedThreats = allEnemies.filter(isUnrecordedThreat);
   const otherEnemies = allEnemies.filter(group => !hasResolvedThreatRange(group) && !isUnrecordedThreat(group));
   const threatWarnings = [...new Set(mission.warnings.filter(warning => warning.includes('脅威半径')))].map(warning => warning);
+  const showCreatorDetails = settings.viewMode === 'creator';
 
   return (
     <section className="section print-section print-threats">
@@ -588,14 +592,14 @@ function PrintThreats({ mission, settings, t }: { mission: MissionData; settings
         {threats.length === 0 ? (
           <p>{t('threats.noThreats')}</p>
         ) : (
-          <ThreatTable threats={threats} mission={mission} settings={settings} t={t} showRadius />
+          <ThreatTable threats={threats} mission={mission} settings={settings} t={t} showRadius showCreatorDetails={showCreatorDetails} />
         )}
 
         {unrecordedThreats.length > 0 && (
           <div className="threats-unrecorded">
             <h4>{t('threats.unrecordedTitle')}</h4>
             <p>{t('threats.unrecordedDescription')}</p>
-            <ThreatTable threats={unrecordedThreats} mission={mission} settings={settings} t={t} showRadius={false} />
+            <ThreatTable threats={unrecordedThreats} mission={mission} settings={settings} t={t} showRadius={false} showCreatorDetails={showCreatorDetails} />
           </div>
         )}
 
@@ -609,37 +613,39 @@ function PrintThreats({ mission, settings, t }: { mission: MissionData; settings
         )}
       </section>
 
-      <section className="section print-subsection">
-        <h3>{t('threats.enemyAircraft')}</h3>
-        {otherEnemies.length === 0 ? (
-          <p>{t('threats.noEnemyAircraft')}</p>
-        ) : (
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>{t('threats.category')}</th>
-                <th>{t('threats.type')}</th>
-                <th>{t('threats.count')}</th>
-                <th>{t('threats.position')}</th>
-                <th>{t('threats.appearance')}</th>
-                <th>{t('threats.hidden')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {otherEnemies.map((group, index) => (
-                <tr key={groupKey(group, index)}>
-                  <td>{group.category}</td>
-                  <td>{group.type}</td>
-                  <td>{group.count}</td>
-                  <td>{formatThreatPosition(group, mission.meta.theatre, settings.coordinateFormat)}</td>
-                  <td>{formatTime(group.startTime, t)}</td>
-                  <td>{group.hidden ? t('common.yes') : t('common.no')}</td>
+      {showCreatorDetails && (
+        <section className="section print-subsection">
+          <h3>{t('threats.enemyAircraft')}</h3>
+          {otherEnemies.length === 0 ? (
+            <p>{t('threats.noEnemyAircraft')}</p>
+          ) : (
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>{t('threats.category')}</th>
+                  <th>{t('threats.type')}</th>
+                  <th>{t('threats.count')}</th>
+                  <th>{t('threats.position')}</th>
+                  <th>{t('threats.appearance')}</th>
+                  <th>{t('threats.hidden')}</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </section>
+              </thead>
+              <tbody>
+                {otherEnemies.map((group, index) => (
+                  <tr key={groupKey(group, index)}>
+                    <td>{group.category}</td>
+                    <td>{group.type}</td>
+                    <td>{group.count}</td>
+                    <td>{formatThreatPosition(group, mission.meta.theatre, settings.coordinateFormat)}</td>
+                    <td>{formatTime(group.startTime, t)}</td>
+                    <td>{group.hidden ? t('common.yes') : t('common.no')}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </section>
+      )}
 
       <section className="section print-subsection">
         <h3>{t('threats.enemyShips')}</h3>
@@ -649,7 +655,14 @@ function PrintThreats({ mission, settings, t }: { mission: MissionData; settings
   );
 }
 
-function ThreatTable({ threats, mission, settings, t, showRadius }: { threats: AIGroup[]; mission: MissionData; settings: DisplaySettings; t: PrintTranslator; showRadius: boolean }) {
+function ThreatTable({ threats, mission, settings, t, showRadius, showCreatorDetails }: {
+  threats: AIGroup[];
+  mission: MissionData;
+  settings: DisplaySettings;
+  t: PrintTranslator;
+  showRadius: boolean;
+  showCreatorDetails: boolean;
+}) {
   return (
     <table className="data-table">
       <thead>
@@ -658,8 +671,8 @@ function ThreatTable({ threats, mission, settings, t, showRadius }: { threats: A
           <th>{t('threats.count')}</th>
           <th>{t('threats.threatRadius')}</th>
           <th>{t('threats.position')}</th>
-          <th>{t('threats.hidden')}</th>
-          <th>{t('threats.lateActivation')}</th>
+          {showCreatorDetails && <th>{t('threats.hidden')}</th>}
+          {showCreatorDetails && <th>{t('threats.lateActivation')}</th>}
         </tr>
       </thead>
       <tbody>
@@ -669,8 +682,8 @@ function ThreatTable({ threats, mission, settings, t, showRadius }: { threats: A
             <td>{threat.count}</td>
             <td>{showRadius ? formatDistance(threat.threatRange!, settings.distanceUnit) : t('threats.unrecorded')}</td>
             <td>{formatThreatPosition(threat, mission.meta.theatre, settings.coordinateFormat)}</td>
-            <td>{threat.hidden ? t('common.yes') : t('common.no')}</td>
-            <td>{threat.lateActivation ? t('common.yes') : t('common.no')}</td>
+            {showCreatorDetails && <td>{threat.hidden ? t('common.yes') : t('common.no')}</td>}
+            {showCreatorDetails && <td>{threat.lateActivation ? t('common.yes') : t('common.no')}</td>}
           </tr>
         ))}
       </tbody>

@@ -222,6 +222,9 @@
     "pngSaved": "PNGを保存しました",
     "pngFailed": "PNG生成に失敗しました",
     "markdown": {
+      "view": "ビュー",
+      "creatorView": "作成者ビュー",
+      "pilotView": "パイロットビュー",
       "map": "マップ",
       "date": "日付",
       "startLocal": "開始時刻 (Local)",

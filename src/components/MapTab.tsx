@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import L from 'leaflet';
@@ -6,6 +6,7 @@ import { MapContainer, TileLayer, Marker, Popup, Polyline, Circle, LayerGroup, u
 import 'leaflet/dist/leaflet.css';
 import type { DisplaySettings, Drawing, Flight, MissionData, SupportAsset, TriggerZone } from '../types/mission';
 import { dcsToLatLon } from '../utils/coordinates';
+import { applyViewMode } from '../utils/viewMode';
 
 interface MapTabProps {
   mission: MissionData;
@@ -25,7 +26,7 @@ const DEFAULT_DRAWING_COLOR = '#ff0000';
 
 export default function MapTab({ mission, settings }: MapTabProps) {
   const { t } = useTranslation();
-  void settings;
+  const viewMission = useMemo(() => applyViewMode(mission, settings.viewMode), [mission, settings.viewMode]);
   const [layers, setLayers] = useState({
     flights: true,
     zones: true,
@@ -38,12 +39,12 @@ export default function MapTab({ mission, settings }: MapTabProps) {
     airbases: true,
   });
 
-  const missionZones = mission.coalitions.blue.zones;
-  const missionDrawings = mission.coalitions.blue.drawings;
+  const missionZones = viewMission.coalitions.blue.zones;
+  const missionDrawings = viewMission.coalitions.blue.drawings;
   const flightEntries = [
-    ...mission.coalitions.blue.flights.map((flight, index) => ({ flight, side: 'blue' as const, index })),
-    ...mission.coalitions.red.flights.map((flight, index) => ({ flight, side: 'red' as const, index })),
-    ...mission.coalitions.neutral.flights.map((flight, index) => ({ flight, side: 'neutral' as const, index })),
+    ...viewMission.coalitions.blue.flights.map((flight, index) => ({ flight, side: 'blue' as const, index })),
+    ...viewMission.coalitions.red.flights.map((flight, index) => ({ flight, side: 'red' as const, index })),
+    ...viewMission.coalitions.neutral.flights.map((flight, index) => ({ flight, side: 'neutral' as const, index })),
   ];
 
   return (
@@ -89,22 +90,22 @@ export default function MapTab({ mission, settings }: MapTabProps) {
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
-          <MapViewport mission={mission} />
+          <MapViewport mission={viewMission} />
 
           {layers.bullseye && (
             <>
-              {isResolvedLatLon(mission.coalitions.blue.bullseye.latlon, mission.coalitions.blue.bullseye.latlonResolved) && (
+              {isResolvedLatLon(viewMission.coalitions.blue.bullseye.latlon, viewMission.coalitions.blue.bullseye.latlonResolved) && (
                 <Marker
-                  position={mission.coalitions.blue.bullseye.latlon}
+                  position={viewMission.coalitions.blue.bullseye.latlon}
                   alt={`${t('common.blue')} Bullseye`}
                   title={`${t('common.blue')} Bullseye`}
                 >
                   <Popup>{t('map.blueBullseye')}</Popup>
                 </Marker>
               )}
-              {isResolvedLatLon(mission.coalitions.red.bullseye.latlon, mission.coalitions.red.bullseye.latlonResolved) && (
+              {isResolvedLatLon(viewMission.coalitions.red.bullseye.latlon, viewMission.coalitions.red.bullseye.latlonResolved) && (
                 <Marker
-                  position={mission.coalitions.red.bullseye.latlon}
+                  position={viewMission.coalitions.red.bullseye.latlon}
                   alt={`${t('common.red')} Bullseye`}
                   title={`${t('common.red')} Bullseye`}
                 >
@@ -116,7 +117,7 @@ export default function MapTab({ mission, settings }: MapTabProps) {
 
           {layers.navpoints && (
             <LayerGroup>
-              {mission.coalitions.blue.navPoints.map(np => {
+              {viewMission.coalitions.blue.navPoints.map(np => {
                 if (!isResolvedLatLon(np.latlon, np.latlonResolved)) return null;
                 const markerLabel = `${t('common.blue')} NavPoint ${np.index}: ${np.name}`;
                 return (
@@ -130,7 +131,7 @@ export default function MapTab({ mission, settings }: MapTabProps) {
                   </Marker>
                 );
               })}
-              {mission.coalitions.red.navPoints.map(np => {
+              {viewMission.coalitions.red.navPoints.map(np => {
                 if (!isResolvedLatLon(np.latlon, np.latlonResolved)) return null;
                 const markerLabel = `${t('common.red')} NavPoint ${np.index}: ${np.name}`;
                 return (
@@ -149,7 +150,7 @@ export default function MapTab({ mission, settings }: MapTabProps) {
 
           {layers.airbases && (
             <LayerGroup>
-              {mission.coalitions.blue.airbases.map(ab => {
+              {viewMission.coalitions.blue.airbases.map(ab => {
                 if (!isResolvedLatLon(ab.latlon, ab.latlonResolved)) return null;
                 const markerLabel = `${t('common.blue')} ${ab.name}`;
                 return (
@@ -164,7 +165,7 @@ export default function MapTab({ mission, settings }: MapTabProps) {
                   </Marker>
                 );
               })}
-              {mission.coalitions.red.airbases.map(ab => {
+              {viewMission.coalitions.red.airbases.map(ab => {
                 if (!isResolvedLatLon(ab.latlon, ab.latlonResolved)) return null;
                 const markerLabel = `${t('common.red')} ${ab.name}`;
                 return (
@@ -194,7 +195,7 @@ export default function MapTab({ mission, settings }: MapTabProps) {
           {layers.zones && (
             <LayerGroup>
               {missionZones.map((zone, index) => (
-                <TriggerZone key={`zone-${zone.zoneId}-${index}`} zone={zone} theatre={mission.meta.theatre} />
+                <TriggerZone key={`zone-${zone.zoneId}-${index}`} zone={zone} theatre={viewMission.meta.theatre} />
               ))}
             </LayerGroup>
           )}
@@ -202,37 +203,37 @@ export default function MapTab({ mission, settings }: MapTabProps) {
           {layers.drawings && (
             <LayerGroup>
               {missionDrawings.map((drawing, index) => (
-                <DrawingLayer key={`drawing-${drawing.layer}-${index}`} drawing={drawing} theatre={mission.meta.theatre} />
+                <DrawingLayer key={`drawing-${drawing.layer}-${index}`} drawing={drawing} theatre={viewMission.meta.theatre} />
               ))}
             </LayerGroup>
           )}
 
           {layers.support && (
             <LayerGroup>
-              {mission.coalitions.blue.support.map((support, index) => (
+              {viewMission.coalitions.blue.support.map((support, index) => (
                 <SupportMarker
                   key={`blue-support-${index}`}
                   support={support}
                   label={t('common.blue')}
-                  theatre={mission.meta.theatre}
+                  theatre={viewMission.meta.theatre}
                   t={t}
                 />
               ))}
-              {mission.coalitions.red.support.map((support, index) => (
+              {viewMission.coalitions.red.support.map((support, index) => (
                 <SupportMarker
                   key={`red-support-${index}`}
                   support={support}
                   label={t('common.red')}
-                  theatre={mission.meta.theatre}
+                  theatre={viewMission.meta.theatre}
                   t={t}
                 />
               ))}
-              {mission.coalitions.neutral.support.map((support, index) => (
+              {viewMission.coalitions.neutral.support.map((support, index) => (
                 <SupportMarker
                   key={`neutral-support-${index}`}
                   support={support}
                   label={t('common.neutral')}
-                  theatre={mission.meta.theatre}
+                  theatre={viewMission.meta.theatre}
                   t={t}
                 />
               ))}
@@ -241,10 +242,10 @@ export default function MapTab({ mission, settings }: MapTabProps) {
 
           {layers.threats && (
             <LayerGroup>
-              {mission.coalitions.red.aiGroups
+              {viewMission.coalitions.red.aiGroups
                 .filter(g => g.threatRange && g.threatRange > 0)
                 .map((g, index) => {
-                  const position = resolveEntityPosition(mission.meta.theatre, g.latlon, g.latlonResolved, g.position);
+                  const position = resolveEntityPosition(viewMission.meta.theatre, g.latlon, g.latlonResolved, g.position);
                   if (!position) return null;
                   const markerLabel = `${t('common.red')} ${g.type} threat range`;
                   return (
@@ -261,10 +262,10 @@ export default function MapTab({ mission, settings }: MapTabProps) {
                     </Circle>
                   );
                 })}
-              {mission.coalitions.neutral.aiGroups
+              {viewMission.coalitions.neutral.aiGroups
                 .filter(g => g.threatRange && g.threatRange > 0)
                 .map((g, index) => {
-                  const position = resolveEntityPosition(mission.meta.theatre, g.latlon, g.latlonResolved, g.position);
+                  const position = resolveEntityPosition(viewMission.meta.theatre, g.latlon, g.latlonResolved, g.position);
                   if (!position) return null;
                   const markerLabel = `${t('common.neutral')} ${g.type} threat range`;
                   return (
@@ -286,8 +287,8 @@ export default function MapTab({ mission, settings }: MapTabProps) {
 
           {layers.enemies && (
             <LayerGroup>
-              {mission.coalitions.red.aiGroups.map((g, index) => {
-                const position = resolveEntityPosition(mission.meta.theatre, g.latlon, g.latlonResolved, g.position);
+              {viewMission.coalitions.red.aiGroups.map((g, index) => {
+                const position = resolveEntityPosition(viewMission.meta.theatre, g.latlon, g.latlonResolved, g.position);
                 if (!position) return null;
                 const markerLabel = `${t('common.red')} ${g.type} (${g.count})`;
                 return (
@@ -302,8 +303,8 @@ export default function MapTab({ mission, settings }: MapTabProps) {
                   </Marker>
                 );
               })}
-              {mission.coalitions.neutral.aiGroups.map((g, index) => {
-                const position = resolveEntityPosition(mission.meta.theatre, g.latlon, g.latlonResolved, g.position);
+              {viewMission.coalitions.neutral.aiGroups.map((g, index) => {
+                const position = resolveEntityPosition(viewMission.meta.theatre, g.latlon, g.latlonResolved, g.position);
                 if (!position) return null;
                 const markerLabel = `${t('common.neutral')} ${g.type} (${g.count})`;
                 return (
@@ -379,7 +380,6 @@ function collectMissionBounds(mission: MissionData): L.LatLngBounds {
   // same arrays on each coalition for compatibility, but they are traversed
   // once here and once in the render tree.
   for (const zone of mission.coalitions.blue.zones) {
-    if (zone.hidden) continue;
     const center = addDcs(zone.xy);
     if (center && zone.type === 0 && zone.radius > 0) extendBoundsByMeters(bounds, center, zone.radius);
     for (const vertex of zone.vertices ?? []) addDcs(vertex);
@@ -480,7 +480,6 @@ function FlightPath({ flight, side, color }: { flight: Flight; side: MapSide; co
 
 function TriggerZone({ zone, theatre }: { zone: TriggerZone; theatre: string }) {
   const { t } = useTranslation();
-  if (zone.hidden) return null;
   const color = dcsColorToCss(zone.color, DEFAULT_ZONE_COLOR);
 
   if (zone.type === 0) {
