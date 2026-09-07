@@ -58,6 +58,18 @@ describe('useSettings persistence', () => {
     });
   });
 
+  it('FFSテーマを有効値として復元する', () => {
+    const stored = JSON.stringify({
+      settingsVersion: SETTINGS_VERSION,
+      theme: 'ffs',
+    });
+
+    expect(loadSettings(createStorage(stored))).toEqual({
+      ...DEFAULT_SETTINGS,
+      theme: 'ffs',
+    });
+  });
+
   it('バージョン無しと古いバージョンは既定値へ移行する', () => {
     const withoutVersion = JSON.stringify({ coordinateFormat: 'MGRS' });
     const oldVersion = JSON.stringify({ settingsVersion: SETTINGS_VERSION - 1, coordinateFormat: 'MGRS' });
