@@ -325,4 +325,5 @@ export interface DisplaySettings {
   viewMode: 'creator' | 'pilot';
   language: 'ja' | 'en';
   outputLanguage: 'ja' | 'en';
+  theme: 'default';
 }

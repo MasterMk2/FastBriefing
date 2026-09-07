@@ -36,11 +36,25 @@ describe('useSettings persistence', () => {
       coordinateFormat: 'INVALID',
       altitudeUnit: 42,
       language: 'en',
+      theme: 'INVALID',
     });
 
     expect(loadSettings(createStorage(stored))).toEqual({
       ...DEFAULT_SETTINGS,
       language: 'en',
+    });
+  });
+
+  it('テーマ未保存の現行設定はdefaultへマイグレーションする', () => {
+    const stored = JSON.stringify({
+      settingsVersion: SETTINGS_VERSION,
+      coordinateFormat: 'MGRS',
+    });
+
+    expect(loadSettings(createStorage(stored))).toEqual({
+      ...DEFAULT_SETTINGS,
+      coordinateFormat: 'MGRS',
+      theme: 'default',
     });
   });
 

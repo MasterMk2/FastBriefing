@@ -241,13 +241,13 @@ function drawBriefingSummary(
   const lineHeight = 42;
   let y = margin;
 
-  context.fillStyle = '#ffffff';
+  context.fillStyle = getThemeColor('--color-export-canvas-background');
   context.fillRect(0, 0, 1536, 2048);
-  context.fillStyle = '#1a1a1a';
+  context.fillStyle = getThemeColor('--color-heading');
   context.font = 'bold 52px sans-serif';
   y = drawWrappedCanvasText(context, meta.sortie || t('export.canvas.briefing'), margin, y, contentWidth, lineHeight + 12);
 
-  context.fillStyle = '#555555';
+  context.fillStyle = getThemeColor('--color-text-tertiary');
   context.font = '28px sans-serif';
   y += 24;
   const lines = [
@@ -267,6 +267,12 @@ function drawBriefingSummary(
   lines.forEach(line => {
     y = drawWrappedCanvasText(context, line, margin, y, contentWidth, lineHeight);
   });
+}
+
+function getThemeColor(token: string): string {
+  if (typeof document === 'undefined') return `var(${token})`;
+  const value = document.defaultView?.getComputedStyle(document.documentElement).getPropertyValue(token).trim();
+  return value || `var(${token})`;
 }
 
 function drawWrappedCanvasText(
