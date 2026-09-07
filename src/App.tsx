@@ -4,7 +4,7 @@ import { MissionParser } from './core/MissionParser';
 import { normalizeMission } from './core/MissionNormalizer';
 import type { DisplaySettings, MissionData } from './types/mission';
 import MissionView from './components/MissionView';
-import { useSettings } from './hooks/useSettings';
+import { THEMES, useSettings } from './hooks/useSettings';
 import { useTranslation } from 'react-i18next';
 
 function App() {
@@ -13,12 +13,20 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
-  const { settings, setViewMode, setLanguage } = useSettings();
+  const { settings, setViewMode, setLanguage, setTheme } = useSettings();
   const { t } = useTranslation();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dragCounterRef = useRef(0);
   const parserRef = useRef<MissionParser | null>(null);
   const parseGenerationRef = useRef(0);
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    document.documentElement.dataset.theme = settings.theme;
+    return () => {
+      delete document.documentElement.dataset.theme;
+    };
+  }, [settings.theme]);
 
   const handleFileDrop = useCallback(async (file: File) => {
     if (!file.name.toLowerCase().endsWith('.miz')) {
@@ -167,7 +175,7 @@ function App() {
   }, []);
 
   return (
-    <div className="app">
+    <div className="app" data-theme={settings.theme}>
       <header className="header">
         <h1>FastBriefing</h1>
         <div className="header-controls">
@@ -179,6 +187,11 @@ function App() {
             <option value="ja">{t('app.japanese')}</option>
             <option value="en">{t('app.english')}</option>
           </select>
+          {THEMES.length > 1 && (
+            <select value={settings.theme} onChange={(event) => setTheme(event.target.value as DisplaySettings['theme'])} aria-label={t('app.theme')}>
+              {THEMES.map(theme => <option key={theme} value={theme}>{t(`app.themes.${theme}`)}</option>)}
+            </select>
+          )}
         </div>
       </header>
 

@@ -10,6 +10,7 @@ import i18n, {
 
 export const SETTINGS_STORAGE_KEY = I18N_SETTINGS_STORAGE_KEY;
 export const SETTINGS_VERSION = I18N_SETTINGS_VERSION;
+export const THEMES = ['default'] as const;
 
 export const DEFAULT_SETTINGS: Readonly<DisplaySettings> = {
   coordinateFormat: 'DDM',
@@ -22,6 +23,7 @@ export const DEFAULT_SETTINGS: Readonly<DisplaySettings> = {
   viewMode: 'pilot',
   language: DEFAULT_LANGUAGE,
   outputLanguage: DEFAULT_LANGUAGE,
+  theme: 'default',
 };
 
 export type SettingsStorage = Pick<Storage, 'getItem' | 'setItem'>;
@@ -70,6 +72,9 @@ function validateSettings(value: Record<string, unknown>): DisplaySettings {
     viewMode: enumOrDefault(value.viewMode, VIEW_MODES, DEFAULT_SETTINGS.viewMode),
     language: enumOrDefault(value.language, LANGUAGES, DEFAULT_SETTINGS.language),
     outputLanguage: enumOrDefault(value.outputLanguage, LANGUAGES, DEFAULT_SETTINGS.outputLanguage),
+    // Version 1 records created before themes existed migrate by falling back
+    // to the only available theme while preserving the other validated fields.
+    theme: enumOrDefault(value.theme, THEMES, DEFAULT_SETTINGS.theme),
   };
 }
 
@@ -136,6 +141,7 @@ interface SettingsContextType {
   setViewMode: (mode: DisplaySettings['viewMode']) => void;
   setLanguage: (lang: DisplaySettings['language']) => void;
   setOutputLanguage: (lang: DisplaySettings['outputLanguage']) => void;
+  setTheme: (theme: DisplaySettings['theme']) => void;
 }
 
 const SettingsContext = createContext<SettingsContextType | null>(null);
@@ -167,6 +173,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     setViewMode: (v) => updateSetting('viewMode', v),
     setLanguage: (v) => updateSetting('language', v),
     setOutputLanguage: (v) => updateSetting('outputLanguage', v),
+    setTheme: (v) => updateSetting('theme', v),
   };
   
   return (

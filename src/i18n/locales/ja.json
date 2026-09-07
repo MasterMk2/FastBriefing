@@ -4,6 +4,10 @@
     "pilotView": "パイロットビュー",
     "displayLanguage": "表示言語",
     "outputLanguage": "出力言語",
+    "theme": "テーマ",
+    "themes": {
+      "default": "標準"
+    },
     "japanese": "日本語",
     "english": "English",
     "selectMiz": ".mizミッションファイルを選択",

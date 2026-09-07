@@ -18,11 +18,19 @@ type LatLon = [number, number];
 
 const DEFAULT_CENTER: LatLon = [42.0, 43.0];
 const DEFAULT_ZOOM = 7;
-const BLUE_FLIGHT_COLOR = '#0066ff';
-const RED_FLIGHT_COLOR = '#ff0000';
-const NEUTRAL_FLIGHT_COLOR = '#666666';
-const DEFAULT_ZONE_COLOR = '#3388ff';
-const DEFAULT_DRAWING_COLOR = '#ff0000';
+const BLUE_FLIGHT_COLOR_TOKEN = '--color-coalition-blue';
+const RED_FLIGHT_COLOR_TOKEN = '--color-coalition-red';
+const NEUTRAL_FLIGHT_COLOR_TOKEN = '--color-coalition-neutral';
+const THREAT_ENGAGEMENT_COLOR_TOKEN = '--color-threat-engagement';
+const THREAT_DETECTION_COLOR_TOKEN = '--color-threat-detection';
+const DEFAULT_ZONE_COLOR_TOKEN = '--color-zone-default';
+const DEFAULT_DRAWING_COLOR_TOKEN = '--color-drawing-default';
+
+function getThemeColor(token: string): string {
+  if (typeof document === 'undefined') return `var(${token})`;
+  const value = document.defaultView?.getComputedStyle(document.documentElement).getPropertyValue(token).trim();
+  return value || `var(${token})`;
+}
 
 export default function MapTab({ mission, settings }: MapTabProps) {
   const { t } = useTranslation();
@@ -67,15 +75,15 @@ export default function MapTab({ mission, settings }: MapTabProps) {
         </div>
         <div className="map-legend" aria-label={getLayerLabel('flights', t)}>
           <span className="map-legend-item">
-            <span aria-hidden="true" style={{ display: 'inline-block', width: '2rem', borderTop: `2px solid ${BLUE_FLIGHT_COLOR}` }} />
+            <span aria-hidden="true" style={{ display: 'inline-block', width: '2rem', borderTop: `2px solid ${getThemeColor(BLUE_FLIGHT_COLOR_TOKEN)}` }} />
             {t('common.blue')}
           </span>
           <span className="map-legend-item">
-            <span aria-hidden="true" style={{ display: 'inline-block', width: '2rem', borderTop: `2px dashed ${RED_FLIGHT_COLOR}` }} />
+            <span aria-hidden="true" style={{ display: 'inline-block', width: '2rem', borderTop: `2px dashed ${getThemeColor(RED_FLIGHT_COLOR_TOKEN)}` }} />
             {t('common.red')}
           </span>
           <span className="map-legend-item">
-            <span aria-hidden="true" style={{ display: 'inline-block', width: '2rem', borderTop: `2px dotted ${NEUTRAL_FLIGHT_COLOR}` }} />
+            <span aria-hidden="true" style={{ display: 'inline-block', width: '2rem', borderTop: `2px dotted ${getThemeColor(NEUTRAL_FLIGHT_COLOR_TOKEN)}` }} />
             {t('common.neutral')}
           </span>
           <span className="map-legend-item">
@@ -262,8 +270,8 @@ export default function MapTab({ mission, settings }: MapTabProps) {
                       key={`red-threat-${index}`}
                       center={position}
                       radius={g.threatRange!}
-                      color={RED_FLIGHT_COLOR}
-                      fillColor={RED_FLIGHT_COLOR}
+                      color={getThemeColor(THREAT_ENGAGEMENT_COLOR_TOKEN)}
+                      fillColor={getThemeColor(THREAT_ENGAGEMENT_COLOR_TOKEN)}
                       fillOpacity={0.1}
                       weight={1}
                     >
@@ -282,8 +290,8 @@ export default function MapTab({ mission, settings }: MapTabProps) {
                       key={`neutral-threat-${index}`}
                       center={position}
                       radius={g.threatRange!}
-                      color={NEUTRAL_FLIGHT_COLOR}
-                      fillColor={NEUTRAL_FLIGHT_COLOR}
+                      color={getThemeColor(NEUTRAL_FLIGHT_COLOR_TOKEN)}
+                      fillColor={getThemeColor(NEUTRAL_FLIGHT_COLOR_TOKEN)}
                       fillOpacity={0.1}
                       weight={1}
                     >
@@ -307,7 +315,7 @@ export default function MapTab({ mission, settings }: MapTabProps) {
                       key={`red-detection-${index}`}
                       center={position}
                       radius={g.detectionRange!}
-                      color={RED_FLIGHT_COLOR}
+                      color={getThemeColor(THREAT_DETECTION_COLOR_TOKEN)}
                       fill={false}
                       fillOpacity={0}
                       dashArray="8 6"
@@ -328,7 +336,7 @@ export default function MapTab({ mission, settings }: MapTabProps) {
                       key={`neutral-detection-${index}`}
                       center={position}
                       radius={g.detectionRange!}
-                      color={NEUTRAL_FLIGHT_COLOR}
+                      color={getThemeColor(NEUTRAL_FLIGHT_COLOR_TOKEN)}
                       fill={false}
                       fillOpacity={0}
                       dashArray="8 6"
@@ -489,9 +497,9 @@ function extendBoundsByMeters(bounds: L.LatLngBounds, center: LatLon, radius: nu
 }
 
 function getFlightColor(side: MapSide): string {
-  if (side === 'blue') return BLUE_FLIGHT_COLOR;
-  if (side === 'red') return RED_FLIGHT_COLOR;
-  return NEUTRAL_FLIGHT_COLOR;
+  if (side === 'blue') return getThemeColor(BLUE_FLIGHT_COLOR_TOKEN);
+  if (side === 'red') return getThemeColor(RED_FLIGHT_COLOR_TOKEN);
+  return getThemeColor(NEUTRAL_FLIGHT_COLOR_TOKEN);
 }
 
 function getFlightDashArray(side: MapSide): string | undefined {
@@ -539,7 +547,7 @@ function FlightPath({ flight, side, color }: { flight: Flight; side: MapSide; co
 
 function TriggerZone({ zone, theatre }: { zone: TriggerZone; theatre: string }) {
   const { t } = useTranslation();
-  const color = dcsColorToCss(zone.color, DEFAULT_ZONE_COLOR);
+  const color = dcsColorToCss(zone.color, getThemeColor(DEFAULT_ZONE_COLOR_TOKEN));
 
   if (zone.type === 0) {
     const center = getDcsCoordinate(theatre, zone.xy[0], zone.xy[1]);
@@ -580,7 +588,7 @@ function DrawingLayer({ drawing, theatre }: { drawing: Drawing; theatre: string 
           .map(point => getDcsCoordinate(theatre, point[0], point[1]))
           .filter((position): position is LatLon => position !== null);
         const key = `${drawing.layer}-${index}`;
-        const color = object.color || DEFAULT_DRAWING_COLOR;
+        const color = object.color || getThemeColor(DEFAULT_DRAWING_COLOR_TOKEN);
         const fillColor = object.fillColor || color;
 
         if (object.primitiveType === 'Line') {
@@ -633,27 +641,35 @@ function dcsColorToCss(value: unknown, fallback: string): string {
 }
 
 function createWaypointIcon(number: number) {
+  const background = getThemeColor('--color-map-waypoint-background');
+  const foreground = getThemeColor('--color-map-marker-foreground');
+  const shadow = getThemeColor('--shadow-map-marker');
   return L.divIcon({
     className: 'waypoint-marker',
-    html: `<div style="background: #333; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold; border: 2px solid white; box-shadow: 0 1px 3px rgba(0,0,0,0.3);">${number}</div>`,
+    html: `<div style="background: ${background}; color: ${foreground}; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold; border: 2px solid ${foreground}; box-shadow: 0 1px 3px ${shadow};">${number}</div>`,
     iconSize: [24, 24],
     iconAnchor: [12, 12],
   });
 }
 
 function createAirbaseIcon() {
+  const background = getThemeColor('--color-map-airbase');
+  const foreground = getThemeColor('--color-map-marker-foreground');
   return L.divIcon({
     className: 'airbase-marker',
-    html: '<div style="background: #4CAF50; color: white; width: 20px; height: 20px; border-radius: 4px; transform: rotate(45deg); display: flex; align-items: center; justify-content: center; font-size: 10px;">✈</div>',
+    html: `<div style="background: ${background}; color: ${foreground}; width: 20px; height: 20px; border-radius: 4px; transform: rotate(45deg); display: flex; align-items: center; justify-content: center; font-size: 10px;">✈</div>`,
     iconSize: [20, 20],
     iconAnchor: [10, 10],
   });
 }
 
 function createEnemyIcon() {
+  const background = getThemeColor('--color-map-enemy');
+  const foreground = getThemeColor('--color-map-marker-foreground');
+  const shadow = getThemeColor('--shadow-map-marker');
   return L.divIcon({
     className: 'enemy-marker',
-    html: '<div style="background: #f44336; color: white; width: 16px; height: 16px; border-radius: 50%; border: 2px solid white; box-shadow: 0 1px 3px rgba(0,0,0,0.3);"></div>',
+    html: `<div style="background: ${background}; color: ${foreground}; width: 16px; height: 16px; border-radius: 50%; border: 2px solid ${foreground}; box-shadow: 0 1px 3px ${shadow};"></div>`,
     iconSize: [16, 16],
     iconAnchor: [8, 8],
   });
@@ -666,9 +682,12 @@ function createSupportIcon(kind: string) {
     carrier: '🚢',
     jtac: '🎯',
   };
+  const background = getThemeColor('--color-map-support');
+  const foreground = getThemeColor('--color-map-marker-foreground');
+  const shadow = getThemeColor('--shadow-map-marker');
   return L.divIcon({
     className: 'support-marker',
-    html: `<div style="background: #FF9800; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; border: 2px solid white; box-shadow: 0 1px 3px rgba(0,0,0,0.3);">${icons[kind] || '📍'}</div>`,
+    html: `<div style="background: ${background}; color: ${foreground}; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; border: 2px solid ${foreground}; box-shadow: 0 1px 3px ${shadow};">${icons[kind] || '📍'}</div>`,
     iconSize: [24, 24],
     iconAnchor: [12, 12],
   });
