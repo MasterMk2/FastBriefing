@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { normalizeMission } from './MissionNormalizer';
-import { formatTimeHHMM, missionZuluDate } from '../utils/time';
+import utcOffsetData from '../data/utcOffsets.json';
+import { formatTimeHHMM, missionLocalDate, missionZuluDate } from '../utils/time';
 
 const settings = { coordinateFormat: 'DDM', unitSystem: 'metric', viewMode: 'creator' };
 
@@ -500,7 +501,53 @@ describe('MissionNormalizer reference-backed layers', () => {
     expect(normalized.warnings).not.toContain('脅威半径が未収録のため地図に描画できません: M-2 Bradley');
   });
 
-  it('resolves UTC offset from the theatre table and produces Caucasus Zulu 04:00', () => {
+  it('matches all pydcs theatre UTC offsets', () => {
+    // Source: pydcs dcs/terrain/<map>/<map>.py utc_offset, checked in 2026-09.
+    // Normandy and TheChannel also cross-check ED forum.dcs.world/topic/386890.
+    const expectedOffsets: Record<string, number> = {
+      Caucasus: 4,
+      GermanyCW: 2,
+      MarianaIslands: 10,
+      Nevada: -8,
+      Normandy: 0,
+      PersianGulf: 4,
+      Sinai: 2,
+      Syria: 3,
+      Kola: 3,
+      Falklands: -3,
+      TheChannel: 2,
+    };
+    const actualOffsets = utcOffsetData as unknown as Record<string, unknown>;
+
+    expect(Object.keys(actualOffsets).filter(key => key !== '_source').sort()).toEqual(Object.keys(expectedOffsets).sort());
+    for (const [theatre, expectedOffset] of Object.entries(expectedOffsets)) {
+      expect(actualOffsets[theatre], theatre).toBe(expectedOffset);
+    }
+
+    const metadataKeyTheatre = normalizeMission(makeMission({ theatre: '_source' }), settings);
+    expect(metadataKeyTheatre.meta.utcOffset).toBe(0);
+    expect(metadataKeyTheatre.warnings).toContain('UTC オフセット未収録: _source');
+  });
+
+  it.each([
+    ['GermanyCW', 2, '06:00'],
+    ['Normandy', 0, '08:00'],
+    ['TheChannel', 2, '06:00'],
+  ] as const)('resolves %s UTC offset and calculates Zulu time', (theatre, expectedOffset, expectedZulu) => {
+    const normalized = normalizeMission(makeMission({
+      mission: {
+        date: { Year: 2025, Month: 6, Day: 1 },
+        start_time: 28800,
+      },
+      theatre,
+    }), settings);
+
+    expect(normalized.meta.utcOffset).toBe(expectedOffset);
+    expect(formatTimeHHMM(missionLocalDate(normalized.meta))).toBe('08:00');
+    expect(formatTimeHHMM(missionZuluDate(normalized.meta))).toBe(expectedZulu);
+  });
+
+  it('resolves Caucasus UTC offset from the theatre table and produces Zulu 04:00', () => {
     const normalized = normalizeMission(makeMission({
       mission: {
         date: { Year: 2025, Month: 5, Day: 1 },
