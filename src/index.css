@@ -51,6 +51,7 @@
   --color-map-coalition-blue: #0066ff;
   --color-map-coalition-red: #ff0000;
   --color-map-coalition-neutral: #666666;
+  --color-map-legend-backdrop: transparent;
   --color-threat-engagement: #ff0000;
   --color-threat-detection: #ff0000;
   --color-threat-engagement-background: rgba(255, 0, 0, 0.1);
@@ -130,6 +131,7 @@
   --color-map-coalition-blue: #315d8f;
   --color-map-coalition-red: #a64a45;
   --color-map-coalition-neutral: #6b6c6a;
+  --color-map-legend-backdrop: #d6e2e5;
   --color-threat-engagement: #9b3b35;
   --color-threat-detection: #8c6220;
   --color-threat-engagement-background: rgba(205,106,97,.16);
@@ -195,6 +197,7 @@
     --color-map-coalition-blue: #0066ff;
     --color-map-coalition-red: #ff0000;
     --color-map-coalition-neutral: #666666;
+    --color-map-legend-backdrop: transparent;
     --color-threat-engagement: #ff0000;
     --color-threat-detection: #ff0000;
     --color-threat-engagement-background: rgba(255, 0, 0, 0.1);
@@ -1026,6 +1029,11 @@ body {
 
 .map-legend-item > [aria-hidden="true"] {
   flex: 0 0 auto;
+}
+
+.map-legend-item > [aria-hidden="true"],
+.map-legend-range-swatch {
+  background-color: var(--color-map-legend-backdrop);
 }
 
 @media (max-width: 768px) {
