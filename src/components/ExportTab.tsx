@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
-import type { MissionData, DisplaySettings, MissionMeta } from '../types/mission';
+import type { AIGroup, MissionData, DisplaySettings, MissionMeta } from '../types/mission';
 import { formatAltitude, formatSpeed, formatDistance, formatPressure, formatTemperature } from '../utils/units';
 import { formatCoordinate } from '../utils/coordinates';
 import { buildMetar } from '../utils/metar';
@@ -16,6 +16,7 @@ import {
 } from '../utils/time';
 import PrintView from './PrintView';
 import { useSettings } from '../hooks/useSettings';
+import { applyViewMode } from '../utils/viewMode';
 
 interface ExportTabProps {
   mission: MissionData;
@@ -25,6 +26,7 @@ interface ExportTabProps {
 export default function ExportTab({ mission, settings }: ExportTabProps) {
   const { t } = useTranslation();
   const { setOutputLanguage } = useSettings();
+  const viewMission = useMemo(() => applyViewMode(mission, settings.viewMode), [mission, settings.viewMode]);
   const [markdown, setMarkdown] = useState('');
   const [copyStatus, setCopyStatus] = useState('');
   const [pngStatus, setPngStatus] = useState('');
@@ -35,13 +37,14 @@ export default function ExportTab({ mission, settings }: ExportTabProps) {
   });
 
   const generateMarkdown = () => {
-    const { meta, weather, coalitions } = mission;
+    const { meta, weather, coalitions } = viewMission;
     const localDate = missionLocalDate(meta);
     const zuluDate = missionZuluDate(meta);
     const metar = buildMetar(weather, { time: zuluDate });
     let md = '';
 
     md += `# ${meta.sortie}\n\n`;
+    md += `**${outputT('export.markdown.view')}**: ${outputT(settings.viewMode === 'pilot' ? 'export.markdown.pilotView' : 'export.markdown.creatorView')}  \n\n`;
     md += `**${outputT('export.markdown.map')}**: ${meta.theatre}  \n`;
     md += `**${outputT('export.markdown.date')}**: ${formatDateYMD(localDate)}  \n`;
     md += `**${outputT('export.markdown.startLocal')}**: ${formatTimeHHMM(localDate)} (${formatUtcOffset(meta.utcOffset)})  \n`;
@@ -93,6 +96,33 @@ export default function ExportTab({ mission, settings }: ExportTabProps) {
     });
     md += '\n';
 
+    const threats = coalitions.red.aiGroups.filter(hasResolvedThreatRange);
+    const unrecordedThreats = coalitions.red.aiGroups.filter(isUnrecordedThreat);
+    md += `## ${outputT('export.markdown.threats')}\n\n`;
+    if (threats.length === 0) {
+      md += `${outputT('export.markdown.noThreats')}\n\n`;
+    } else {
+      md += `| ${outputT('export.markdown.type')} | ${outputT('export.markdown.count')} | ${outputT('export.markdown.engagementRange')} | ${outputT('export.markdown.detectionRange')} |\n|------|------:|--------------------|------------------|\n`;
+      threats.forEach(group => {
+        const engagementRange = group.threatRange && group.threatRange > 0
+          ? formatDistance(group.threatRange, settings.distanceUnit)
+          : outputT('export.markdown.none');
+        const detectionRange = group.detectionRange && group.detectionRange > 0
+          ? formatDistance(group.detectionRange, settings.distanceUnit)
+          : outputT('export.markdown.none');
+        md += `| ${group.type} | ${group.count} | ${engagementRange} | ${detectionRange} |\n`;
+      });
+      md += '\n';
+    }
+    if (unrecordedThreats.length > 0) {
+      md += `### ${outputT('export.markdown.unrecordedThreats')}\n\n`;
+      md += `| ${outputT('export.markdown.type')} | ${outputT('export.markdown.count')} | ${outputT('export.markdown.engagementRange')} | ${outputT('export.markdown.detectionRange')} |\n|------|------:|--------------------|------------------|\n`;
+      unrecordedThreats.forEach(group => {
+        md += `| ${group.type} | ${group.count} | ${outputT('export.markdown.unrecorded')} | ${outputT('export.markdown.unrecorded')} |\n`;
+      });
+      md += '\n';
+    }
+
     md += `## ${outputT('export.markdown.commsPlan')}\n\n`;
     md += `| ${outputT('export.markdown.callsign')} | ${outputT('export.markdown.side')} | CH | ${outputT('export.markdown.frequencyMHz')} | ${outputT('export.markdown.modulation')} | ${outputT('export.markdown.name')} |\n|--------------|----|----|--------------|------|------|\n`;
     [...coalitions.blue.flights, ...coalitions.red.flights].forEach(flight => {
@@ -134,7 +164,7 @@ export default function ExportTab({ mission, settings }: ExportTabProps) {
       const context = canvas.getContext('2d');
       if (!context) throw new Error('Canvas 2D context unavailable');
 
-      drawBriefingSummary(context, mission, settings, t);
+      drawBriefingSummary(context, viewMission, settings, t);
       const blob = await canvasToBlob(canvas);
       if (!blob) throw new Error('PNG blob unavailable');
 
@@ -211,13 +241,13 @@ function drawBriefingSummary(
   const lineHeight = 42;
   let y = margin;
 
-  context.fillStyle = '#ffffff';
+  context.fillStyle = getThemeColor('--color-export-canvas-background');
   context.fillRect(0, 0, 1536, 2048);
-  context.fillStyle = '#1a1a1a';
+  context.fillStyle = getThemeColor('--color-heading');
   context.font = 'bold 52px sans-serif';
   y = drawWrappedCanvasText(context, meta.sortie || t('export.canvas.briefing'), margin, y, contentWidth, lineHeight + 12);
 
-  context.fillStyle = '#555555';
+  context.fillStyle = getThemeColor('--color-text-tertiary');
   context.font = '28px sans-serif';
   y += 24;
   const lines = [
@@ -237,6 +267,12 @@ function drawBriefingSummary(
   lines.forEach(line => {
     y = drawWrappedCanvasText(context, line, margin, y, contentWidth, lineHeight);
   });
+}
+
+function getThemeColor(token: string): string {
+  if (typeof document === 'undefined') return `var(${token})`;
+  const value = document.defaultView?.getComputedStyle(document.documentElement).getPropertyValue(token).trim();
+  return value || `var(${token})`;
 }
 
 function drawWrappedCanvasText(
@@ -277,4 +313,25 @@ function canvasToBlob(canvas: HTMLCanvasElement): Promise<Blob | null> {
 function safeFilename(value: string): string {
   const filename = value.replace(/[\\/:*?"<>|]/g, '_').trim();
   return filename || 'briefing';
+}
+
+function hasResolvedThreatRange(group: AIGroup): boolean {
+  const hasEngagementRange = Number.isFinite(group.threatRange)
+    && (group.threatRange ?? 0) > 0;
+  const hasDetectionRange = Number.isFinite(group.detectionRange)
+    && (group.detectionRange ?? 0) > 0;
+  return hasEngagementRange || hasDetectionRange;
+}
+
+function isUnrecordedThreat(group: AIGroup): boolean {
+  if (hasResolvedThreatRange(group)) return false;
+  if (group.threatRangeSource === 'unknown') return true;
+  if (group.threatRangeSource === 'reference' || group.threatRangeSource === 'detection') return false;
+
+  const category = group.category.trim().toLowerCase();
+  const isThreatCandidate = category === 'vehicle' || category === 'ship';
+  if (!isThreatCandidate) return false;
+
+  return (!Number.isFinite(group.threatRange) || (group.threatRange ?? 0) <= 0)
+    && (!Number.isFinite(group.detectionRange) || (group.detectionRange ?? 0) <= 0);
 }

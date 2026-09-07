@@ -1,7 +1,9 @@
+import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { MissionData, DisplaySettings, SupportAsset } from '../types/mission';
 import { dcsToLatLon, formatCoordinate } from '../utils/coordinates';
 import { formatAltitude, formatSpeed } from '../utils/units';
+import { applyViewMode } from '../utils/viewMode';
 
 interface SupportTabProps {
   mission: MissionData;
@@ -10,7 +12,8 @@ interface SupportTabProps {
 
 export default function SupportTab({ mission, settings }: SupportTabProps) {
   const { t } = useTranslation();
-  const allSupport = [...mission.coalitions.blue.support, ...mission.coalitions.red.support];
+  const viewMission = useMemo(() => applyViewMode(mission, settings.viewMode), [mission, settings.viewMode]);
+  const allSupport = [...viewMission.coalitions.blue.support, ...viewMission.coalitions.red.support];
   
   if (allSupport.length === 0) {
     return (
@@ -66,7 +69,7 @@ export default function SupportTab({ mission, settings }: SupportTabProps) {
             )}
             
             <dt>{t('support.position')}</dt>
-            <dd>{formatSupportPosition(s, mission.meta.theatre, settings.coordinateFormat)}</dd>
+            <dd>{formatSupportPosition(s, viewMission.meta.theatre, settings.coordinateFormat)}</dd>
           </dl>
         </section>
       ))}

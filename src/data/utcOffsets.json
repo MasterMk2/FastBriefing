@@ -1,13 +1,14 @@
 {
+  "_source": "pydcs dcs/terrain/<map>/<map>.py の utc_offset（2026-09 時点）。Normandy と TheChannel の 2 時間差は ED フォーラム forum.dcs.world/topic/386890 で DCS 側のバグとして報告されている点に注意。",
   "Caucasus": 4,
   "MarianaIslands": 10,
   "Syria": 3,
   "Nevada": -8,
-  "Normandy": 1,
+  "Normandy": 0,
   "PersianGulf": 4,
-  "TheChannel": 1,
+  "TheChannel": 2,
   "Falklands": -3,
   "Sinai": 2,
   "Kola": 3,
-  "GermanyCW": 1
+  "GermanyCW": 2
 }

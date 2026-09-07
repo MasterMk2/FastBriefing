@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import L from 'leaflet';
@@ -6,6 +6,7 @@ import { MapContainer, TileLayer, Marker, Popup, Polyline, Circle, LayerGroup, u
 import 'leaflet/dist/leaflet.css';
 import type { DisplaySettings, Drawing, Flight, MissionData, SupportAsset, TriggerZone } from '../types/mission';
 import { dcsToLatLon } from '../utils/coordinates';
+import { applyViewMode } from '../utils/viewMode';
 
 interface MapTabProps {
   mission: MissionData;
@@ -17,20 +18,29 @@ type LatLon = [number, number];
 
 const DEFAULT_CENTER: LatLon = [42.0, 43.0];
 const DEFAULT_ZOOM = 7;
-const BLUE_FLIGHT_COLOR = '#0066ff';
-const RED_FLIGHT_COLOR = '#ff0000';
-const NEUTRAL_FLIGHT_COLOR = '#666666';
-const DEFAULT_ZONE_COLOR = '#3388ff';
-const DEFAULT_DRAWING_COLOR = '#ff0000';
+const BLUE_FLIGHT_COLOR_TOKEN = '--color-map-coalition-blue';
+const RED_FLIGHT_COLOR_TOKEN = '--color-map-coalition-red';
+const NEUTRAL_FLIGHT_COLOR_TOKEN = '--color-map-coalition-neutral';
+const THREAT_ENGAGEMENT_COLOR_TOKEN = '--color-threat-engagement';
+const THREAT_DETECTION_COLOR_TOKEN = '--color-threat-detection';
+const DEFAULT_ZONE_COLOR_TOKEN = '--color-zone-default';
+const DEFAULT_DRAWING_COLOR_TOKEN = '--color-drawing-default';
+
+function getThemeColor(token: string): string {
+  if (typeof document === 'undefined') return `var(${token})`;
+  const value = document.defaultView?.getComputedStyle(document.documentElement).getPropertyValue(token).trim();
+  return value || `var(${token})`;
+}
 
 export default function MapTab({ mission, settings }: MapTabProps) {
   const { t } = useTranslation();
-  void settings;
+  const viewMission = useMemo(() => applyViewMode(mission, settings.viewMode), [mission, settings.viewMode]);
   const [layers, setLayers] = useState({
     flights: true,
     zones: true,
     drawings: true,
     threats: true,
+    detection: false,
     support: true,
     enemies: true,
     bullseye: true,
@@ -38,12 +48,12 @@ export default function MapTab({ mission, settings }: MapTabProps) {
     airbases: true,
   });
 
-  const missionZones = mission.coalitions.blue.zones;
-  const missionDrawings = mission.coalitions.blue.drawings;
+  const missionZones = viewMission.coalitions.blue.zones;
+  const missionDrawings = viewMission.coalitions.blue.drawings;
   const flightEntries = [
-    ...mission.coalitions.blue.flights.map((flight, index) => ({ flight, side: 'blue' as const, index })),
-    ...mission.coalitions.red.flights.map((flight, index) => ({ flight, side: 'red' as const, index })),
-    ...mission.coalitions.neutral.flights.map((flight, index) => ({ flight, side: 'neutral' as const, index })),
+    ...viewMission.coalitions.blue.flights.map((flight, index) => ({ flight, side: 'blue' as const, index })),
+    ...viewMission.coalitions.red.flights.map((flight, index) => ({ flight, side: 'red' as const, index })),
+    ...viewMission.coalitions.neutral.flights.map((flight, index) => ({ flight, side: 'neutral' as const, index })),
   ];
 
   return (
@@ -65,16 +75,24 @@ export default function MapTab({ mission, settings }: MapTabProps) {
         </div>
         <div className="map-legend" aria-label={getLayerLabel('flights', t)}>
           <span className="map-legend-item">
-            <span aria-hidden="true" style={{ display: 'inline-block', width: '2rem', borderTop: `2px solid ${BLUE_FLIGHT_COLOR}` }} />
+            <span aria-hidden="true" style={{ display: 'inline-block', width: '2rem', borderTop: `2px solid ${getThemeColor(BLUE_FLIGHT_COLOR_TOKEN)}` }} />
             {t('common.blue')}
           </span>
           <span className="map-legend-item">
-            <span aria-hidden="true" style={{ display: 'inline-block', width: '2rem', borderTop: `2px dashed ${RED_FLIGHT_COLOR}` }} />
+            <span aria-hidden="true" style={{ display: 'inline-block', width: '2rem', borderTop: `2px dashed ${getThemeColor(RED_FLIGHT_COLOR_TOKEN)}` }} />
             {t('common.red')}
           </span>
           <span className="map-legend-item">
-            <span aria-hidden="true" style={{ display: 'inline-block', width: '2rem', borderTop: `2px dotted ${NEUTRAL_FLIGHT_COLOR}` }} />
+            <span aria-hidden="true" style={{ display: 'inline-block', width: '2rem', borderTop: `2px dotted ${getThemeColor(NEUTRAL_FLIGHT_COLOR_TOKEN)}` }} />
             {t('common.neutral')}
+          </span>
+          <span className="map-legend-item">
+            <span aria-hidden="true" className="map-legend-range-swatch map-legend-engagement-swatch" />
+            {t('threats.engagementRange')}
+          </span>
+          <span className="map-legend-item">
+            <span aria-hidden="true" className="map-legend-range-swatch map-legend-detection-swatch" />
+            {t('threats.detectionRange')}
           </span>
         </div>
       </div>
@@ -89,22 +107,22 @@ export default function MapTab({ mission, settings }: MapTabProps) {
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
-          <MapViewport mission={mission} />
+          <MapViewport mission={viewMission} includeDetectionRange={layers.detection} />
 
           {layers.bullseye && (
             <>
-              {isResolvedLatLon(mission.coalitions.blue.bullseye.latlon, mission.coalitions.blue.bullseye.latlonResolved) && (
+              {isResolvedLatLon(viewMission.coalitions.blue.bullseye.latlon, viewMission.coalitions.blue.bullseye.latlonResolved) && (
                 <Marker
-                  position={mission.coalitions.blue.bullseye.latlon}
+                  position={viewMission.coalitions.blue.bullseye.latlon}
                   alt={`${t('common.blue')} Bullseye`}
                   title={`${t('common.blue')} Bullseye`}
                 >
                   <Popup>{t('map.blueBullseye')}</Popup>
                 </Marker>
               )}
-              {isResolvedLatLon(mission.coalitions.red.bullseye.latlon, mission.coalitions.red.bullseye.latlonResolved) && (
+              {isResolvedLatLon(viewMission.coalitions.red.bullseye.latlon, viewMission.coalitions.red.bullseye.latlonResolved) && (
                 <Marker
-                  position={mission.coalitions.red.bullseye.latlon}
+                  position={viewMission.coalitions.red.bullseye.latlon}
                   alt={`${t('common.red')} Bullseye`}
                   title={`${t('common.red')} Bullseye`}
                 >
@@ -116,7 +134,7 @@ export default function MapTab({ mission, settings }: MapTabProps) {
 
           {layers.navpoints && (
             <LayerGroup>
-              {mission.coalitions.blue.navPoints.map(np => {
+              {viewMission.coalitions.blue.navPoints.map(np => {
                 if (!isResolvedLatLon(np.latlon, np.latlonResolved)) return null;
                 const markerLabel = `${t('common.blue')} NavPoint ${np.index}: ${np.name}`;
                 return (
@@ -130,7 +148,7 @@ export default function MapTab({ mission, settings }: MapTabProps) {
                   </Marker>
                 );
               })}
-              {mission.coalitions.red.navPoints.map(np => {
+              {viewMission.coalitions.red.navPoints.map(np => {
                 if (!isResolvedLatLon(np.latlon, np.latlonResolved)) return null;
                 const markerLabel = `${t('common.red')} NavPoint ${np.index}: ${np.name}`;
                 return (
@@ -149,7 +167,7 @@ export default function MapTab({ mission, settings }: MapTabProps) {
 
           {layers.airbases && (
             <LayerGroup>
-              {mission.coalitions.blue.airbases.map(ab => {
+              {viewMission.coalitions.blue.airbases.map(ab => {
                 if (!isResolvedLatLon(ab.latlon, ab.latlonResolved)) return null;
                 const markerLabel = `${t('common.blue')} ${ab.name}`;
                 return (
@@ -164,7 +182,7 @@ export default function MapTab({ mission, settings }: MapTabProps) {
                   </Marker>
                 );
               })}
-              {mission.coalitions.red.airbases.map(ab => {
+              {viewMission.coalitions.red.airbases.map(ab => {
                 if (!isResolvedLatLon(ab.latlon, ab.latlonResolved)) return null;
                 const markerLabel = `${t('common.red')} ${ab.name}`;
                 return (
@@ -194,7 +212,7 @@ export default function MapTab({ mission, settings }: MapTabProps) {
           {layers.zones && (
             <LayerGroup>
               {missionZones.map((zone, index) => (
-                <TriggerZone key={`zone-${zone.zoneId}-${index}`} zone={zone} theatre={mission.meta.theatre} />
+                <TriggerZone key={`zone-${zone.zoneId}-${index}`} zone={zone} theatre={viewMission.meta.theatre} />
               ))}
             </LayerGroup>
           )}
@@ -202,37 +220,37 @@ export default function MapTab({ mission, settings }: MapTabProps) {
           {layers.drawings && (
             <LayerGroup>
               {missionDrawings.map((drawing, index) => (
-                <DrawingLayer key={`drawing-${drawing.layer}-${index}`} drawing={drawing} theatre={mission.meta.theatre} />
+                <DrawingLayer key={`drawing-${drawing.layer}-${index}`} drawing={drawing} theatre={viewMission.meta.theatre} />
               ))}
             </LayerGroup>
           )}
 
           {layers.support && (
             <LayerGroup>
-              {mission.coalitions.blue.support.map((support, index) => (
+              {viewMission.coalitions.blue.support.map((support, index) => (
                 <SupportMarker
                   key={`blue-support-${index}`}
                   support={support}
                   label={t('common.blue')}
-                  theatre={mission.meta.theatre}
+                  theatre={viewMission.meta.theatre}
                   t={t}
                 />
               ))}
-              {mission.coalitions.red.support.map((support, index) => (
+              {viewMission.coalitions.red.support.map((support, index) => (
                 <SupportMarker
                   key={`red-support-${index}`}
                   support={support}
                   label={t('common.red')}
-                  theatre={mission.meta.theatre}
+                  theatre={viewMission.meta.theatre}
                   t={t}
                 />
               ))}
-              {mission.coalitions.neutral.support.map((support, index) => (
+              {viewMission.coalitions.neutral.support.map((support, index) => (
                 <SupportMarker
                   key={`neutral-support-${index}`}
                   support={support}
                   label={t('common.neutral')}
-                  theatre={mission.meta.theatre}
+                  theatre={viewMission.meta.theatre}
                   t={t}
                 />
               ))}
@@ -241,10 +259,10 @@ export default function MapTab({ mission, settings }: MapTabProps) {
 
           {layers.threats && (
             <LayerGroup>
-              {mission.coalitions.red.aiGroups
+              {viewMission.coalitions.red.aiGroups
                 .filter(g => g.threatRange && g.threatRange > 0)
                 .map((g, index) => {
-                  const position = resolveEntityPosition(mission.meta.theatre, g.latlon, g.latlonResolved, g.position);
+                  const position = resolveEntityPosition(viewMission.meta.theatre, g.latlon, g.latlonResolved, g.position);
                   if (!position) return null;
                   const markerLabel = `${t('common.red')} ${g.type} threat range`;
                   return (
@@ -252,8 +270,8 @@ export default function MapTab({ mission, settings }: MapTabProps) {
                       key={`red-threat-${index}`}
                       center={position}
                       radius={g.threatRange!}
-                      color={RED_FLIGHT_COLOR}
-                      fillColor={RED_FLIGHT_COLOR}
+                      color={getThemeColor(THREAT_ENGAGEMENT_COLOR_TOKEN)}
+                      fillColor={getThemeColor(THREAT_ENGAGEMENT_COLOR_TOKEN)}
                       fillOpacity={0.1}
                       weight={1}
                     >
@@ -261,10 +279,10 @@ export default function MapTab({ mission, settings }: MapTabProps) {
                     </Circle>
                   );
                 })}
-              {mission.coalitions.neutral.aiGroups
+              {viewMission.coalitions.neutral.aiGroups
                 .filter(g => g.threatRange && g.threatRange > 0)
                 .map((g, index) => {
-                  const position = resolveEntityPosition(mission.meta.theatre, g.latlon, g.latlonResolved, g.position);
+                  const position = resolveEntityPosition(viewMission.meta.theatre, g.latlon, g.latlonResolved, g.position);
                   if (!position) return null;
                   const markerLabel = `${t('common.neutral')} ${g.type} threat range`;
                   return (
@@ -272,8 +290,8 @@ export default function MapTab({ mission, settings }: MapTabProps) {
                       key={`neutral-threat-${index}`}
                       center={position}
                       radius={g.threatRange!}
-                      color={NEUTRAL_FLIGHT_COLOR}
-                      fillColor={NEUTRAL_FLIGHT_COLOR}
+                      color={getThemeColor(NEUTRAL_FLIGHT_COLOR_TOKEN)}
+                      fillColor={getThemeColor(NEUTRAL_FLIGHT_COLOR_TOKEN)}
                       fillOpacity={0.1}
                       weight={1}
                     >
@@ -284,10 +302,57 @@ export default function MapTab({ mission, settings }: MapTabProps) {
             </LayerGroup>
           )}
 
+          {layers.detection && (
+            <LayerGroup>
+              {viewMission.coalitions.red.aiGroups
+                .filter(g => g.detectionRange && g.detectionRange > 0)
+                .map((g, index) => {
+                  const position = resolveEntityPosition(viewMission.meta.theatre, g.latlon, g.latlonResolved, g.position);
+                  if (!position) return null;
+                  const markerLabel = `${t('common.red')} ${g.type} detection range`;
+                  return (
+                    <Circle
+                      key={`red-detection-${index}`}
+                      center={position}
+                      radius={g.detectionRange!}
+                      color={getThemeColor(THREAT_DETECTION_COLOR_TOKEN)}
+                      fill={false}
+                      fillOpacity={0}
+                      dashArray="8 6"
+                      weight={1}
+                    >
+                      <Popup>{`${markerLabel}: ${t('map.detectionPopup', { type: g.type, range: g.detectionRange })}`}</Popup>
+                    </Circle>
+                  );
+                })}
+              {viewMission.coalitions.neutral.aiGroups
+                .filter(g => g.detectionRange && g.detectionRange > 0)
+                .map((g, index) => {
+                  const position = resolveEntityPosition(viewMission.meta.theatre, g.latlon, g.latlonResolved, g.position);
+                  if (!position) return null;
+                  const markerLabel = `${t('common.neutral')} ${g.type} detection range`;
+                  return (
+                    <Circle
+                      key={`neutral-detection-${index}`}
+                      center={position}
+                      radius={g.detectionRange!}
+                      color={getThemeColor(NEUTRAL_FLIGHT_COLOR_TOKEN)}
+                      fill={false}
+                      fillOpacity={0}
+                      dashArray="8 6"
+                      weight={1}
+                    >
+                      <Popup>{`${markerLabel}: ${t('map.detectionPopup', { type: g.type, range: g.detectionRange })}`}</Popup>
+                    </Circle>
+                  );
+                })}
+            </LayerGroup>
+          )}
+
           {layers.enemies && (
             <LayerGroup>
-              {mission.coalitions.red.aiGroups.map((g, index) => {
-                const position = resolveEntityPosition(mission.meta.theatre, g.latlon, g.latlonResolved, g.position);
+              {viewMission.coalitions.red.aiGroups.map((g, index) => {
+                const position = resolveEntityPosition(viewMission.meta.theatre, g.latlon, g.latlonResolved, g.position);
                 if (!position) return null;
                 const markerLabel = `${t('common.red')} ${g.type} (${g.count})`;
                 return (
@@ -302,8 +367,8 @@ export default function MapTab({ mission, settings }: MapTabProps) {
                   </Marker>
                 );
               })}
-              {mission.coalitions.neutral.aiGroups.map((g, index) => {
-                const position = resolveEntityPosition(mission.meta.theatre, g.latlon, g.latlonResolved, g.position);
+              {viewMission.coalitions.neutral.aiGroups.map((g, index) => {
+                const position = resolveEntityPosition(viewMission.meta.theatre, g.latlon, g.latlonResolved, g.position);
                 if (!position) return null;
                 const markerLabel = `${t('common.neutral')} ${g.type} (${g.count})`;
                 return (
@@ -326,22 +391,22 @@ export default function MapTab({ mission, settings }: MapTabProps) {
   );
 }
 
-function MapViewport({ mission }: { mission: MissionData }) {
+function MapViewport({ mission, includeDetectionRange }: { mission: MissionData; includeDetectionRange: boolean }) {
   const map = useMap();
 
   useEffect(() => {
-    const bounds = collectMissionBounds(mission);
+    const bounds = collectMissionBounds(mission, includeDetectionRange);
     if (bounds.isValid()) {
       map.fitBounds(bounds, { padding: [24, 24], maxZoom: 12 });
     } else {
       map.setView(DEFAULT_CENTER, DEFAULT_ZOOM);
     }
-  }, [map, mission]);
+  }, [includeDetectionRange, map, mission]);
 
   return null;
 }
 
-function collectMissionBounds(mission: MissionData): L.LatLngBounds {
+function collectMissionBounds(mission: MissionData, includeDetectionRange = false): L.LatLngBounds {
   const bounds = L.latLngBounds([]);
   const add = (coordinate: unknown, resolved?: boolean) => addLatLon(bounds, coordinate, resolved);
   const addDcs = (xy: LatLon) => {
@@ -371,6 +436,9 @@ function collectMissionBounds(mission: MissionData): L.LatLngBounds {
       if (coordinate) {
         bounds.extend(coordinate);
         if (group.threatRange && group.threatRange > 0) extendBoundsByMeters(bounds, coordinate, group.threatRange);
+        if (includeDetectionRange && group.detectionRange && group.detectionRange > 0) {
+          extendBoundsByMeters(bounds, coordinate, group.detectionRange);
+        }
       }
     }
   }
@@ -379,7 +447,6 @@ function collectMissionBounds(mission: MissionData): L.LatLngBounds {
   // same arrays on each coalition for compatibility, but they are traversed
   // once here and once in the render tree.
   for (const zone of mission.coalitions.blue.zones) {
-    if (zone.hidden) continue;
     const center = addDcs(zone.xy);
     if (center && zone.type === 0 && zone.radius > 0) extendBoundsByMeters(bounds, center, zone.radius);
     for (const vertex of zone.vertices ?? []) addDcs(vertex);
@@ -430,9 +497,9 @@ function extendBoundsByMeters(bounds: L.LatLngBounds, center: LatLon, radius: nu
 }
 
 function getFlightColor(side: MapSide): string {
-  if (side === 'blue') return BLUE_FLIGHT_COLOR;
-  if (side === 'red') return RED_FLIGHT_COLOR;
-  return NEUTRAL_FLIGHT_COLOR;
+  if (side === 'blue') return getThemeColor(BLUE_FLIGHT_COLOR_TOKEN);
+  if (side === 'red') return getThemeColor(RED_FLIGHT_COLOR_TOKEN);
+  return getThemeColor(NEUTRAL_FLIGHT_COLOR_TOKEN);
 }
 
 function getFlightDashArray(side: MapSide): string | undefined {
@@ -480,8 +547,7 @@ function FlightPath({ flight, side, color }: { flight: Flight; side: MapSide; co
 
 function TriggerZone({ zone, theatre }: { zone: TriggerZone; theatre: string }) {
   const { t } = useTranslation();
-  if (zone.hidden) return null;
-  const color = dcsColorToCss(zone.color, DEFAULT_ZONE_COLOR);
+  const color = dcsColorToCss(zone.color, getThemeColor(DEFAULT_ZONE_COLOR_TOKEN));
 
   if (zone.type === 0) {
     const center = getDcsCoordinate(theatre, zone.xy[0], zone.xy[1]);
@@ -522,7 +588,7 @@ function DrawingLayer({ drawing, theatre }: { drawing: Drawing; theatre: string 
           .map(point => getDcsCoordinate(theatre, point[0], point[1]))
           .filter((position): position is LatLon => position !== null);
         const key = `${drawing.layer}-${index}`;
-        const color = object.color || DEFAULT_DRAWING_COLOR;
+        const color = object.color || getThemeColor(DEFAULT_DRAWING_COLOR_TOKEN);
         const fillColor = object.fillColor || color;
 
         if (object.primitiveType === 'Line') {
@@ -575,27 +641,35 @@ function dcsColorToCss(value: unknown, fallback: string): string {
 }
 
 function createWaypointIcon(number: number) {
+  const background = getThemeColor('--color-map-waypoint-background');
+  const foreground = getThemeColor('--color-map-marker-foreground');
+  const shadow = getThemeColor('--shadow-map-marker');
   return L.divIcon({
     className: 'waypoint-marker',
-    html: `<div style="background: #333; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold; border: 2px solid white; box-shadow: 0 1px 3px rgba(0,0,0,0.3);">${number}</div>`,
+    html: `<div style="background: ${background}; color: ${foreground}; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold; border: 2px solid ${foreground}; box-shadow: 0 1px 3px ${shadow};">${number}</div>`,
     iconSize: [24, 24],
     iconAnchor: [12, 12],
   });
 }
 
 function createAirbaseIcon() {
+  const background = getThemeColor('--color-map-airbase');
+  const foreground = getThemeColor('--color-map-marker-foreground');
   return L.divIcon({
     className: 'airbase-marker',
-    html: '<div style="background: #4CAF50; color: white; width: 20px; height: 20px; border-radius: 4px; transform: rotate(45deg); display: flex; align-items: center; justify-content: center; font-size: 10px;">✈</div>',
+    html: `<div style="background: ${background}; color: ${foreground}; width: 20px; height: 20px; border-radius: 4px; transform: rotate(45deg); display: flex; align-items: center; justify-content: center; font-size: 10px;">✈</div>`,
     iconSize: [20, 20],
     iconAnchor: [10, 10],
   });
 }
 
 function createEnemyIcon() {
+  const background = getThemeColor('--color-map-enemy');
+  const foreground = getThemeColor('--color-map-marker-foreground');
+  const shadow = getThemeColor('--shadow-map-marker');
   return L.divIcon({
     className: 'enemy-marker',
-    html: '<div style="background: #f44336; color: white; width: 16px; height: 16px; border-radius: 50%; border: 2px solid white; box-shadow: 0 1px 3px rgba(0,0,0,0.3);"></div>',
+    html: `<div style="background: ${background}; color: ${foreground}; width: 16px; height: 16px; border-radius: 50%; border: 2px solid ${foreground}; box-shadow: 0 1px 3px ${shadow};"></div>`,
     iconSize: [16, 16],
     iconAnchor: [8, 8],
   });
@@ -608,9 +682,12 @@ function createSupportIcon(kind: string) {
     carrier: '🚢',
     jtac: '🎯',
   };
+  const background = getThemeColor('--color-map-support');
+  const foreground = getThemeColor('--color-map-marker-foreground');
+  const shadow = getThemeColor('--shadow-map-marker');
   return L.divIcon({
     className: 'support-marker',
-    html: `<div style="background: #FF9800; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; border: 2px solid white; box-shadow: 0 1px 3px rgba(0,0,0,0.3);">${icons[kind] || '📍'}</div>`,
+    html: `<div style="background: ${background}; color: ${foreground}; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; border: 2px solid ${foreground}; box-shadow: 0 1px 3px ${shadow};">${icons[kind] || '📍'}</div>`,
     iconSize: [24, 24],
     iconAnchor: [12, 12],
   });
@@ -622,6 +699,7 @@ function getLayerLabel(key: string, t: TFunction): string {
     zones: 'map.layers.zones',
     drawings: 'map.layers.drawings',
     threats: 'map.layers.threats',
+    detection: 'map.layers.detection',
     support: 'map.layers.support',
     enemies: 'map.layers.enemies',
     bullseye: 'map.layers.bullseye',

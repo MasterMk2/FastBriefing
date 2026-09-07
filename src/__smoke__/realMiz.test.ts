@@ -4,6 +4,8 @@ import { readdir, readFile } from 'node:fs/promises';
 import { normalizeMission } from '../core/MissionNormalizer';
 import { parseMissionArchive } from '../workers/missionParser';
 import utcOffsetData from '../data/utcOffsets.json';
+import type { MissionData } from '../types/mission';
+import { applyViewMode } from '../utils/viewMode';
 
 declare const process: {
   env: Record<string, string | undefined>;
@@ -49,6 +51,33 @@ function hasSourceClientPylons(value: unknown): boolean {
   return Object.values(value).some(item => hasSourceClientPylons(item));
 }
 
+function hasHiddenFlag(value: unknown): boolean {
+  return isRecord(value) && value.hidden === true;
+}
+
+function missionEntityCount(mission: MissionData): number {
+  const coalitions = [mission.coalitions.blue, mission.coalitions.red, mission.coalitions.neutral];
+  const coalitionEntityCount = coalitions.reduce(
+    (total, coalition) => total + coalition.flights.length + coalition.support.length + coalition.aiGroups.length,
+    0,
+  );
+  return coalitionEntityCount + mission.coalitions.blue.zones.length + mission.coalitions.blue.drawings.length;
+}
+
+function hiddenEntityCount(mission: MissionData): number {
+  const coalitions = [mission.coalitions.blue, mission.coalitions.red, mission.coalitions.neutral];
+  const coalitionHiddenCount = coalitions.reduce(
+    (total, coalition) => total
+      + coalition.flights.filter(hasHiddenFlag).length
+      + coalition.support.filter(hasHiddenFlag).length
+      + coalition.aiGroups.filter(hasHiddenFlag).length,
+    0,
+  );
+  return coalitionHiddenCount
+    + mission.coalitions.blue.zones.filter(hasHiddenFlag).length
+    + mission.coalitions.blue.drawings.filter(hasHiddenFlag).length;
+}
+
 describe.skipIf(!smokeDirectory)('real .miz smoke test', () => {
   it('parses and normalizes every mission archive in SMOKE_MIZ_DIR', async () => {
     const names = (await readdir(smokeDirectory) as unknown as string[])
@@ -58,6 +87,8 @@ describe.skipIf(!smokeDirectory)('real .miz smoke test', () => {
     const parseFailures: string[] = [];
     let pylonMissionCount = 0;
     let threatMissionCount = 0;
+    let hiddenMissionCount = 0;
+    let reducedPilotMissionCount = 0;
 
     for (const name of names) {
       let parsed: Awaited<ReturnType<typeof parseMissionArchive>>;
@@ -71,6 +102,17 @@ describe.skipIf(!smokeDirectory)('real .miz smoke test', () => {
       }
 
       const normalized = normalizeMission(parsed, settings);
+      const creatorView = applyViewMode(normalized, 'creator');
+      const pilotView = applyViewMode(normalized, 'pilot');
+      const creatorEntityCount = missionEntityCount(creatorView);
+      const pilotEntityCount = missionEntityCount(pilotView);
+      const hiddenCount = hiddenEntityCount(normalized);
+
+      if (hiddenCount > 0) {
+        hiddenMissionCount += 1;
+        if (pilotEntityCount < creatorEntityCount) reducedPilotMissionCount += 1;
+      }
+
       const flights = [
         ...normalized.coalitions.blue.flights,
         ...normalized.coalitions.red.flights,
@@ -109,6 +151,11 @@ describe.skipIf(!smokeDirectory)('real .miz smoke test', () => {
           utcOffset: normalized.meta.utcOffset,
           sortie: normalized.meta.sortie,
           description: normalized.meta.description,
+          viewMode: {
+            creatorEntities: creatorEntityCount,
+            pilotEntities: pilotEntityCount,
+            hiddenEntities: hiddenCount,
+          },
         }),
       );
 
@@ -132,5 +179,15 @@ describe.skipIf(!smokeDirectory)('real .miz smoke test', () => {
     expect(parseFailures, `解析に失敗した .miz: ${parseFailures.join('; ')}`).toEqual([]);
     expect(pylonMissionCount, '搭載パイロンを取得できたミッション数').toBeGreaterThan(0);
     expect(threatMissionCount, '脅威半径を解決できたミッション数').toBeGreaterThan(0);
+    if (hiddenMissionCount === 0) {
+      console.log(JSON.stringify({
+        viewMode: {
+          status: 'skipped',
+          reason: 'hidden フラグを使っているミッションがありません',
+        },
+      }));
+    } else {
+      expect(reducedPilotMissionCount, 'hidden フラグを持つミッションでパイロットビューの件数が減る').toBeGreaterThan(0);
+    }
   });
 });

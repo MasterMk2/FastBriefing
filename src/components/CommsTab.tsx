@@ -1,6 +1,8 @@
+import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import type { MissionData, DisplaySettings, Flight, SupportAsset } from '../types/mission';
+import { applyViewMode } from '../utils/viewMode';
 
 /** Frequency comparison tolerance in MHz (1 kHz). */
 export const FREQUENCY_MATCH_TOLERANCE_MHZ = 0.001;
@@ -145,20 +147,20 @@ function classifyFrequencyCluster(entries: CommunicationFrequency[]): FrequencyC
 
 export default function CommsTab({ mission, settings }: CommsTabProps) {
   const { t } = useTranslation();
-  void settings;
-  const allFlights = [...mission.coalitions.blue.flights, ...mission.coalitions.red.flights];
-  const allSupport = [...mission.coalitions.blue.support, ...mission.coalitions.red.support];
+  const viewMission = useMemo(() => applyViewMode(mission, settings.viewMode), [mission, settings.viewMode]);
+  const allFlights = [...viewMission.coalitions.blue.flights, ...viewMission.coalitions.red.flights];
+  const allSupport = [...viewMission.coalitions.blue.support, ...viewMission.coalitions.red.support];
   const flightRows = createStableKeys(
     allFlights,
     'flight',
-    flight => `${getFlightSide(mission, flight)}|${flight.groupId}|${flight.name}|${flight.callsign}|${flight.type}`,
+    flight => `${getFlightSide(viewMission, flight)}|${flight.groupId}|${flight.name}|${flight.callsign}|${flight.type}`,
   );
   const supportRows = createStableKeys(
     allSupport,
     'support',
     support => `${support.kind}|${support.callsign}|${support.frequency}|${support.position.join(',')}|${support.tacan?.channel ?? ''}`,
   );
-  const frequencyConflicts = detectFrequencyConflicts(collectFrequencyEntries(mission));
+  const frequencyConflicts = detectFrequencyConflicts(collectFrequencyEntries(viewMission));
 
   return (
     <div className="tab-panel comms">
@@ -197,7 +199,7 @@ export default function CommsTab({ mission, settings }: CommsTabProps) {
       <section className="section">
         <h3>{t('comms.flightPlan')}</h3>
         {flightRows.map(({ item: flight, key: flightKey }) => {
-          const side = getFlightSide(mission, flight);
+          const side = getFlightSide(viewMission, flight);
           const leadUnit = flight.units[0];
           const radioRows = leadUnit
             ? createStableKeys(leadUnit.radios, `radio-${flightKey}`, radio => `${radio.channel}|${radio.frequency}|${radio.modulation}|${radio.name}`)
