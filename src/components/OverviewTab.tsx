@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import type { MissionData, DisplaySettings } from '../types/mission';
@@ -5,6 +6,7 @@ import { formatAltitude, formatPressure, formatTemperature, formatSpeed, formatD
 import { getMoonInfo, getSunTimes, type SunTimes } from '../utils/astro';
 import { buildMetar } from '../utils/metar';
 import { addSeconds, formatDateYMD, formatTimeHHMM, formatUtcOffset, missionLocalDate, missionZuluDate } from '../utils/time';
+import { applyViewMode } from '../utils/viewMode';
 
 interface OverviewTabProps {
   mission: MissionData;
@@ -13,7 +15,8 @@ interface OverviewTabProps {
 
 export default function OverviewTab({ mission, settings }: OverviewTabProps) {
   const { t } = useTranslation();
-  const { meta, weather, coalitions } = mission;
+  const viewMission = useMemo(() => applyViewMode(mission, settings.viewMode), [mission, settings.viewMode]);
+  const { meta, weather, coalitions } = viewMission;
   const blueFlights = coalitions.blue.flights.length;
   const redFlights = coalitions.red.flights.length;
   const totalFlights = blueFlights + redFlights;

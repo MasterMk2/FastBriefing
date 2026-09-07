@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import type { MissionData, DisplaySettings, MissionMeta } from '../types/mission';
@@ -16,6 +16,7 @@ import {
 } from '../utils/time';
 import PrintView from './PrintView';
 import { useSettings } from '../hooks/useSettings';
+import { applyViewMode } from '../utils/viewMode';
 
 interface ExportTabProps {
   mission: MissionData;
@@ -25,6 +26,7 @@ interface ExportTabProps {
 export default function ExportTab({ mission, settings }: ExportTabProps) {
   const { t } = useTranslation();
   const { setOutputLanguage } = useSettings();
+  const viewMission = useMemo(() => applyViewMode(mission, settings.viewMode), [mission, settings.viewMode]);
   const [markdown, setMarkdown] = useState('');
   const [copyStatus, setCopyStatus] = useState('');
   const [pngStatus, setPngStatus] = useState('');
@@ -35,13 +37,14 @@ export default function ExportTab({ mission, settings }: ExportTabProps) {
   });
 
   const generateMarkdown = () => {
-    const { meta, weather, coalitions } = mission;
+    const { meta, weather, coalitions } = viewMission;
     const localDate = missionLocalDate(meta);
     const zuluDate = missionZuluDate(meta);
     const metar = buildMetar(weather, { time: zuluDate });
     let md = '';
 
     md += `# ${meta.sortie}\n\n`;
+    md += `**${outputT('export.markdown.view')}**: ${outputT(settings.viewMode === 'pilot' ? 'export.markdown.pilotView' : 'export.markdown.creatorView')}  \n\n`;
     md += `**${outputT('export.markdown.map')}**: ${meta.theatre}  \n`;
     md += `**${outputT('export.markdown.date')}**: ${formatDateYMD(localDate)}  \n`;
     md += `**${outputT('export.markdown.startLocal')}**: ${formatTimeHHMM(localDate)} (${formatUtcOffset(meta.utcOffset)})  \n`;
@@ -134,7 +137,7 @@ export default function ExportTab({ mission, settings }: ExportTabProps) {
       const context = canvas.getContext('2d');
       if (!context) throw new Error('Canvas 2D context unavailable');
 
-      drawBriefingSummary(context, mission, settings, t);
+      drawBriefingSummary(context, viewMission, settings, t);
       const blob = await canvasToBlob(canvas);
       if (!blob) throw new Error('PNG blob unavailable');
 

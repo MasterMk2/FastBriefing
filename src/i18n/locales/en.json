@@ -222,6 +222,9 @@
     "pngSaved": "PNG saved",
     "pngFailed": "PNG generation failed",
     "markdown": {
+      "view": "View",
+      "creatorView": "Creator View",
+      "pilotView": "Pilot View",
       "map": "Map",
       "date": "Date",
       "startLocal": "Start Time (Local)",

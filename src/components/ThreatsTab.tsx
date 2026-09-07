@@ -1,8 +1,10 @@
+import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import type { AIGroup, MissionData, DisplaySettings } from '../types/mission';
 import { dcsToLatLon, formatCoordinate } from '../utils/coordinates';
 import { formatDistance } from '../utils/units';
+import { applyViewMode } from '../utils/viewMode';
 
 interface ThreatsTabProps {
   mission: MissionData;
@@ -11,11 +13,13 @@ interface ThreatsTabProps {
 
 export default function ThreatsTab({ mission, settings }: ThreatsTabProps) {
   const { t } = useTranslation();
-  const allEnemies = mission.coalitions.red.aiGroups;
+  const viewMission = useMemo(() => applyViewMode(mission, settings.viewMode), [mission, settings.viewMode]);
+  const allEnemies = viewMission.coalitions.red.aiGroups;
   const threats = allEnemies.filter(hasResolvedThreatRange);
   const unrecordedThreats = allEnemies.filter(isUnrecordedThreat);
   const otherEnemies = allEnemies.filter(g => !hasResolvedThreatRange(g) && !isUnrecordedThreat(g));
   const threatWarnings = [...new Set(mission.warnings.filter(warning => warning.includes(t('threats.threatRadius', { lng: 'ja' }))))];
+  const showCreatorDetails = settings.viewMode === 'creator';
   
   return (
     <div className="tab-panel threats">
@@ -31,8 +35,8 @@ export default function ThreatsTab({ mission, settings }: ThreatsTabProps) {
                 <th>{t('threats.count')}</th>
                 <th>{t('threats.threatRadius')}</th>
                 <th>{t('threats.position')}</th>
-                <th>{t('threats.hidden')}</th>
-                <th>{t('threats.lateActivation')}</th>
+                {showCreatorDetails && <th>{t('threats.hidden')}</th>}
+                {showCreatorDetails && <th>{t('threats.lateActivation')}</th>}
               </tr>
             </thead>
             <tbody>
@@ -42,8 +46,8 @@ export default function ThreatsTab({ mission, settings }: ThreatsTabProps) {
                   <td>{threat.count}</td>
                   <td>{formatDistance(threat.threatRange!, settings.distanceUnit)}</td>
                   <td>{formatThreatPosition(threat, mission.meta.theatre, settings.coordinateFormat)}</td>
-                  <td>{threat.hidden ? t('common.yes') : t('common.no')}</td>
-                  <td>{threat.lateActivation ? t('common.yes') : t('common.no')}</td>
+                  {showCreatorDetails && <td>{threat.hidden ? t('common.yes') : t('common.no')}</td>}
+                  {showCreatorDetails && <td>{threat.lateActivation ? t('common.yes') : t('common.no')}</td>}
                 </tr>
               ))}
             </tbody>
@@ -61,8 +65,8 @@ export default function ThreatsTab({ mission, settings }: ThreatsTabProps) {
                   <th>{t('threats.count')}</th>
                   <th>{t('threats.threatRadius')}</th>
                   <th>{t('threats.position')}</th>
-                  <th>{t('threats.hidden')}</th>
-                  <th>{t('threats.lateActivation')}</th>
+                  {showCreatorDetails && <th>{t('threats.hidden')}</th>}
+                  {showCreatorDetails && <th>{t('threats.lateActivation')}</th>}
                 </tr>
               </thead>
               <tbody>
@@ -72,8 +76,8 @@ export default function ThreatsTab({ mission, settings }: ThreatsTabProps) {
                     <td>{threat.count}</td>
                     <td>{t('threats.unrecorded')}</td>
                     <td>{formatThreatPosition(threat, mission.meta.theatre, settings.coordinateFormat)}</td>
-                    <td>{threat.hidden ? t('common.yes') : t('common.no')}</td>
-                    <td>{threat.lateActivation ? t('common.yes') : t('common.no')}</td>
+                    {showCreatorDetails && <td>{threat.hidden ? t('common.yes') : t('common.no')}</td>}
+                    {showCreatorDetails && <td>{threat.lateActivation ? t('common.yes') : t('common.no')}</td>}
                   </tr>
                 ))}
               </tbody>
@@ -91,37 +95,39 @@ export default function ThreatsTab({ mission, settings }: ThreatsTabProps) {
         )}
       </section>
       
-      <section className="section">
-        <h3>{t('threats.enemyAircraft')}</h3>
-        {otherEnemies.length === 0 ? (
-          <p>{t('threats.noEnemyAircraft')}</p>
-        ) : (
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>{t('threats.category')}</th>
-                <th>{t('threats.type')}</th>
-                <th>{t('threats.count')}</th>
-                <th>{t('threats.position')}</th>
-                <th>{t('threats.appearance')}</th>
-                <th>{t('threats.hidden')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {otherEnemies.map((g, i) => (
-                <tr key={groupKey(g, i)}>
-                  <td>{g.category}</td>
-                  <td>{g.type}</td>
-                  <td>{g.count}</td>
-                  <td>{formatThreatPosition(g, mission.meta.theatre, settings.coordinateFormat)}</td>
-                  <td>{formatTime(g.startTime, t)}</td>
-                  <td>{g.hidden ? t('common.yes') : t('common.no')}</td>
+      {showCreatorDetails && (
+        <section className="section">
+          <h3>{t('threats.enemyAircraft')}</h3>
+          {otherEnemies.length === 0 ? (
+            <p>{t('threats.noEnemyAircraft')}</p>
+          ) : (
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>{t('threats.category')}</th>
+                  <th>{t('threats.type')}</th>
+                  <th>{t('threats.count')}</th>
+                  <th>{t('threats.position')}</th>
+                  <th>{t('threats.appearance')}</th>
+                  <th>{t('threats.hidden')}</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </section>
+              </thead>
+              <tbody>
+                {otherEnemies.map((g, i) => (
+                  <tr key={groupKey(g, i)}>
+                    <td>{g.category}</td>
+                    <td>{g.type}</td>
+                    <td>{g.count}</td>
+                    <td>{formatThreatPosition(g, viewMission.meta.theatre, settings.coordinateFormat)}</td>
+                    <td>{formatTime(g.startTime, t)}</td>
+                    <td>{g.hidden ? t('common.yes') : t('common.no')}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </section>
+      )}
       
       <section className="section">
         <h3>{t('threats.enemyShips')}</h3>

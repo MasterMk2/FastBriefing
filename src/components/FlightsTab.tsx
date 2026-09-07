@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import type { MissionData, DisplaySettings, Flight, MissionMeta } from '../types/mission';
@@ -6,6 +6,7 @@ import { calculateBearing, formatCoordinate, getDefaultCoordinateFormat } from '
 import { getMagneticVariation, trueToMagnetic } from '../utils/magvar';
 import { formatEtaLocal, formatEtaZulu, missionZuluDate } from '../utils/time';
 import { formatAltitude, formatSpeed, formatDistance } from '../utils/units';
+import { applyViewMode } from '../utils/viewMode';
 
 interface FlightsTabProps {
   mission: MissionData;
@@ -16,8 +17,9 @@ export default function FlightsTab({ mission, settings }: FlightsTabProps) {
   const { t } = useTranslation();
   const [selectedFlight, setSelectedFlight] = useState<Flight | null>(null);
   const [side, setSide] = useState<'blue' | 'red'>('blue');
-  
-  const flights = side === 'blue' ? mission.coalitions.blue.flights : mission.coalitions.red.flights;
+  const viewMission = useMemo(() => applyViewMode(mission, settings.viewMode), [mission, settings.viewMode]);
+  const flights = side === 'blue' ? viewMission.coalitions.blue.flights : viewMission.coalitions.red.flights;
+  const visibleSelectedFlight = selectedFlight && flights.includes(selectedFlight) ? selectedFlight : null;
   
   return (
     <div className="tab-panel flights">
@@ -46,13 +48,13 @@ export default function FlightsTab({ mission, settings }: FlightsTabProps) {
           ))}
         </aside>
         
-        {selectedFlight && (
+        {visibleSelectedFlight && (
           <main className="flight-detail">
-            <FlightDetail flight={selectedFlight} settings={settings} meta={mission.meta} />
+            <FlightDetail flight={visibleSelectedFlight} settings={settings} meta={viewMission.meta} />
           </main>
         )}
         
-        {!selectedFlight && flights.length > 0 && (
+        {!visibleSelectedFlight && flights.length > 0 && (
           <main className="flight-detail empty">
             <p>{t('flights.selectPrompt')}</p>
           </main>
