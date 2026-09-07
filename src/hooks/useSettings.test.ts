@@ -45,7 +45,7 @@ describe('useSettings persistence', () => {
     });
   });
 
-  it('テーマ未保存の現行設定はdefaultへマイグレーションする', () => {
+  it('テーマ未保存の現行設定はFFSへフォールバックする', () => {
     const stored = JSON.stringify({
       settingsVersion: SETTINGS_VERSION,
       coordinateFormat: 'MGRS',
@@ -54,7 +54,7 @@ describe('useSettings persistence', () => {
     expect(loadSettings(createStorage(stored))).toEqual({
       ...DEFAULT_SETTINGS,
       coordinateFormat: 'MGRS',
-      theme: 'default',
+      theme: 'ffs',
     });
   });
 
@@ -70,12 +70,40 @@ describe('useSettings persistence', () => {
     });
   });
 
-  it('バージョン無しと古いバージョンは既定値へ移行する', () => {
+  it('バージョン無しと未知のバージョンは既定値へ移行する', () => {
     const withoutVersion = JSON.stringify({ coordinateFormat: 'MGRS' });
-    const oldVersion = JSON.stringify({ settingsVersion: SETTINGS_VERSION - 1, coordinateFormat: 'MGRS' });
+    const unknownVersion = JSON.stringify({ settingsVersion: 0, coordinateFormat: 'MGRS' });
 
     expect(loadSettings(createStorage(withoutVersion))).toEqual(DEFAULT_SETTINGS);
-    expect(loadSettings(createStorage(oldVersion))).toEqual(DEFAULT_SETTINGS);
+    expect(loadSettings(createStorage(unknownVersion))).toEqual(DEFAULT_SETTINGS);
+  });
+
+  it('v1記録は他項目を保持したままFFSへ移行する', () => {
+    const stored = JSON.stringify({
+      settingsVersion: 1,
+      coordinateFormat: 'MGRS',
+      language: 'en',
+      theme: 'default',
+    });
+
+    expect(loadSettings(createStorage(stored))).toEqual({
+      ...DEFAULT_SETTINGS,
+      coordinateFormat: 'MGRS',
+      language: 'en',
+      theme: 'ffs',
+    });
+  });
+
+  it('v2記録のdefault明示選択は尊重する', () => {
+    const stored = JSON.stringify({
+      settingsVersion: SETTINGS_VERSION,
+      theme: 'default',
+    });
+
+    expect(loadSettings(createStorage(stored))).toEqual({
+      ...DEFAULT_SETTINGS,
+      theme: 'default',
+    });
   });
 
   it('保存値には現在のスキーマバージョンを付ける', () => {

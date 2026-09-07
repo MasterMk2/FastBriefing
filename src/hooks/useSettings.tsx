@@ -23,7 +23,7 @@ export const DEFAULT_SETTINGS: Readonly<DisplaySettings> = {
   viewMode: 'pilot',
   language: DEFAULT_LANGUAGE,
   outputLanguage: DEFAULT_LANGUAGE,
-  theme: 'default',
+  theme: 'ffs',
 };
 
 export type SettingsStorage = Pick<Storage, 'getItem' | 'setItem'>;
@@ -72,8 +72,7 @@ function validateSettings(value: Record<string, unknown>): DisplaySettings {
     viewMode: enumOrDefault(value.viewMode, VIEW_MODES, DEFAULT_SETTINGS.viewMode),
     language: enumOrDefault(value.language, LANGUAGES, DEFAULT_SETTINGS.language),
     outputLanguage: enumOrDefault(value.outputLanguage, LANGUAGES, DEFAULT_SETTINGS.outputLanguage),
-    // Version 1 records created before themes existed migrate by falling back
-    // to the only available theme while preserving the other validated fields.
+    // Unknown or missing theme values fall back to the default theme (FFS).
     theme: enumOrDefault(value.theme, THEMES, DEFAULT_SETTINGS.theme),
   };
 }
@@ -92,6 +91,12 @@ export function migrateSettings(value: unknown): DisplaySettings {
   switch (value.settingsVersion) {
     case SETTINGS_VERSION:
       return validateSettings(value);
+    case 1:
+      // v1 records predate the FFS default: a stored 'default' cannot be told
+      // apart from an implicit choice, so migrate every v1 record to 'ffs'
+      // while preserving the other validated fields. Explicit 'default'
+      // choices made afterwards (v2) are respected by validateSettings.
+      return { ...validateSettings(value), theme: 'ffs' };
     default:
       console.warn('FastBriefing settings version is missing or unsupported; resetting to defaults.');
       return cloneDefaultSettings();

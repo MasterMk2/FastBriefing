@@ -4,7 +4,7 @@ import en from './locales/en.json';
 import ja from './locales/ja.json';
 
 export const SETTINGS_STORAGE_KEY = 'fastbriefing-settings';
-export const SETTINGS_VERSION = 1;
+export const SETTINGS_VERSION = 2;
 export const SUPPORTED_LANGUAGES = ['ja', 'en'] as const;
 export type SupportedLanguage = typeof SUPPORTED_LANGUAGES[number];
 export const DEFAULT_LANGUAGE: SupportedLanguage = 'ja';
