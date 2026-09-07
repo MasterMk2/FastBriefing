@@ -10,7 +10,7 @@ import i18n, {
 
 export const SETTINGS_STORAGE_KEY = I18N_SETTINGS_STORAGE_KEY;
 export const SETTINGS_VERSION = I18N_SETTINGS_VERSION;
-export const THEMES = ['default'] as const;
+export const THEMES = ['default', 'ffs'] as const;
 
 export const DEFAULT_SETTINGS: Readonly<DisplaySettings> = {
   coordinateFormat: 'DDM',

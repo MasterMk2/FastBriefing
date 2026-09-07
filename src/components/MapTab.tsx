@@ -18,9 +18,9 @@ type LatLon = [number, number];
 
 const DEFAULT_CENTER: LatLon = [42.0, 43.0];
 const DEFAULT_ZOOM = 7;
-const BLUE_FLIGHT_COLOR_TOKEN = '--color-coalition-blue';
-const RED_FLIGHT_COLOR_TOKEN = '--color-coalition-red';
-const NEUTRAL_FLIGHT_COLOR_TOKEN = '--color-coalition-neutral';
+const BLUE_FLIGHT_COLOR_TOKEN = '--color-map-coalition-blue';
+const RED_FLIGHT_COLOR_TOKEN = '--color-map-coalition-red';
+const NEUTRAL_FLIGHT_COLOR_TOKEN = '--color-map-coalition-neutral';
 const THREAT_ENGAGEMENT_COLOR_TOKEN = '--color-threat-engagement';
 const THREAT_DETECTION_COLOR_TOKEN = '--color-threat-detection';
 const DEFAULT_ZONE_COLOR_TOKEN = '--color-zone-default';

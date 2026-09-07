@@ -6,7 +6,8 @@
     "outputLanguage": "出力言語",
     "theme": "テーマ",
     "themes": {
-      "default": "標準"
+      "default": "標準",
+      "ffs": "FFS"
     },
     "japanese": "日本語",
     "english": "English",

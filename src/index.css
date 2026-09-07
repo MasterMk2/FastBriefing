@@ -48,6 +48,9 @@
   --color-coalition-blue: #0066ff;
   --color-coalition-red: #ff0000;
   --color-coalition-neutral: #666666;
+  --color-map-coalition-blue: #0066ff;
+  --color-map-coalition-red: #ff0000;
+  --color-map-coalition-neutral: #666666;
   --color-threat-engagement: #ff0000;
   --color-threat-detection: #ff0000;
   --color-threat-engagement-background: rgba(255, 0, 0, 0.1);
@@ -66,6 +69,145 @@
 
 /* Add future theme overrides as :root[data-theme="theme-name"] blocks. */
 :root[data-theme="default"] {
+}
+
+/* FFS 公式サイト freedomflight.jp の配色に準拠 */
+:root[data-theme="ffs"] {
+  /* Graphite surfaces and foregrounds. */
+  --color-page-background: #101113;
+  --color-text: #e8e6e1;
+  --color-surface: #17191d;
+  --color-heading: #e8e6e1;
+  --color-border: #272a2f;
+  --color-control-border: #272a2f;
+  --color-border-dashed: #8b8a86;
+  --color-border-light: #1f2226;
+  --color-text-secondary: #8b8a86;
+  --color-text-tertiary: #8b8a86;
+  --color-text-muted: #8b8a86;
+  --color-on-accent: #101113;
+  --color-code-heading: #e8e6e1;
+  --color-neutral-badge-background: #1c1f24;
+
+  /* Smoked brass accent. */
+  --color-accent: #c2a76c;
+  --color-accent-hover: #8d7a4d;
+  --color-surface-accent-hover: rgba(194,167,108,.09);
+  --color-surface-hover: #1c1f24;
+  --color-surface-subtle: #15171a;
+  --color-surface-selection-hover: rgba(194,167,108,.09);
+
+  /* State surfaces use the FFS status colors at low opacity. */
+  --color-surface-info: rgba(92,158,99,.16);
+  --color-info-border: #5c9e63;
+  --color-info-text: #5c9e63;
+  --color-error-text: #cd6a61;
+  --color-error-background: rgba(205,106,97,.16);
+  --color-surface-warning: rgba(195,154,78,.16);
+  --color-warning-border: #c39a4e;
+  --color-warning-text: #c39a4e;
+  --color-surface-danger: rgba(205,106,97,.16);
+  --color-danger-text: #cd6a61;
+  --color-task-red-border: #e09792;
+  --color-neutral-border: #272a2f;
+
+  /* Dark code and drag/drop overlays remain legible on graphite surfaces. */
+  --color-code-background: #101113;
+  --color-code-text: #e8e6e1;
+  --color-drop-active-background: rgba(194,167,108,.09);
+  --color-accent-ring: rgba(194,167,108,.28);
+  --color-drop-overlay-background: rgba(16,17,19,.94);
+  --color-drop-overlay-text: #c2a76c;
+  --color-overlay: rgba(16,17,19,.9);
+  --shadow-card: rgba(0,0,0,.4);
+
+  /* FFS coalition tones for UI chips and side labels. */
+  --color-coalition-blue: #9db8dc;
+  --color-coalition-red: #e09792;
+  --color-coalition-neutral: #8b8a86;
+
+  /* Darkened FFS hues keep flight paths distinct on light OSM tiles. */
+  --color-map-coalition-blue: #315d8f;
+  --color-map-coalition-red: #a64a45;
+  --color-map-coalition-neutral: #6b6c6a;
+  --color-threat-engagement: #9b3b35;
+  --color-threat-detection: #8c6220;
+  --color-threat-engagement-background: rgba(205,106,97,.16);
+  --color-zone-default: #7b622f;
+  --color-drawing-default: #4a4d52;
+
+  /* Dark, map-safe marker colors; export canvases stay paper-white. */
+  --color-map-waypoint-background: #272a2f;
+  --color-map-marker-foreground: #e8e6e1;
+  --color-map-airbase: #3e7b48;
+  --color-map-enemy: #a64a45;
+  --color-map-support: #8b661f;
+  --shadow-map-marker: rgba(16,17,19,.45);
+  --color-export-canvas-background: #ffffff;
+}
+
+/* Printed briefings always use the light, default palette even in FFS mode. */
+@media print {
+  :root[data-theme="ffs"] {
+    --color-page-background: #f5f5f5;
+    --color-text: #333;
+    --color-surface: #fff;
+    --color-heading: #1a1a1a;
+    --color-border: #e0e0e0;
+    --color-control-border: #ddd;
+    --color-border-dashed: #ccc;
+    --color-border-light: #eee;
+    --color-text-secondary: #666;
+    --color-text-tertiary: #555;
+    --color-text-muted: #888;
+    --color-on-accent: #fff;
+    --color-code-heading: #fff;
+    --color-neutral-badge-background: #e0e0e0;
+    --color-accent: #0066ff;
+    --color-accent-hover: #0052cc;
+    --color-surface-accent-hover: #f8faff;
+    --color-surface-hover: #f0f0f0;
+    --color-surface-subtle: #fafafa;
+    --color-surface-selection-hover: #eef5ff;
+    --color-surface-info: #e3f2fd;
+    --color-info-border: #90caf9;
+    --color-info-text: #0d47a1;
+    --color-error-text: #d32f2f;
+    --color-error-background: #ffebee;
+    --color-surface-warning: #fff3e0;
+    --color-warning-border: #ffcc80;
+    --color-warning-text: #e65100;
+    --color-surface-danger: #fce4ec;
+    --color-danger-text: #c2185b;
+    --color-task-red-border: #e53935;
+    --color-neutral-border: #757575;
+    --color-code-background: #1e1e1e;
+    --color-code-text: #d4d4d4;
+    --color-drop-active-background: #eaf2ff;
+    --color-accent-ring: rgba(0, 102, 255, 0.15);
+    --color-drop-overlay-background: rgba(234, 242, 255, 0.94);
+    --color-drop-overlay-text: #0044aa;
+    --color-overlay: rgba(255, 255, 255, 0.9);
+    --shadow-card: rgba(0, 0, 0, 0.1);
+    --color-coalition-blue: #0066ff;
+    --color-coalition-red: #ff0000;
+    --color-coalition-neutral: #666666;
+    --color-map-coalition-blue: #0066ff;
+    --color-map-coalition-red: #ff0000;
+    --color-map-coalition-neutral: #666666;
+    --color-threat-engagement: #ff0000;
+    --color-threat-detection: #ff0000;
+    --color-threat-engagement-background: rgba(255, 0, 0, 0.1);
+    --color-zone-default: #3388ff;
+    --color-drawing-default: #ff0000;
+    --color-map-waypoint-background: #333;
+    --color-map-marker-foreground: #fff;
+    --color-map-airbase: #4CAF50;
+    --color-map-enemy: #f44336;
+    --color-map-support: #FF9800;
+    --shadow-map-marker: rgba(0, 0, 0, 0.3);
+    --color-export-canvas-background: #ffffff;
+  }
 }
 
 * {
