@@ -169,7 +169,10 @@ export default function MapTab({ mission, settings }: MapTabProps) {
             <LayerGroup>
               {viewMission.coalitions.blue.airbases.map(ab => {
                 if (!isResolvedLatLon(ab.latlon, ab.latlonResolved)) return null;
-                const markerLabel = `${t('common.blue')} ${ab.name}`;
+                // A .miz carries no airfield names, so ab.name is empty for
+                // every real mission and this label was rendering as a bare
+                // "Blue " with nothing after it.
+                const markerLabel = `${t('common.blue')} ${ab.name || t('map.airbaseFallback', { id: ab.id })}`;
                 return (
                   <Marker
                     key={`blue-airbase-${ab.id}`}
@@ -184,7 +187,7 @@ export default function MapTab({ mission, settings }: MapTabProps) {
               })}
               {viewMission.coalitions.red.airbases.map(ab => {
                 if (!isResolvedLatLon(ab.latlon, ab.latlonResolved)) return null;
-                const markerLabel = `${t('common.red')} ${ab.name}`;
+                const markerLabel = `${t('common.red')} ${ab.name || t('map.airbaseFallback', { id: ab.id })}`;
                 return (
                   <Marker
                     key={`red-airbase-${ab.id}`}
