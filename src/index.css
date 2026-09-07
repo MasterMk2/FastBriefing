@@ -821,3 +821,19 @@ body {
     grid-template-columns: 1fr;
   }
 }
+
+.map-legend-range-swatch {
+  display: inline-block;
+  width: 2rem;
+  height: 0.65rem;
+  box-sizing: border-box;
+  border: 2px solid #ff0000;
+}
+
+.map-legend-engagement-swatch {
+  background: rgba(255, 0, 0, 0.1);
+}
+
+.map-legend-detection-swatch {
+  border-style: dashed;
+}

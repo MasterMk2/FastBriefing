@@ -910,6 +910,8 @@ interface ThreatResolution {
   threatRange: number;
   threatRangeSource?: AIGroup['threatRangeSource'];
   threatRangeUnitType?: string;
+  detectionRange: number;
+  detectionRangeUnitType?: string;
 }
 
 function isThreatCandidateCategory(category: string): boolean {
@@ -917,39 +919,91 @@ function isThreatCandidateCategory(category: string): boolean {
   return normalizedCategory === 'vehicle' || normalizedCategory === 'ship';
 }
 
+// DCS uses the vehicle category for some static/support objects. Keep this
+// explicit allow-list in addition to zero-valued reference entries so a
+// missing alias cannot turn a confirmed non-threat into a threat warning.
+const KNOWN_NON_THREAT_UNIT_TYPES = new Set([
+  'house1arm',
+  'gaz-3307',
+  'gaz-3308',
+  'gaz-66',
+  'ural-4320-31',
+  'ural-4320t',
+  'ural-375 pbu',
+  'ural-375',
+  'ural-4320 apa-5d',
+  'zil-131 kung',
+  'zil-131 apa-80',
+  'zil-4331',
+  'zil-135',
+  'atmz-5',
+  'atz-10',
+  'ural atsp-6',
+  'ship_tilde_supply',
+  'speedboat',
+  'elyna',
+  'dry-cargo ship-1',
+  'dry-cargo ship-2',
+  'handywind',
+  'seawise_giant',
+  'harbortug',
+]);
+
+function isKnownNonThreatUnitType(type: string): boolean {
+  return KNOWN_NON_THREAT_UNIT_TYPES.has(type.trim().toLowerCase());
+}
+
 function resolveGroupThreat(units: unknown[], isThreatCandidate: boolean, warnings: string[]): ThreatResolution {
-  let bestRange = 0;
-  let bestSource: AIGroup['threatRangeSource'] = isThreatCandidate ? 'unknown' : undefined;
-  let bestType: string | undefined;
+  let bestThreatRange = 0;
+  let bestThreatType: string | undefined;
+  let bestDetectionRange = 0;
+  let bestDetectionType: string | undefined;
+  let hasUnknownThreatCandidate = false;
+  let hasReferenceData = false;
 
   for (const rawUnit of units) {
     const unit = rawUnit as Record<string, unknown>;
     const type = getString(unit, ['type']);
     const threat = threatRanges[type];
     if (!threat) {
-      if (isThreatCandidate && type) addWarning(warnings, `脅威半径が未収録のため地図に描画できません: ${type}`);
+      if (type) {
+        addWarning(warnings, `参照データに未収録のユニット: ${type}`);
+        if (isThreatCandidate && !isKnownNonThreatUnitType(type)) {
+          hasUnknownThreatCandidate = true;
+          addWarning(warnings, `脅威半径が未収録のため地図に描画できません: ${type}`);
+        }
+      }
       continue;
     }
 
-    const threatRange = threat.threatRange > 0 ? threat.threatRange : threat.detectionRange > 0 ? threat.detectionRange : 0;
-    const source: AIGroup['threatRangeSource'] = threat.threatRange > 0
-      ? 'reference'
-      : threat.detectionRange > 0
-        ? 'detection'
-        : 'reference';
-    const shouldReplace = threatRange > bestRange
-      || (threatRange === bestRange && source === 'reference' && bestSource === 'detection');
-    if (shouldReplace || bestType === undefined) {
-      bestRange = threatRange;
-      bestSource = source;
-      bestType = type;
+    hasReferenceData = true;
+    if (threat.threatRange > bestThreatRange) {
+      bestThreatRange = threat.threatRange;
+      bestThreatType = type;
+    }
+    if (threat.detectionRange > bestDetectionRange) {
+      bestDetectionRange = threat.detectionRange;
+      bestDetectionType = type;
     }
   }
 
+  // A positive combat range always comes from the reference table. If no
+  // combat range is known, retain `unknown` only when an unrecorded candidate
+  // exists; otherwise `reference` means the zero combat range is confirmed.
+  const threatRangeSource: AIGroup['threatRangeSource'] = bestThreatRange > 0
+    ? 'reference'
+    : hasUnknownThreatCandidate
+      ? 'unknown'
+      : hasReferenceData
+        ? 'reference'
+        : undefined;
+
   return {
-    threatRange: bestRange,
-    threatRangeSource: bestSource,
-    threatRangeUnitType: bestType,
+    threatRange: bestThreatRange,
+    threatRangeSource,
+    threatRangeUnitType: bestThreatType,
+    detectionRange: bestDetectionRange,
+    detectionRangeUnitType: bestDetectionType,
   };
 }
 
