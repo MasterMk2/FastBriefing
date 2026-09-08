@@ -54,6 +54,13 @@ function makeMission(overrides: {
     units: [unit('CVN_71', 'Excellent', { x: 1000, y: 2000 })],
     route: { points: [{ x: 1000, y: 2000, alt: 6000, speed: 180, task: { id: 'ComboTask', params: { tasks: [beaconTask, iclsTask, link4Task] } } }] },
   };
+  const refueling = {
+    task: 'Refueling',
+    callsign: { name: 'Texaco Refueling' },
+    frequency: 252000000,
+    units: [unit('KC-135', 'Excellent', { x: 1100, y: 2100 })],
+    route: { points: [{ x: 1100, y: 2100, alt: 6000, speed: 180 }] },
+  };
   const jtac = {
     task: 'GroundAttack',
     frequency: 305000000,
@@ -81,7 +88,7 @@ function makeMission(overrides: {
 
   const coalitionSide = {
     country: [{
-      plane: [{ category: 'plane', group: [flight, tanker] }],
+      plane: [{ category: 'plane', group: [flight, tanker, refueling] }],
       ship: [{ category: 'ship', group: [] }],
       vehicle: [{ category: 'vehicle', group: vehicleGroups.concat([jtac]) }],
     }],
@@ -234,6 +241,15 @@ describe('MissionNormalizer reference-backed layers', () => {
     expect(tanker[0].tacan?.callsign).toBe('TKR');
     expect(tanker[0].icls?.channel).toBe(12);
     expect(tanker[0].link4?.channel).toBe(4);
+  });
+
+  it('normalizes a Refueling task as tanker while retaining legacy Tanker support', () => {
+    const normalized = normalizeMission(makeMission(), settings);
+    const support = normalized.coalitions.blue.support;
+
+    expect(support.find(asset => asset.callsign === 'Texaco')?.kind).toBe('tanker');
+    expect(support.find(asset => asset.callsign === 'Texaco Refueling')?.kind).toBe('tanker');
+    expect(support.filter(asset => asset.kind === 'tanker')).toHaveLength(2);
   });
 
   it('detects JTAC/FAC groups and keeps laser code data when present', () => {

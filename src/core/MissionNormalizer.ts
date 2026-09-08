@@ -679,7 +679,7 @@ function normalizeSupport(
       const carrier = isCarrierType(unitType);
       const jtac = isJTACGroup(unitType, signals.hasFacTask || /JTAC|FAC/i.test(task));
 
-      if (task === 'Tanker') {
+      if (task === 'Tanker' || task === 'Refueling') {
         support.push(normalizeTanker(groupData, dictionary, theatre, signals));
       } else if (task === 'AWACS') {
         support.push(normalizeAWACS(groupData, dictionary, theatre, signals));
