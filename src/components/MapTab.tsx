@@ -4,6 +4,9 @@ import type { TFunction } from 'i18next';
 import L from 'leaflet';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, Circle, LayerGroup, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
+import markerIcon from 'leaflet/dist/images/marker-icon.png';
+import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png';
+import markerShadow from 'leaflet/dist/images/marker-shadow.png';
 import type { DisplaySettings, Drawing, Flight, MissionData, SupportAsset, TriggerZone } from '../types/mission';
 import { dcsToLatLon } from '../utils/coordinates';
 import { applyViewMode } from '../utils/viewMode';
@@ -25,6 +28,17 @@ const THREAT_ENGAGEMENT_COLOR_TOKEN = '--color-threat-engagement';
 const THREAT_DETECTION_COLOR_TOKEN = '--color-threat-detection';
 const DEFAULT_ZONE_COLOR_TOKEN = '--color-zone-default';
 const DEFAULT_DRAWING_COLOR_TOKEN = '--color-drawing-default';
+
+const defaultMarkerIcon = L.icon({
+  iconUrl: markerIcon,
+  iconRetinaUrl: markerIcon2x,
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+  tooltipAnchor: [16, -28],
+  shadowUrl: markerShadow,
+  shadowSize: [41, 41],
+});
 
 function getThemeColor(token: string): string {
   if (typeof document === 'undefined') return `var(${token})`;
@@ -114,6 +128,7 @@ export default function MapTab({ mission, settings }: MapTabProps) {
               {isResolvedLatLon(viewMission.coalitions.blue.bullseye.latlon, viewMission.coalitions.blue.bullseye.latlonResolved) && (
                 <Marker
                   position={viewMission.coalitions.blue.bullseye.latlon}
+                  icon={defaultMarkerIcon}
                   alt={`${t('common.blue')} Bullseye`}
                   title={`${t('common.blue')} Bullseye`}
                 >
@@ -123,6 +138,7 @@ export default function MapTab({ mission, settings }: MapTabProps) {
               {isResolvedLatLon(viewMission.coalitions.red.bullseye.latlon, viewMission.coalitions.red.bullseye.latlonResolved) && (
                 <Marker
                   position={viewMission.coalitions.red.bullseye.latlon}
+                  icon={defaultMarkerIcon}
                   alt={`${t('common.red')} Bullseye`}
                   title={`${t('common.red')} Bullseye`}
                 >
@@ -141,6 +157,7 @@ export default function MapTab({ mission, settings }: MapTabProps) {
                   <Marker
                     key={`blue-nav-${np.index}`}
                     position={np.latlon}
+                    icon={defaultMarkerIcon}
                     alt={markerLabel}
                     title={markerLabel}
                   >
@@ -155,6 +172,7 @@ export default function MapTab({ mission, settings }: MapTabProps) {
                   <Marker
                     key={`red-nav-${np.index}`}
                     position={np.latlon}
+                    icon={defaultMarkerIcon}
                     alt={markerLabel}
                     title={markerLabel}
                   >
@@ -606,7 +624,7 @@ function DrawingLayer({ drawing, theatre }: { drawing: Drawing; theatre: string 
           const position = positions[0];
           if (!position) return null;
           return (
-            <Marker key={key} position={position} alt={object.name} title={object.name}>
+            <Marker key={key} position={position} icon={defaultMarkerIcon} alt={object.name} title={object.name}>
               <Popup>{object.name}</Popup>
             </Marker>
           );

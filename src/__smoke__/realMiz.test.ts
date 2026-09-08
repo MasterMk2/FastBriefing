@@ -51,6 +51,29 @@ function hasSourceClientPylons(value: unknown): boolean {
   return Object.values(value).some(item => hasSourceClientPylons(item));
 }
 
+function sourceGroupCollectionElements(value: unknown): unknown[] {
+  if (Array.isArray(value)) return value;
+  if (!isRecord(value)) return [];
+  const entries = Object.entries(value);
+  if (entries.length > 0 && entries.every(([key]) => /^\d+$/.test(key))) {
+    return entries
+      .sort(([left], [right]) => Number(left) - Number(right))
+      .map(([, item]) => item);
+  }
+  return entries.length === 0 ? [] : [value];
+}
+
+function hasSourceGroupTask(value: unknown, task: string): boolean {
+  if (Array.isArray(value)) return value.some(item => hasSourceGroupTask(item, task));
+  if (!isRecord(value)) return false;
+  return Object.entries(value).some(([key, child]) => {
+    if (key === 'group') {
+      return sourceGroupCollectionElements(child).some(item => isRecord(item) && item.task === task);
+    }
+    return hasSourceGroupTask(child, task);
+  });
+}
+
 function hasHiddenFlag(value: unknown): boolean {
   return isRecord(value) && value.hidden === true;
 }
@@ -89,6 +112,7 @@ describe.skipIf(!smokeDirectory)('real .miz smoke test', () => {
     let threatMissionCount = 0;
     let hiddenMissionCount = 0;
     let reducedPilotMissionCount = 0;
+    let refuelingMissionCount = 0;
 
     for (const name of names) {
       let parsed: Awaited<ReturnType<typeof parseMissionArchive>>;
@@ -133,6 +157,12 @@ describe.skipIf(!smokeDirectory)('real .miz smoke test', () => {
       const expectedUtcOffset = utcOffsetData[parsed.theatre as keyof typeof utcOffsetData];
       const sourceHasClientData = hasSourceClientFlight(parsed.mission);
       const sourceHasPylonData = hasSourceClientPylons(parsed.mission);
+      const sourceHasRefuelingTask = hasSourceGroupTask(parsed.mission, 'Refueling');
+      const tankerSupport = [
+        ...normalized.coalitions.blue.support,
+        ...normalized.coalitions.red.support,
+        ...normalized.coalitions.neutral.support,
+      ].filter(asset => asset.kind === 'tanker');
 
       if (pylonCount > 0) pylonMissionCount += 1;
       if (threatGroups.length > 0) threatMissionCount += 1;
@@ -147,6 +177,8 @@ describe.skipIf(!smokeDirectory)('real .miz smoke test', () => {
           warnings: normalized.warnings.length,
           sourceHasClientData,
           sourceHasPylonData,
+          sourceHasRefuelingTask,
+          tankerSupportCount: tankerSupport.length,
           theatre: parsed.theatre,
           utcOffset: normalized.meta.utcOffset,
           sortie: normalized.meta.sortie,
@@ -170,6 +202,10 @@ describe.skipIf(!smokeDirectory)('real .miz smoke test', () => {
       if (sourceHasClientData && sourceHasPylonData) {
         expect.soft(pylonCount, `${name}: pylon count`).toBeGreaterThan(0);
       }
+      if (sourceHasRefuelingTask) {
+        refuelingMissionCount += 1;
+        expect.soft(tankerSupport.length, `${name}: Refueling tanker support count`).toBeGreaterThan(0);
+      }
       if (threatCandidateGroups.length > 0) {
         expect.soft(threatGroups.length, `${name}: resolved threat group count`).toBeGreaterThan(0);
         expect.soft(threatGroups.every(group => (group.threatRange ?? 0) > 0), `${name}: threat range`).toBe(true);
@@ -179,6 +215,12 @@ describe.skipIf(!smokeDirectory)('real .miz smoke test', () => {
     expect(parseFailures, `解析に失敗した .miz: ${parseFailures.join('; ')}`).toEqual([]);
     expect(pylonMissionCount, '搭載パイロンを取得できたミッション数').toBeGreaterThan(0);
     expect(threatMissionCount, '脅威半径を解決できたミッション数').toBeGreaterThan(0);
+    console.log(JSON.stringify({
+      refueling: {
+        missionCount: refuelingMissionCount,
+        condition: '元 mission に task=Refueling があるファイルのみ tanker support を検証',
+      },
+    }));
     if (hiddenMissionCount === 0) {
       console.log(JSON.stringify({
         viewMode: {
