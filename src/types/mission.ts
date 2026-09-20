@@ -294,8 +294,8 @@ export interface SMEACNotes {
 }
 
 export interface FlightNotes {
-  jokerFuel: number;
-  bingoFuel: number;
+  jokerFuel: number | null;
+  bingoFuel: number | null;
   tot: string;
   pilotName: string;
   customNotes: string;

@@ -2,10 +2,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ChangeEvent, DragEvent as ReactDragEvent, KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { MissionParser } from './core/MissionParser';
 import { normalizeMission } from './core/MissionNormalizer';
-import type { DisplaySettings, MissionData } from './types/mission';
+import type { DisplaySettings, MissionData, UserNotes } from './types/mission';
 import MissionView from './components/MissionView';
 import { THEMES, useSettings } from './hooks/useSettings';
 import { useTranslation } from 'react-i18next';
+import { createMissionKey, emptyUserNotes, readStoredNotes, saveStoredNotes } from './utils/notes';
 
 function App() {
   const [missionData, setMissionData] = useState<MissionData | null>(null);
@@ -13,6 +14,7 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [storageFailed, setStorageFailed] = useState(false);
   const { settings, setViewMode, setLanguage, setTheme } = useSettings();
   const { t } = useTranslation();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -48,8 +50,13 @@ function App() {
     try {
       const parsed = await parser.parse(file);
       if (parserRef.current !== parser || parseGenerationRef.current !== generation) return;
+      const missionKey = await createMissionKey(file);
+      if (parserRef.current !== parser || parseGenerationRef.current !== generation) return;
 
-      setMissionData(normalizeMission(parsed, settings));
+      const normalized = normalizeMission(parsed, settings);
+      normalized.userNotes = readStoredNotes(missionKey) ?? emptyUserNotes(missionKey);
+      setStorageFailed(false);
+      setMissionData(normalized);
     } catch (err) {
       if (parserRef.current === parser && parseGenerationRef.current === generation && !isAbortError(err)) {
         const message = err instanceof Error ? err.message : '';
@@ -62,6 +69,17 @@ function App() {
       }
     }
   }, [settings, t]);
+
+  const handleNotesChange = useCallback((notes: UserNotes) => {
+    setMissionData(current => current?.userNotes.missionKey === notes.missionKey
+      ? { ...current, userNotes: notes }
+      : current);
+  }, []);
+
+  useEffect(() => {
+    if (!missionData?.userNotes.missionKey) return;
+    setStorageFailed(!saveStoredNotes(missionData.userNotes));
+  }, [missionData?.userNotes]);
 
   const handleFiles = useCallback((fileList: FileList | readonly File[]) => {
     const files = Array.from(fileList);
@@ -227,7 +245,7 @@ function App() {
             </label>
           </div>
         ) : (
-          <MissionView mission={missionData} settings={settings} />
+          <MissionView mission={missionData} settings={settings} onNotesChange={handleNotesChange} storageFailed={storageFailed} />
         )}
 
         {isDragging && missionData && (

@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
-import type { AIGroup, MissionData, DisplaySettings, MissionMeta } from '../types/mission';
+import type { AIGroup, MissionData, DisplaySettings, MissionMeta, SMEACNotes } from '../types/mission';
 import { formatAltitude, formatSpeed, formatDistance, formatPressure, formatTemperature } from '../utils/units';
 import { formatCoordinate } from '../utils/coordinates';
 import { buildMetar } from '../utils/metar';
@@ -30,6 +30,25 @@ export default function ExportTab({ mission, settings }: ExportTabProps) {
   const [markdown, setMarkdown] = useState('');
   const [copyStatus, setCopyStatus] = useState('');
   const [pngStatus, setPngStatus] = useState('');
+
+  const exportNormalizedJson = () => {
+    const visibleFlights = new Set([
+      ...viewMission.coalitions.blue.flights.map(flight => `blue:${flight.groupId}`),
+      ...viewMission.coalitions.red.flights.map(flight => `red:${flight.groupId}`),
+    ]);
+    const userNotes = settings.viewMode === 'creator' ? viewMission.userNotes : {
+      ...viewMission.userNotes,
+      perFlight: Object.fromEntries(Object.entries(viewMission.userNotes.perFlight)
+        .filter(([key]) => visibleFlights.has(key))),
+    };
+    const json = JSON.stringify({ ...viewMission, userNotes }, null, 2);
+    const url = URL.createObjectURL(new Blob([json], { type: 'application/json' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'fastbriefing-mission.json';
+    link.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
+  };
 
   const outputT = (key: string, options?: Record<string, string | number>) => t(key, {
     ...options,
@@ -64,12 +83,32 @@ export default function ExportTab({ mission, settings }: ExportTabProps) {
     });
     md += '\n';
 
+    const smeacSections: (keyof SMEACNotes)[] = [
+      'situation', 'mission', 'execution', 'adminLogistics', 'commandSignal',
+    ];
+    if (smeacSections.some(section => viewMission.userNotes.smeac[section].trim())) {
+      md += `## ${outputT('notes.smeacTitle')}\n\n`;
+      for (const section of smeacSections) {
+        const value = viewMission.userNotes.smeac[section].trim();
+        if (value) md += `### ${outputT(`notes.smeac.${section}`)}\n\n${value}\n\n`;
+      }
+    }
+
     md += `## ${outputT('export.markdown.flightList')}\n\n`;
     [...coalitions.blue.flights, ...coalitions.red.flights].forEach(flight => {
       const side = coalitions.blue.flights.includes(flight) ? 'Blue' : 'Red';
+      const notes = viewMission.userNotes.perFlight[`${side.toLowerCase()}:${flight.groupId}`];
       md += `### ${side} - ${flight.callsign} (${flight.name}) [${flight.type} ×${flight.units.length}]\n\n`;
       md += `- **${outputT('export.markdown.task')}**: ${flight.task}\n`;
       md += `- **${outputT('export.markdown.groupFrequency')}**: ${(flight.frequency / 1000000).toFixed(3)} MHz (${flight.modulation === 0 ? 'AM' : 'FM'})\n\n`;
+      if (notes) {
+        if (notes.pilotName) md += `- **${outputT('notes.pilotName')}**: ${notes.pilotName}\n`;
+        if (notes.tot) md += `- **${outputT('notes.tot')}**: ${notes.tot}\n`;
+        if (notes.jokerFuel !== null) md += `- **${outputT('notes.jokerFuel')}**: ${notes.jokerFuel}\n`;
+        if (notes.bingoFuel !== null) md += `- **${outputT('notes.bingoFuel')}**: ${notes.bingoFuel}\n`;
+        if (notes.customNotes) md += `- **${outputT('notes.customNotes')}**: ${notes.customNotes}\n`;
+        md += '\n';
+      }
 
       md += `#### ${outputT('export.markdown.route')}\n\n`;
       md += `| # | ${outputT('export.markdown.name')} | ${outputT('export.markdown.type')} | ${outputT('export.markdown.coordinate')} | ${outputT('export.markdown.altitude')} | ${outputT('export.markdown.speed')} | ${outputT('export.markdown.eta')} |\n|---|------|------|------|------|------|-----|\n`;
@@ -184,6 +223,7 @@ export default function ExportTab({ mission, settings }: ExportTabProps) {
     <div className="tab-panel export">
       <div className="export-actions">
         <button onClick={generateMarkdown} className="btn btn-primary">{t('export.generateMarkdown')}</button>
+        <button onClick={exportNormalizedJson} className="btn btn-secondary">{t('export.normalizedJson')}</button>
         <button onClick={copyMarkdown} className="btn" disabled={!markdown}>{t('export.copy')}</button>
         <button onClick={printBriefing} className="btn btn-secondary">{t('export.printPdf')}</button>
         <button onClick={exportPng} className="btn btn-secondary">{t('export.generatePng')}</button>

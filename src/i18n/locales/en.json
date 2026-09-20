@@ -31,6 +31,7 @@
     "comms": "Comms",
     "support": "Support Assets",
     "threats": "Threats",
+    "notes": "Notes",
     "export": "Export",
     "missionSections": "Mission sections",
     "loading": "Loading tab..."
@@ -220,8 +221,34 @@
     "detectionPopup": "{{type}} - {{range}}m",
     "enemyPopup": "{{type}} ×{{count}}"
   },
+  "notes": {
+    "smeacTitle": "SMEAC Briefing",
+    "smeacHelp": "Write each section here. This browser restores your notes when you reopen the same mission.",
+    "smeac": {
+      "situation": "Situation",
+      "mission": "Mission",
+      "execution": "Execution",
+      "adminLogistics": "Admin & Logistics",
+      "commandSignal": "Command & Signal"
+    },
+    "flightTitle": "Flight Notes",
+    "pilotName": "Pilot",
+    "tot": "TOT",
+    "jokerFuel": "Joker Fuel",
+    "bingoFuel": "Bingo Fuel",
+    "customNotes": "Additional Notes",
+    "sidecarTitle": "Sidecar JSON",
+    "sidecarHelp": "Save or restore your notes in a separate file. Import requires the same mission filename and contents.",
+    "exportSidecar": "Save Notes",
+    "importSidecar": "Import Notes",
+    "exported": "Notes saved",
+    "imported": "Notes imported",
+    "importFailed": "Import failed. Check the file format, size, and mission identity.",
+    "storageFailed": "Automatic browser storage failed. Save a sidecar JSON copy."
+  },
   "export": {
     "generateMarkdown": "Generate Markdown",
+    "normalizedJson": "Save Normalized JSON",
     "copy": "Copy",
     "printPdf": "Print / PDF",
     "generatePng": "Generate PNG",

@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { AIGroup, DisplaySettings, Flight, MissionData, MissionMeta, SupportAsset } from '../types/mission';
+import type { AIGroup, DisplaySettings, Flight, FlightNotes, MissionData, MissionMeta, SMEACNotes, SupportAsset } from '../types/mission';
 import { calculateBearing, dcsToLatLon, formatCoordinate, getDefaultCoordinateFormat } from '../utils/coordinates';
 import { getMagneticVariation, trueToMagnetic } from '../utils/magvar';
 import { formatAltitude, formatDistance, formatPressure, formatSpeed, formatTemperature } from '../utils/units';
@@ -42,6 +42,7 @@ export default function PrintView({ mission, settings }: PrintViewProps) {
       </header>
 
       <PrintOverview mission={viewMission} settings={settings} t={printT} />
+      <PrintNotes mission={viewMission} t={printT} />
 
       <p className="print-map-note hint">{printT('export.mapPrintNote')}</p>
 
@@ -51,7 +52,7 @@ export default function PrintView({ mission, settings }: PrintViewProps) {
           <p>{printT('flights.empty')}</p>
         ) : (
           flights.map(({ flight, side }) => (
-            <PrintFlight key={`${side}:${flight.groupId}`} flight={flight} side={side} meta={viewMission.meta} settings={settings} t={printT} />
+            <PrintFlight key={`${side}:${flight.groupId}`} flight={flight} side={side} meta={viewMission.meta} settings={settings} t={printT} notes={viewMission.userNotes.perFlight[`${side.toLowerCase()}:${flight.groupId}`]} />
           ))
         )}
       </section>
@@ -60,6 +61,26 @@ export default function PrintView({ mission, settings }: PrintViewProps) {
       <PrintSupport mission={viewMission} settings={settings} t={printT} />
       <PrintThreats mission={viewMission} settings={settings} t={printT} />
     </div>
+  );
+}
+
+function PrintNotes({ mission, t }: { mission: MissionData; t: PrintTranslator }) {
+  const sections: (keyof SMEACNotes)[] = [
+    'situation', 'mission', 'execution', 'adminLogistics', 'commandSignal',
+  ];
+  const filled = sections.filter(section => mission.userNotes.smeac[section].trim());
+  if (filled.length === 0) return null;
+
+  return (
+    <section className="section print-section print-notes">
+      <h2>{t('notes.smeacTitle')}</h2>
+      {filled.map(section => (
+        <section className="print-subsection" key={section}>
+          <h3>{t(`notes.smeac.${section}`)}</h3>
+          <p className="notes-print-text">{mission.userNotes.smeac[section]}</p>
+        </section>
+      ))}
+    </section>
   );
 }
 
@@ -230,7 +251,7 @@ function PrintOverview({ mission, settings, t }: { mission: MissionData; setting
   );
 }
 
-function PrintFlight({ flight, side, meta, settings, t }: { flight: Flight; side: 'Blue' | 'Red'; meta: MissionMeta; settings: DisplaySettings; t: PrintTranslator }) {
+function PrintFlight({ flight, side, meta, settings, t, notes }: { flight: Flight; side: 'Blue' | 'Red'; meta: MissionMeta; settings: DisplaySettings; t: PrintTranslator; notes?: FlightNotes }) {
   const leadUnit = flight.units[0];
   const aircraftDefaultCoordinateFormat = getDefaultCoordinateFormat(flight.type);
   const missionDate = missionZuluDate(meta);
@@ -252,6 +273,19 @@ function PrintFlight({ flight, side, meta, settings, t }: { flight: Flight; side
           {flight.hidden && <span className="badge hidden">{t('flights.hidden')}</span>}
         </div>
       </header>
+
+      {notes && (notes.pilotName || notes.tot || notes.jokerFuel !== null || notes.bingoFuel !== null || notes.customNotes) && (
+        <section className="section print-subsection">
+          <h4>{t('notes.flightTitle')}</h4>
+          <dl className="info-grid">
+            {notes.pilotName && <><dt>{t('notes.pilotName')}</dt><dd>{notes.pilotName}</dd></>}
+            {notes.tot && <><dt>{t('notes.tot')}</dt><dd>{notes.tot}</dd></>}
+            {notes.jokerFuel !== null && <><dt>{t('notes.jokerFuel')}</dt><dd>{notes.jokerFuel}</dd></>}
+            {notes.bingoFuel !== null && <><dt>{t('notes.bingoFuel')}</dt><dd>{notes.bingoFuel}</dd></>}
+          </dl>
+          {notes.customNotes && <p className="notes-print-text">{notes.customNotes}</p>}
+        </section>
+      )}
 
       <section className="section print-subsection">
         <h4>{t('flights.aircraftRoster')}</h4>

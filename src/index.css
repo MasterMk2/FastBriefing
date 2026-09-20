@@ -1057,3 +1057,54 @@ body {
 .map-legend-detection-swatch {
   border-style: dashed;
 }
+
+.notes-fields,
+.notes-flight-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
+  gap: 1rem;
+}
+
+.notes-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.notes-field-wide {
+  grid-column: 1 / -1;
+}
+
+.notes-field input,
+.notes-field textarea {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 0.6rem;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+}
+
+.notes-flight {
+  margin: 0.75rem 0;
+  padding: 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+}
+
+.notes-flight summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.notes-flight-fields {
+  margin-top: 1rem;
+}
+
+.notes-print-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

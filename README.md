@@ -120,7 +120,8 @@ COPY --from=build /app/dist /usr/share/nginx/html
 2. **概要を確認** — ソーティ名 / マップ / 日付 / 開始時刻（Local/Zulu併記）/ 天候 / タスク文（青・赤・中立）。
 3. **フライトを選ぶ** — 青/赤タブでフライト一覧 → 機体構成・搭載・無線・経路（ナビログ）を確認。`viewMode` で作成者/パイロットを切替（FR-70）。
 4. **地図で俯瞰** — レイヤ切替（フライト経路 / ゾーン / 描画 / 脅威 / 支援機 / 敵 / Bullseye / NavPoints / 飛行場）で必要な情報だけを表示（FR-62）。
-5. **出力** — 「出力」タブで Markdown 生成 → コピー（Discord 貼り付け）、印刷 / PDF（Ctrl+P, A4縦）、PNG/`.miz` 埋め込みは Phase 2 で実装（FR-80〜83）。
+5. **記入欄** — SMEAC の各節と、フライトごとのパイロット・TOT・Joker/Bingo 燃料を記入。同じファイル名・内容の `.miz` を再び開くとブラウザに保存した内容を復元します。サイドカー JSON でも保存・読み込みできます（FR-38、FR-71、FR-72）。
+6. **出力** — 「出力」タブで Markdown、正規化 JSON、印刷 / PDF（Ctrl+P、A4縦）、ブリーフィング要約 PNG を出力できます。`.miz` への PNG 埋め込みは未対応です（FR-09、FR-80、FR-81、FR-83）。
 
 > **ヒント:** 設定（座標形式・単位・言語）はヘッダー右のセレクトで切替。`localStorage` に保存され再訪時に復元されます。
 
@@ -144,7 +145,8 @@ Main
     ├── [通信]     CommsTab — フライト別 / 支援機 / 共通周波数 / 重複警告
     ├── [支援機]   SupportTab — Tanker/AWACS/Carrier/JTAC
     ├── [脅威]     ThreatsTab — SAM/AAA リング / 敵航空機
-    └── [出力]     ExportTab — Markdown / 印刷 / PNG（予定）
+    ├── [記入欄]   NotesTab — SMEAC / フライト別メモ / サイドカー JSON
+    └── [出力]     ExportTab — Markdown / 正規化 JSON / 印刷 / PNG
 ```
 
 ---

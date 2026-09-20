@@ -31,6 +31,7 @@
     "comms": "通信",
     "support": "支援機",
     "threats": "脅威",
+    "notes": "記入欄",
     "export": "出力",
     "missionSections": "ミッションセクション",
     "loading": "タブを読み込み中..."
@@ -220,8 +221,34 @@
     "detectionPopup": "{{type}} - {{range}}m",
     "enemyPopup": "{{type}} ×{{count}}"
   },
+  "notes": {
+    "smeacTitle": "SMEAC ブリーフィング",
+    "smeacHelp": "各節の文章を記入できます。同じミッションを開くと、このブラウザに保存された内容を復元します。",
+    "smeac": {
+      "situation": "Situation / 状況",
+      "mission": "Mission / 任務",
+      "execution": "Execution / 実施",
+      "adminLogistics": "Admin & Logistics / 管理・補給",
+      "commandSignal": "Command & Signal / 指揮・通信"
+    },
+    "flightTitle": "フライト別の追記",
+    "pilotName": "担当パイロット",
+    "tot": "TOT",
+    "jokerFuel": "Joker 燃料",
+    "bingoFuel": "Bingo 燃料",
+    "customNotes": "追加メモ",
+    "sidecarTitle": "サイドカー JSON",
+    "sidecarHelp": "記入内容を別ファイルに保存・復元できます。同じファイル名・内容のミッションにだけ読み込めます。",
+    "exportSidecar": "記入内容を保存",
+    "importSidecar": "記入内容を読み込む",
+    "exported": "記入内容を保存しました",
+    "imported": "記入内容を読み込みました",
+    "importFailed": "読み込みに失敗しました。形式、サイズ、対象ミッションを確認してください。",
+    "storageFailed": "ブラウザへの自動保存に失敗しました。サイドカー JSON を保存してください。"
+  },
   "export": {
     "generateMarkdown": "Markdown生成",
+    "normalizedJson": "正規化JSONを保存",
     "copy": "コピー",
     "printPdf": "印刷 / PDF",
     "generatePng": "PNG生成",
