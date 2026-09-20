@@ -178,10 +178,10 @@ export interface RouteTask {
 export interface LegInfo {
   distance: number;
   trueBearing: number;
-  magneticBearing: number;
-  time: number;
+  magneticBearing?: number;
+  time?: number;
   cumulativeDistance: number;
-  cumulativeTime: number;
+  cumulativeTime?: number;
 }
 
 export interface SupportAsset {

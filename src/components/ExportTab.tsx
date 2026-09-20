@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import type { AIGroup, MissionData, DisplaySettings, MissionMeta, SMEACNotes } from '../types/mission';
 import { formatAltitude, formatSpeed, formatDistance, formatPressure, formatTemperature } from '../utils/units';
-import { formatCoordinate } from '../utils/coordinates';
+import { formatLegDuration, formatRouteCoordinate } from '../utils/routeLegs';
 import { buildMetar } from '../utils/metar';
 import {
   etaZuluDate,
@@ -130,10 +130,13 @@ export default function ExportTab({ mission, settings }: ExportTabProps) {
       }
 
       md += `#### ${outputT('export.markdown.route')}\n\n`;
-      md += `| # | ${outputT('export.markdown.name')} | ${outputT('export.markdown.type')} | ${outputT('export.markdown.coordinate')} | ${outputT('export.markdown.altitude')} | ${outputT('export.markdown.speed')} | ${outputT('export.markdown.eta')} |\n|---|------|------|------|------|------|-----|\n`;
+      md += `| # | ${outputT('export.markdown.name')} | ${outputT('export.markdown.type')} | ${outputT('export.markdown.coordinate')} | ${outputT('export.markdown.altitude')} | ${outputT('export.markdown.speed')} | ${outputT('export.markdown.eta')} | ${outputT('flights.distance')} | ${outputT('flights.bearing')} | ${outputT('flights.legTime')} | ${outputT('flights.cumulativeDistance')} | ${outputT('flights.cumulativeTime')} |\n|---|------|------|------|------|------|-----|------|------|------|------|------|\n`;
       flight.route.forEach(wp => {
-        const coordinate = formatCoordinate(wp.latlon[0], wp.latlon[1], settings.coordinateFormat);
-        md += `| ${wp.index} | ${wp.name} | ${wp.action} | ${coordinate} | ${formatAltitude(wp.alt, settings.altitudeUnit)} | ${formatSpeed(wp.speed, settings.speedUnit)} | ${formatETA(wp.eta, meta)} |\n`;
+        const coordinate = formatRouteCoordinate(wp, settings.coordinateFormat);
+        const bearing = wp.leg ? wp.leg.magneticBearing === undefined
+          ? outputT('flights.trueBearingOnly', { trueBearing: wp.leg.trueBearing.toFixed(0) })
+          : outputT('flights.bearingValue', { trueBearing: wp.leg.trueBearing.toFixed(0), magneticBearing: wp.leg.magneticBearing.toFixed(0) }) : '-';
+        md += `| ${wp.index} | ${wp.name} | ${wp.action} | ${coordinate} | ${formatAltitude(wp.alt, settings.altitudeUnit)} | ${formatSpeed(wp.speed, settings.speedUnit)} | ${formatETA(wp.eta, meta)} | ${wp.leg ? formatDistance(wp.leg.distance, settings.distanceUnit) : '-'} | ${bearing} | ${formatLegDuration(wp.leg?.time)} | ${wp.leg ? formatDistance(wp.leg.cumulativeDistance, settings.distanceUnit) : '-'} | ${formatLegDuration(wp.leg?.cumulativeTime)} |\n`;
       });
       md += '\n';
 

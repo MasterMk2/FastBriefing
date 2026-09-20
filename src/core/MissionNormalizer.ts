@@ -5,6 +5,7 @@ import threatRangeData from '../data/threatRanges.json';
 import utcOffsetData from '../data/utcOffsets.json';
 import weaponData from '../data/weapons.json';
 import cloudPresetData from '../data/cloudPresets.json';
+import { calculateRouteLegs } from '../utils/routeLegs';
 
 interface ThreatRangeReference {
   threatRange: number;
@@ -160,6 +161,11 @@ export function normalizeMission(
   const zones = normalizeZones(mission);
   const drawings = normalizeDrawings(mission);
   const coalitions = normalizeCoalitions(mission, warehouses, dictionary, mapResource, theatre, warnings, zones, drawings);
+  for (const coalition of Object.values(coalitions)) {
+    for (const flight of coalition.flights) {
+      flight.route = calculateRouteLegs(flight.route, meta);
+    }
+  }
   const userNotes = createEmptyUserNotes();
   
   return {

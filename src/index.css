@@ -653,6 +653,15 @@ body {
 
 .flight-detail {
   min-height: 400px;
+  min-width: 0;
+}
+
+.flight-route-scroll {
+  overflow-x: auto;
+}
+
+.flight-route-scroll .data-table {
+  min-width: 90rem;
 }
 
 .flight-detail.empty {

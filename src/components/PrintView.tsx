@@ -1,13 +1,13 @@
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { AIGroup, DisplaySettings, Flight, FlightNotes, MissionData, MissionMeta, SMEACNotes, SupportAsset } from '../types/mission';
-import { calculateBearing, dcsToLatLon, formatCoordinate, getDefaultCoordinateFormat } from '../utils/coordinates';
-import { getMagneticVariation, trueToMagnetic } from '../utils/magvar';
+import { dcsToLatLon, formatCoordinate, getDefaultCoordinateFormat } from '../utils/coordinates';
 import { formatAltitude, formatDistance, formatPressure, formatSpeed, formatTemperature } from '../utils/units';
 import { getMoonInfo, getSunTimes, type SunTimes } from '../utils/astro';
 import { buildMetar } from '../utils/metar';
 import { addSeconds, formatDateYMD, formatEtaLocal, formatEtaZulu, formatTimeHHMM, formatUtcOffset, missionLocalDate, missionZuluDate } from '../utils/time';
 import { applyViewMode } from '../utils/viewMode';
+import { formatLegDuration, formatRouteCoordinate } from '../utils/routeLegs';
 
 interface PrintViewProps {
   mission: MissionData;
@@ -254,7 +254,6 @@ function PrintOverview({ mission, settings, t }: { mission: MissionData; setting
 function PrintFlight({ flight, side, meta, settings, t, notes }: { flight: Flight; side: 'Blue' | 'Red'; meta: MissionMeta; settings: DisplaySettings; t: PrintTranslator; notes?: FlightNotes }) {
   const leadUnit = flight.units[0];
   const aircraftDefaultCoordinateFormat = getDefaultCoordinateFormat(flight.type);
-  const missionDate = missionZuluDate(meta);
   const props = leadUnit ? Object.entries(leadUnit.props) : [];
   const link16 = leadUnit?.datalink?.link16;
 
@@ -382,31 +381,55 @@ function PrintFlight({ flight, side, meta, settings, t, notes }: { flight: Fligh
               <th>{t('flights.altitude')}</th>
               <th>{t('flights.speed')}</th>
               <th>{t('flights.eta')}</th>
-              <th>{t('flights.distance')}</th>
-              <th>{t('flights.bearing')}</th>
             </tr>
           </thead>
           <tbody>
             {flight.route.length === 0 ? (
-              <tr><td colSpan={9}>{t('common.notAvailable')}</td></tr>
-            ) : flight.route.map((waypoint, routeIndex) => {
-              const bearing = getDisplayedBearing(flight.route, routeIndex, meta, missionDate);
-              return (
+              <tr><td colSpan={7}>{t('common.notAvailable')}</td></tr>
+            ) : flight.route.map((waypoint, routeIndex) => (
                 <tr key={`${waypoint.index}:${routeIndex}`}>
                   <td>{waypoint.index}</td>
                   <td>{waypoint.name}</td>
                   <td>{waypoint.action}</td>
-                  <td>{formatCoordinate(waypoint.latlon[0], waypoint.latlon[1], settings.coordinateFormat)}</td>
+                  <td>{formatRouteCoordinate(waypoint, settings.coordinateFormat)}</td>
                   <td>{formatAltitude(waypoint.alt, settings.altitudeUnit)}</td>
                   <td>{formatSpeed(waypoint.speed, settings.speedUnit)}</td>
                   <td>{formatFlightEta(waypoint.eta, meta, t)}</td>
-                  <td>{waypoint.leg ? formatDistance(waypoint.leg.distance, settings.distanceUnit) : '-'}</td>
-                  <td>{bearing ? t('flights.bearingValue', { trueBearing: bearing.trueBearing.toFixed(0), magneticBearing: bearing.magneticBearing.toFixed(0) }) : '-'}</td>
                 </tr>
-              );
-            })}
+              ))}
           </tbody>
         </table>
+        {flight.route.length > 1 && (
+          <>
+            <h5>{t('flights.legSummary')}</h5>
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>{t('flights.distance')}</th>
+                  <th>{t('flights.bearing')}</th>
+                  <th>{t('flights.legTime')}</th>
+                  <th>{t('flights.cumulativeDistance')}</th>
+                  <th>{t('flights.cumulativeTime')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {flight.route.slice(1).map((waypoint, routeIndex) => (
+                  <tr key={`${waypoint.index}:${routeIndex}`}>
+                    <td>{waypoint.index}</td>
+                    <td>{waypoint.leg ? formatDistance(waypoint.leg.distance, settings.distanceUnit) : '-'}</td>
+                    <td>{waypoint.leg ? waypoint.leg.magneticBearing === undefined
+                      ? t('flights.trueBearingOnly', { trueBearing: waypoint.leg.trueBearing.toFixed(0) })
+                      : t('flights.bearingValue', { trueBearing: waypoint.leg.trueBearing.toFixed(0), magneticBearing: waypoint.leg.magneticBearing.toFixed(0) }) : '-'}</td>
+                    <td>{formatLegDuration(waypoint.leg?.time)}</td>
+                    <td>{waypoint.leg ? formatDistance(waypoint.leg.cumulativeDistance, settings.distanceUnit) : '-'}</td>
+                    <td>{formatLegDuration(waypoint.leg?.cumulativeTime)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </>
+        )}
       </section>
 
       {props.length > 0 && (
@@ -749,30 +772,6 @@ function formatFlightEta(eta: number, meta: MissionMeta, t: PrintTranslator): st
     localTime: formatEtaLocal(meta, eta),
     zuluTime: formatEtaZulu(meta, eta),
   });
-}
-
-interface DisplayBearing {
-  trueBearing: number;
-  magneticBearing: number;
-}
-
-function getDisplayedBearing(route: Flight['route'], routeIndex: number, meta: MissionMeta, missionDate: Date): DisplayBearing | null {
-  const waypoint = route[routeIndex];
-  const previousWaypoint = route[routeIndex - 1];
-  if (!waypoint || !previousWaypoint) return null;
-
-  const [fromLat, fromLon] = previousWaypoint.latlon;
-  const [toLat, toLon] = waypoint.latlon;
-  if (![fromLat, fromLon, toLat, toLon].every(Number.isFinite)) return null;
-
-  const trueBearing = calculateBearing(fromLat, fromLon, toLat, toLon);
-  if (!Number.isFinite(trueBearing)) return null;
-
-  const variation = getMagneticVariation(meta.theatre, toLat, toLon, missionDate);
-  return {
-    trueBearing,
-    magneticBearing: trueToMagnetic(trueBearing, variation),
-  };
 }
 
 function formatSupportPosition(support: SupportAsset, theatre: string, coordinateFormat: DisplaySettings['coordinateFormat']): string {
