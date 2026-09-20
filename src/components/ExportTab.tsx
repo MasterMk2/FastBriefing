@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { TFunction } from 'i18next';
 import type { AIGroup, MissionData, DisplaySettings, MissionMeta, SMEACNotes } from '../types/mission';
 import { formatAltitude, formatSpeed, formatDistance, formatPressure, formatTemperature } from '../utils/units';
 import { formatLegDuration, formatRouteCoordinate } from '../utils/routeLegs';
@@ -18,20 +17,31 @@ import PrintView from './PrintView';
 import { useSettings } from '../hooks/useSettings';
 import { applyViewMode } from '../utils/viewMode';
 import { buildGeospatialExport, toGeoJson, toKml } from '../utils/geospatialExport';
+import { planKneeboardPages } from '../utils/kneeboard';
+import { renderKneeboardPages } from '../utils/kneeboardRenderer';
+import { createKneeboardMizCopy, createKneeboardPngZip, numberedKneeboardImages } from '../utils/kneeboardArchive';
 
 interface ExportTabProps {
   mission: MissionData;
   settings: DisplaySettings;
+  sourceFile: File | null;
 }
 
-export default function ExportTab({ mission, settings }: ExportTabProps) {
+export default function ExportTab({ mission, settings, sourceFile }: ExportTabProps) {
   const { t } = useTranslation();
   const { setOutputLanguage } = useSettings();
   const viewMission = useMemo(() => applyViewMode(mission, settings.viewMode), [mission, settings.viewMode]);
   const [markdown, setMarkdown] = useState('');
   const [copyStatus, setCopyStatus] = useState('');
   const [pngStatus, setPngStatus] = useState('');
+  const [pngBusy, setPngBusy] = useState(false);
+  const [kneeboardWidth, setKneeboardWidth] = useState(1536);
+  const [aircraftType, setAircraftType] = useState('');
   const [geoStatus, setGeoStatus] = useState('');
+  const aircraftTypes = useMemo(() => [...new Set([
+    ...viewMission.coalitions.blue.flights,
+    ...viewMission.coalitions.red.flights,
+  ].map(flight => flight.type).filter(type => /^[A-Za-z0-9_-]+$/.test(type)))].sort(), [viewMission]);
 
   const exportGeospatial = (format: 'geojson' | 'kml') => {
     const result = buildGeospatialExport(mission, settings.viewMode);
@@ -215,29 +225,40 @@ export default function ExportTab({ mission, settings }: ExportTabProps) {
     window.print();
   };
 
-  const exportPng = async () => {
+  const exportKneeboard = async (format: 'zip' | 'miz') => {
+    if (pngBusy) return;
+    setPngBusy(true);
     setPngStatus(t('export.pngGenerating'));
 
     try {
-      const canvas = document.createElement('canvas');
-      canvas.width = 1536;
-      canvas.height = 2048;
-      const context = canvas.getContext('2d');
-      if (!context) throw new Error('Canvas 2D context unavailable');
-
-      drawBriefingSummary(context, viewMission, settings, t);
-      const blob = await canvasToBlob(canvas);
-      if (!blob) throw new Error('PNG blob unavailable');
-
+      const outputT = (key: string, options?: Record<string, string | number>) =>
+        t(key, { ...options, lng: settings.outputLanguage });
+      const pages = planKneeboardPages(mission, settings, outputT, aircraftType || null);
+      const pngs = await renderKneeboardPages(pages, kneeboardWidth, outputT);
+      const images = numberedKneeboardImages(pngs);
+      let result: Uint8Array;
+      let filename: string;
+      if (format === 'miz') {
+        if (!sourceFile) throw new Error('Mission source file unavailable');
+        result = createKneeboardMizCopy(new Uint8Array(await sourceFile.arrayBuffer()), images, aircraftType || null);
+        filename = `${safeFilename(sourceFile.name.replace(/\.miz$/i, ''))}-kneeboard.miz`;
+      } else {
+        result = createKneeboardPngZip(images);
+        filename = `${safeFilename(mission.meta.sortie || 'briefing')}-kneeboard.zip`;
+      }
+      const blob = new Blob([result as BlobPart], { type: 'application/zip' });
       const objectUrl = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = objectUrl;
-      link.download = `${safeFilename(mission.meta.sortie || 'briefing')}-briefing.png`;
+      link.download = filename;
       link.click();
       window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
-      setPngStatus(t('export.pngSaved'));
-    } catch {
-      setPngStatus(t('export.pngFailed'));
+      setPngStatus(t('export.pngSaved', { count: images.length }));
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      setPngStatus(t('export.pngFailed', { detail }));
+    } finally {
+      setPngBusy(false);
     }
   };
 
@@ -250,7 +271,20 @@ export default function ExportTab({ mission, settings }: ExportTabProps) {
         <button onClick={() => exportGeospatial('kml')} className="btn btn-secondary">{t('export.kml')}</button>
         <button onClick={copyMarkdown} className="btn" disabled={!markdown}>{t('export.copy')}</button>
         <button onClick={printBriefing} className="btn btn-secondary">{t('export.printPdf')}</button>
-        <button onClick={exportPng} className="btn btn-secondary">{t('export.generatePng')}</button>
+        <button onClick={() => void exportKneeboard('zip')} className="btn btn-secondary" disabled={pngBusy}>{t('export.generatePng')}</button>
+        <button onClick={() => void exportKneeboard('miz')} className="btn btn-secondary" disabled={pngBusy || !sourceFile}>{t('export.embedMiz')}</button>
+        <label>
+          {t('export.kneeboardWidth')}
+          <input type="number" min={768} max={3072} step={3} value={kneeboardWidth}
+            onChange={event => setKneeboardWidth(Number(event.target.value))} />
+        </label>
+        <label>
+          {t('export.kneeboardTarget')}
+          <select value={aircraftType} onChange={event => setAircraftType(event.target.value)}>
+            <option value="">{t('export.kneeboardAll')}</option>
+            {aircraftTypes.map(type => <option key={type} value={type}>{type}</option>)}
+          </select>
+        </label>
         <label>
           {t('app.outputLanguage')}
           <select
@@ -289,90 +323,6 @@ export default function ExportTab({ mission, settings }: ExportTabProps) {
 
 function formatETA(eta: number, meta: MissionMeta): string {
   return `${formatTimeHHMMSS(etaZuluDate(meta, eta))}Z`;
-}
-
-function drawBriefingSummary(
-  context: CanvasRenderingContext2D,
-  mission: MissionData,
-  settings: DisplaySettings,
-  t: TFunction,
-): void {
-  const { meta, weather } = mission;
-  const localDate = missionLocalDate(meta);
-  const zuluDate = missionZuluDate(meta);
-  const metar = buildMetar(weather, { time: zuluDate });
-  const margin = 96;
-  const contentWidth = 1536 - margin * 2;
-  const lineHeight = 42;
-  let y = margin;
-
-  context.fillStyle = getThemeColor('--color-export-canvas-background');
-  context.fillRect(0, 0, 1536, 2048);
-  context.fillStyle = getThemeColor('--color-heading');
-  context.font = 'bold 52px sans-serif';
-  y = drawWrappedCanvasText(context, meta.sortie || t('export.canvas.briefing'), margin, y, contentWidth, lineHeight + 12);
-
-  context.fillStyle = getThemeColor('--color-text-tertiary');
-  context.font = '28px sans-serif';
-  y += 24;
-  const lines = [
-    t('export.canvas.map', { value: meta.theatre }),
-    t('export.canvas.date', { value: formatDateYMD(localDate) }),
-    t('export.canvas.local', { value: `${formatTimeHHMM(localDate)} (${formatUtcOffset(meta.utcOffset)})` }),
-    t('export.canvas.zulu', { value: `${formatTimeHHMM(zuluDate)}Z` }),
-    '',
-    t('export.canvas.weather'),
-    t('export.canvas.temperature', { value: formatTemperature(weather.temperature, settings.temperatureUnit) }),
-    t('export.canvas.qnh', { value: formatPressure(weather.qnh, settings.pressureUnit) }),
-    t('export.canvas.visibility', { value: formatDistance(weather.visibility, settings.distanceUnit) }),
-    t('export.canvas.clouds', { value: weather.clouds.label }),
-    t('export.canvas.metar', { value: metar }),
-  ];
-
-  lines.forEach(line => {
-    y = drawWrappedCanvasText(context, line, margin, y, contentWidth, lineHeight);
-  });
-}
-
-function getThemeColor(token: string): string {
-  if (typeof document === 'undefined') return `var(${token})`;
-  const value = document.defaultView?.getComputedStyle(document.documentElement).getPropertyValue(token).trim();
-  return value || `var(${token})`;
-}
-
-function drawWrappedCanvasText(
-  context: CanvasRenderingContext2D,
-  text: string,
-  x: number,
-  y: number,
-  maxWidth: number,
-  lineHeight: number,
-): number {
-  if (!text) return y + lineHeight;
-
-  let line = '';
-  for (const character of Array.from(text)) {
-    const candidate = line + character;
-    if (line && context.measureText(candidate).width > maxWidth) {
-      context.fillText(line, x, y);
-      y += lineHeight;
-      line = character;
-    } else {
-      line = candidate;
-    }
-  }
-
-  if (line) {
-    context.fillText(line, x, y);
-    y += lineHeight;
-  }
-  return y;
-}
-
-function canvasToBlob(canvas: HTMLCanvasElement): Promise<Blob | null> {
-  return new Promise(resolve => {
-    canvas.toBlob(resolve, 'image/png');
-  });
 }
 
 function safeFilename(value: string): string {

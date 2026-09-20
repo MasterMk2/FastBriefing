@@ -15,6 +15,7 @@ const ExportTab = lazy(() => import('./ExportTab'));
 interface MissionViewProps {
   mission: MissionData;
   settings: DisplaySettings;
+  sourceFile: File | null;
   onNotesChange: (notes: UserNotes) => void;
   storageFailed: boolean;
 }
@@ -27,10 +28,10 @@ const tabs = [
   { id: 'support', component: SupportTab },
   { id: 'threats', component: ThreatsTab },
   { id: 'notes', component: null },
-  { id: 'export', component: ExportTab },
+  { id: 'export', component: null },
 ] as const;
 
-export default function MissionView({ mission, settings, onNotesChange, storageFailed }: MissionViewProps) {
+export default function MissionView({ mission, settings, sourceFile, onNotesChange, storageFailed }: MissionViewProps) {
   const [activeTab, setActiveTab] = useState(0);
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const { t } = useTranslation();
@@ -110,7 +111,9 @@ export default function MissionView({ mission, settings, onNotesChange, storageF
               <Suspense fallback={<div className="tab-loading" role="status" aria-live="polite">{t('tabs.loading')}</div>}>
                 {Tab
                   ? <Tab mission={mission} settings={settings} />
-                  : <NotesTab mission={mission} settings={settings} onNotesChange={onNotesChange} storageFailed={storageFailed} />}
+                  : tab.id === 'export'
+                    ? <ExportTab mission={mission} settings={settings} sourceFile={sourceFile} />
+                    : <NotesTab mission={mission} settings={settings} onNotesChange={onNotesChange} storageFailed={storageFailed} />}
               </Suspense>
             )}
           </div>

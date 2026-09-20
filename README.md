@@ -47,7 +47,7 @@ FastBriefing は DCS World のミッションファイル（`.miz` = ZIP + Lua�
 | **地図** | Leaflet による経路・Bullseye・飛行場・トリガーゾーン・`drawings`・脅威リング・支援機のレイヤ表示（FR-60〜62）。OSM 帰属表示を必ず出力（FR-64） |
 | **天候** | 気温/QNH/風（FROM/TO併記）/雲プリセット/視程/霧/砂塵（FR-21）、METAR 1行要約（FR-22 予定） |
 | **通信計画** | コムカード自動生成、重複周波数の警告、Guard 243.0/121.5 を併記（FR-67, FR-68） |
-| **出力** | 印刷CSS → PDF（A4縦）、Markdown（Discord貼り付け）、PNG/GeoJSON（予定）（FR-80〜84） |
+| **出力** | 印刷CSS → PDF（A4縦）、Markdown、正規化JSON、GeoJSON/KML、ニーボードPNG一式と`.miz`コピー（FR-80〜84） |
 | **ビュー制御** | 作成者ビュー / パイロットビュー（`hidden` 尊重）（FR-70） |
 
 ---
@@ -121,7 +121,7 @@ COPY --from=build /app/dist /usr/share/nginx/html
 3. **フライトを選ぶ** — 青/赤タブでフライト一覧 → 機体構成・搭載・無線・経路（ナビログ）を確認。ナビログには区間距離・真/磁方位・区間時間と累積値を表示します。時間は各経路点の設定速度からの推定値です。未対応マップでは DCS 座標と真方位を表示し、磁方位は出しません。`viewMode` で作成者/パイロットを切替（FR-41、FR-70）。
 4. **地図で俯瞰** — レイヤ切替（フライト経路 / ゾーン / 描画 / 脅威 / 支援機 / 敵 / Bullseye / NavPoints / 飛行場）で必要な情報だけを表示（FR-62）。
 5. **記入欄** — SMEAC の各節と、フライトごとのパイロット・TOT・Joker/Bingo 燃料を記入。同じファイル名・内容の `.miz` を再び開くとブラウザに保存した内容を復元します。サイドカー JSON でも保存・読み込みできます（FR-38、FR-71、FR-72）。
-6. **出力** — 「出力」タブで Markdown、正規化 JSON、経路・ゾーンの GeoJSON / KML、印刷 / PDF（Ctrl+P、A4縦）、ブリーフィング要約 PNG を出力できます。GeoJSON / KML はパイロットビューの非表示項目と座標未解決の項目を除外します。円形ゾーンは64辺の多角形で近似します。`.miz` への PNG 埋め込みは未対応です（FR-09、FR-80、FR-81、FR-83、FR-84）。
+6. **出力** — 「出力」タブで Markdown、正規化 JSON、経路・ゾーンの GeoJSON / KML、印刷 / PDF（Ctrl+P、A4縦）、ニーボードPNG一式（ZIP）またはニーボード入り`.miz`コピーを出力できます。ニーボードは概要・各フライトのナビログ・通信・経路概略図の連番ページで、既定1536×2048 pxです。全機共通または機種別を選べます。地図は地形画像を使わない模式図です。GeoJSON / KML はパイロットビューの非表示項目と座標未解決の項目を除外します。円形ゾーンは64辺の多角形で近似します（FR-09、FR-80〜84）。
 
 > **ヒント:** 設定（座標形式・単位・言語）はヘッダー右のセレクトで切替。`localStorage` に保存され再訪時に復元されます。
 
@@ -146,7 +146,7 @@ Main
     ├── [支援機]   SupportTab — Tanker/AWACS/Carrier/JTAC
     ├── [脅威]     ThreatsTab — SAM/AAA リング / 敵航空機
     ├── [記入欄]   NotesTab — SMEAC / フライト別メモ / サイドカー JSON
-    └── [出力]     ExportTab — Markdown / 正規化 JSON / GeoJSON / KML / 印刷 / PNG
+    └── [出力]     ExportTab — Markdown / 正規化 JSON / GeoJSON / KML / 印刷 / ニーボードPNG・.mizコピー
 ```
 
 ---

@@ -10,6 +10,7 @@ import { createMissionKey, emptyUserNotes, readStoredNotes, saveStoredNotes } fr
 
 function App() {
   const [missionData, setMissionData] = useState<MissionData | null>(null);
+  const [sourceFile, setSourceFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -57,6 +58,7 @@ function App() {
       normalized.userNotes = readStoredNotes(missionKey) ?? emptyUserNotes(missionKey);
       setStorageFailed(false);
       setMissionData(normalized);
+      setSourceFile(file);
     } catch (err) {
       if (parserRef.current === parser && parseGenerationRef.current === generation && !isAbortError(err)) {
         const message = err instanceof Error ? err.message : '';
@@ -190,6 +192,7 @@ function App() {
     setError(null);
     setNotice(null);
     setMissionData(null);
+    setSourceFile(null);
   }, []);
 
   return (
@@ -245,7 +248,7 @@ function App() {
             </label>
           </div>
         ) : (
-          <MissionView mission={missionData} settings={settings} onNotesChange={handleNotesChange} storageFailed={storageFailed} />
+          <MissionView mission={missionData} settings={settings} sourceFile={sourceFile} onNotesChange={handleNotesChange} storageFailed={storageFailed} />
         )}
 
         {isDragging && missionData && (
