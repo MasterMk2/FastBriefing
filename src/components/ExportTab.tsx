@@ -17,6 +17,7 @@ import {
 import PrintView from './PrintView';
 import { useSettings } from '../hooks/useSettings';
 import { applyViewMode } from '../utils/viewMode';
+import { buildGeospatialExport, toGeoJson, toKml } from '../utils/geospatialExport';
 
 interface ExportTabProps {
   mission: MissionData;
@@ -30,6 +31,24 @@ export default function ExportTab({ mission, settings }: ExportTabProps) {
   const [markdown, setMarkdown] = useState('');
   const [copyStatus, setCopyStatus] = useState('');
   const [pngStatus, setPngStatus] = useState('');
+  const [geoStatus, setGeoStatus] = useState('');
+
+  const exportGeospatial = (format: 'geojson' | 'kml') => {
+    const result = buildGeospatialExport(mission, settings.viewMode);
+    if (result.features.length === 0) {
+      setGeoStatus(t('export.geoEmpty', { skipped: result.skipped }));
+      return;
+    }
+    const data = format === 'geojson' ? toGeoJson(result) : toKml(result);
+    const type = format === 'geojson' ? 'application/geo+json' : 'application/vnd.google-earth.kml+xml';
+    const url = URL.createObjectURL(new Blob([data], { type }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `fastbriefing-routes.${format}`;
+    link.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
+    setGeoStatus(t('export.geoSaved', { count: result.features.length, skipped: result.skipped }));
+  };
 
   const exportNormalizedJson = () => {
     const visibleFlights = new Set([
@@ -224,6 +243,8 @@ export default function ExportTab({ mission, settings }: ExportTabProps) {
       <div className="export-actions">
         <button onClick={generateMarkdown} className="btn btn-primary">{t('export.generateMarkdown')}</button>
         <button onClick={exportNormalizedJson} className="btn btn-secondary">{t('export.normalizedJson')}</button>
+        <button onClick={() => exportGeospatial('geojson')} className="btn btn-secondary">{t('export.geoJson')}</button>
+        <button onClick={() => exportGeospatial('kml')} className="btn btn-secondary">{t('export.kml')}</button>
         <button onClick={copyMarkdown} className="btn" disabled={!markdown}>{t('export.copy')}</button>
         <button onClick={printBriefing} className="btn btn-secondary">{t('export.printPdf')}</button>
         <button onClick={exportPng} className="btn btn-secondary">{t('export.generatePng')}</button>
@@ -240,6 +261,7 @@ export default function ExportTab({ mission, settings }: ExportTabProps) {
         </label>
         {copyStatus && <span className="hint" role="status">{copyStatus}</span>}
         {pngStatus && <span className="hint" role="status">{pngStatus}</span>}
+        {geoStatus && <span className="hint" role="status">{geoStatus}</span>}
       </div>
 
       {markdown && (

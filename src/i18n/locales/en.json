@@ -249,6 +249,10 @@
   "export": {
     "generateMarkdown": "Generate Markdown",
     "normalizedJson": "Save Normalized JSON",
+    "geoJson": "Save Routes and Zones as GeoJSON",
+    "kml": "Save Routes and Zones as KML",
+    "geoSaved": "Saved {{count}} routes and zones (skipped {{skipped}} with unresolved coordinates or insufficient points).",
+    "geoEmpty": "No routes or zones can be exported (skipped {{skipped}}).",
     "copy": "Copy",
     "printPdf": "Print / PDF",
     "generatePng": "Generate PNG",

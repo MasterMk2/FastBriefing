@@ -249,6 +249,10 @@
   "export": {
     "generateMarkdown": "Markdown生成",
     "normalizedJson": "正規化JSONを保存",
+    "geoJson": "経路・ゾーンをGeoJSONで保存",
+    "kml": "経路・ゾーンをKMLで保存",
+    "geoSaved": "{{count}}件の経路・ゾーンを保存しました（座標未解決などで{{skipped}}件を除外）。",
+    "geoEmpty": "出力できる経路・ゾーンがありません（{{skipped}}件を除外）。",
     "copy": "コピー",
     "printPdf": "印刷 / PDF",
     "generatePng": "PNG生成",
