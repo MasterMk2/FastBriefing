@@ -300,7 +300,7 @@ body {
     display: none !important;
   }
 
-  .print-map-blocked .mission-view > :not(.print-briefing) {
+  .mission-view > :not(.print-briefing) {
     display: none !important;
   }
 

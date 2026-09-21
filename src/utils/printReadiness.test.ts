@@ -3,6 +3,7 @@ import {
   getNativePrintBlockReason,
   installPrintReadinessGuard,
   PRINT_MAP_BLOCKED_CLASS,
+  shouldResetPrintMapOnExportActivation,
 } from './printReadiness';
 
 describe('native print readiness guard', () => {
@@ -13,6 +14,13 @@ describe('native print readiness guard', () => {
     expect(getNativePrintBlockReason(true, true, 'error')).toBe('map-unavailable');
     expect(getNativePrintBlockReason(true, true, 'ready')).toBeNull();
     expect(getNativePrintBlockReason(true, false, 'loading')).toBeNull();
+  });
+
+  it('resets the map only when entering Export from another tab', () => {
+    expect(shouldResetPrintMapOnExportActivation(false, true, true)).toBe(true);
+    expect(shouldResetPrintMapOnExportActivation(true, true, true)).toBe(false);
+    expect(shouldResetPrintMapOnExportActivation(false, false, true)).toBe(false);
+    expect(shouldResetPrintMapOnExportActivation(false, true, false)).toBe(false);
   });
 
   it('fails closed for native print while the map is blocked and clears after printing', () => {

@@ -5,7 +5,11 @@ import type { DisplaySettings, MissionData, UserNotes } from '../types/mission';
 import type { BriefingSection } from '../utils/briefingSections';
 import { getMissionWhiteboardId, useWhiteboard } from '../hooks/useWhiteboard';
 import { useSettings } from '../hooks/useSettings';
-import { getNativePrintBlockReason, installPrintReadinessGuard } from '../utils/printReadiness';
+import {
+  getNativePrintBlockReason,
+  installPrintReadinessGuard,
+  shouldResetPrintMapOnExportActivation,
+} from '../utils/printReadiness';
 import BriefingPlanner from './BriefingPlanner';
 import PrintView from './PrintView';
 import type { MissionMapRenderState } from './MissionMapCanvas';
@@ -75,11 +79,11 @@ function MissionWorkspace({ mission, settings, sourceFile, onNotesChange, storag
   const printBlocked = printBlockReason !== null;
 
   const activateTab = useCallback((tabId: MissionTabId) => {
-    if (tabId === 'export' && hasPrintMap) {
+    if (shouldResetPrintMapOnExportActivation(activeTab === 'export', tabId === 'export', hasPrintMap)) {
       setPrintMapRender({ key: printMapKey, state: 'loading' });
     }
     setActiveTab(tabId);
-  }, [hasPrintMap, printMapKey]);
+  }, [activeTab, hasPrintMap, printMapKey]);
 
   const handlePrintMapStateChange = useCallback((state: MissionMapRenderState) => {
     setPrintMapRender({ key: printMapKey, state });

@@ -13,6 +13,14 @@ export function getNativePrintBlockReason(
   return null;
 }
 
+export function shouldResetPrintMapOnExportActivation(
+  exportActive: boolean,
+  exportRequested: boolean,
+  hasPrintMap: boolean,
+): boolean {
+  return !exportActive && exportRequested && hasPrintMap;
+}
+
 interface PrintEventTarget {
   addEventListener(type: 'beforeprint' | 'afterprint', listener: () => void): void;
   removeEventListener(type: 'beforeprint' | 'afterprint', listener: () => void): void;
