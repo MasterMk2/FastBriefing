@@ -99,6 +99,8 @@ function MissionWorkspace({ mission, settings }: MissionViewProps) {
       return (
         <WhiteboardTab
           data={whiteboard.data}
+          persistenceStatus={whiteboard.persistenceStatus}
+          canUndo={whiteboard.canUndo}
           onNotesChange={whiteboard.setNotes}
           onAddStroke={whiteboard.addStroke}
           onUndoStroke={whiteboard.undoStroke}

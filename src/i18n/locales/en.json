@@ -39,7 +39,7 @@
   "planner": {
     "title": "Briefing Planner",
     "selectedCount": "{{count}} / {{total}} sections",
-    "description": "Choose which information appears on screen and in Markdown, print/PDF, and PNG summary output. The selection is saved in this browser.",
+    "description": "Choose which information appears on screen and in Markdown, print/PDF, and PNG output. The selection is saved in this browser.",
     "sectionLegend": "Information to include in the briefing",
     "selectAll": "Select all",
     "clearAll": "Clear all",
@@ -67,6 +67,7 @@
     "title": "Mission Whiteboard",
     "description": "Sketch routes, assignments, attack order, or other mission coordination and add a text explanation.",
     "savedLocally": "Saved locally for this mission",
+    "storageUnavailable": "Browser storage is unavailable (content will be lost when this view closes)",
     "toolbar": "Whiteboard drawing tools",
     "penColor": "Pen color",
     "selectColor": "Select pen color {{color}}",
@@ -275,11 +276,11 @@
     "mapPrintNote": "The map is omitted from the print view. Check the Map tab on screen.",
     "printImageExport": "Print and Image Export",
     "printHelp": "Only sections selected in the Briefing Planner are printed. Use the browser print function (Ctrl+P) to save the result as a PDF.",
-    "pngHelp": "PNG renders the selected overview and whiteboard to a 1536×2048 canvas. Embedding into .miz files is not supported.",
+    "pngHelp": "Each selected section is saved as one or more numbered 1536×2048 PNG files. Multiple images are bundled into one ZIP, and long content continues on additional images. Embedding into .miz files is not supported.",
     "copied": "Markdown copied",
     "copyFailed": "Copy failed (check browser permissions)",
     "pngGenerating": "Generating PNG…",
-    "pngSaved": "PNG saved",
+    "pngSaved": "Saved {{count}} PNG file(s)",
     "pngFailed": "PNG generation failed",
     "markdown": {
       "view": "View",
@@ -347,7 +348,12 @@
       "qnh": "QNH: {{value}}",
       "visibility": "Visibility: {{value}}",
       "clouds": "Clouds: {{value}}",
-      "metar": "METAR: {{value}}"
+      "metar": "METAR: {{value}}",
+      "flightDetails": "{{routeCount}} route point(s) | {{frequency}} MHz {{modulation}}",
+      "noFlights": "No flights",
+      "mapDetails": "{{routeCount}} route point(s) | {{zoneCount}} zone(s) | {{drawingCount}} drawing(s)",
+      "noSupport": "No support assets",
+      "threat": "{{type}} ×{{count}} | engagement {{engagement}} | detection {{detection}}"
     }
   }
 }

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { MissionParser, ZIP_LIMITS } from './MissionParser';
+import { fingerprintMissionArchive, MissionParser, ZIP_LIMITS } from './MissionParser';
 
 interface WorkerResponse {
   type: string;
@@ -70,7 +70,16 @@ describe('MissionParser', () => {
     expect(worker?.postedMessage).toEqual({ file: buffer });
     expect(worker?.transferList).toEqual([buffer]);
     expect(result.theatre).toBe('Caucasus');
+    expect(result.sourceFingerprint).toMatch(/^(?:[a-f0-9]{64}|fnv1a-)/);
     expect(worker?.terminated).toBe(true);
+  });
+
+  it('同じメタデータでも異なるアーカイブ内容には異なる指紋を付ける', async () => {
+    const first = await fingerprintMissionArchive(Uint8Array.from([1, 2, 3]).buffer);
+    const second = await fingerprintMissionArchive(Uint8Array.from([1, 2, 4]).buffer);
+
+    expect(first).not.toBe(second);
+    expect(await fingerprintMissionArchive(Uint8Array.from([1, 2, 3]).buffer)).toBe(first);
   });
 
   it('圧縮後サイズが上限ちょうどならarrayBufferを呼び出す', async () => {
@@ -108,7 +117,7 @@ describe('MissionParser', () => {
     const parser = new MissionParser();
     const promise = parser.parse(file);
 
-    await Promise.resolve();
+    await vi.waitFor(() => expect(FakeWorker.latest).toBeDefined());
     parser.cancel();
 
     await expect(promise).rejects.toMatchObject({ name: 'AbortError' });

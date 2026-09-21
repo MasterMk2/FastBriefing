@@ -89,22 +89,7 @@ export function normalizeWhiteboard(value: unknown): WhiteboardData {
 }
 
 export function getMissionWhiteboardId(mission: MissionData): string {
-  const { meta } = mission;
-  const identity = [
-    meta.sortie,
-    meta.theatre,
-    meta.date.Year,
-    meta.date.Month,
-    meta.date.Day,
-    meta.startTime,
-    meta.meVersion,
-  ].join('|');
-  let hash = 0x811c9dc5;
-  for (const character of identity) {
-    hash ^= character.charCodeAt(0);
-    hash = Math.imul(hash, 0x01000193);
-  }
-  return (hash >>> 0).toString(36);
+  return `v1-${mission.sourceFingerprint}`;
 }
 
 export function loadWhiteboard(
@@ -125,43 +110,64 @@ export function saveWhiteboard(
   missionId: string,
   data: WhiteboardData,
   storage: WhiteboardStorage | null = getStorage(),
-): void {
-  if (!storage) return;
+): boolean {
+  if (!storage) return false;
   try {
     const normalized = normalizeWhiteboard({ version: WHITEBOARD_VERSION, ...data });
     storage.setItem(`${WHITEBOARD_STORAGE_PREFIX}${missionId}`, JSON.stringify({
       version: WHITEBOARD_VERSION,
       ...normalized,
     }));
+    return true;
   } catch {
     console.warn('FastBriefing whiteboard could not be saved; continuing without persistence.');
+    return false;
   }
 }
 
 export function useWhiteboard(mission: MissionData) {
   const missionId = useMemo(() => getMissionWhiteboardId(mission), [mission]);
   const [data, setData] = useState<WhiteboardData>(() => loadWhiteboard(missionId));
+  const [clearedStrokes, setClearedStrokes] = useState<WhiteboardStroke[] | null>(null);
+  const [persistenceStatus, setPersistenceStatus] = useState<'saved' | 'memory-only'>('saved');
 
   useEffect(() => {
-    saveWhiteboard(missionId, data);
+    setPersistenceStatus(saveWhiteboard(missionId, data) ? 'saved' : 'memory-only');
   }, [data, missionId]);
 
   return {
     missionId,
     data,
+    persistenceStatus,
+    canUndo: data.strokes.length > 0 || clearedStrokes !== null,
     setNotes: (notes: string) => setData(current => ({
       ...current,
       notes: notes.slice(0, MAX_WHITEBOARD_NOTES),
     })),
-    addStroke: (stroke: WhiteboardStroke) => setData(current => {
+    addStroke: (stroke: WhiteboardStroke) => {
+      setClearedStrokes(null);
+      setData(current => {
       const normalized = normalizeWhiteboard({
         version: WHITEBOARD_VERSION,
         ...current,
         strokes: [...current.strokes, stroke],
       });
       return normalized;
-    }),
-    undoStroke: () => setData(current => ({ ...current, strokes: current.strokes.slice(0, -1) })),
-    clearDrawing: () => setData(current => ({ ...current, strokes: [] })),
+      });
+    },
+    undoStroke: () => {
+      if (data.strokes.length === 0 && clearedStrokes) {
+        setData(current => ({ ...current, strokes: clearedStrokes }));
+        setClearedStrokes(null);
+        return;
+      }
+      setClearedStrokes(null);
+      setData(current => ({ ...current, strokes: current.strokes.slice(0, -1) }));
+    },
+    clearDrawing: () => {
+      if (data.strokes.length === 0) return;
+      setClearedStrokes(data.strokes);
+      setData(current => ({ ...current, strokes: [] }));
+    },
   };
 }

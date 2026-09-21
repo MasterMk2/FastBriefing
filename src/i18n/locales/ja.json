@@ -39,7 +39,7 @@
   "planner": {
     "title": "ブリーフィング・プランナー",
     "selectedCount": "{{count}} / {{total}} セクション",
-    "description": "画面に表示し、Markdown・印刷/PDF・PNG要約へ含める情報を選択します。選択はこのブラウザに保存されます。",
+    "description": "画面に表示し、Markdown・印刷/PDF・PNGへ含める情報を選択します。選択はこのブラウザに保存されます。",
     "sectionLegend": "ブリーフィングに含める情報",
     "selectAll": "すべて選択",
     "clearAll": "すべて解除",
@@ -67,6 +67,7 @@
     "title": "ミッション・ホワイトボード",
     "description": "経路、役割分担、攻撃順序などを自由に描き、テキストでも補足できます。",
     "savedLocally": "このミッション用にローカル保存",
+    "storageUnavailable": "ブラウザ保存を利用できません（この画面を閉じると内容が失われます）",
     "toolbar": "ホワイトボード描画ツール",
     "penColor": "ペン色",
     "selectColor": "ペン色 {{color}} を選択",
@@ -275,11 +276,11 @@
     "mapPrintNote": "地図は印刷用ビューに含めていません。画面の地図タブで確認してください。",
     "printImageExport": "印刷・画像出力",
     "printHelp": "ブリーフィング・プランナーで選択したセクションだけを印刷します。ブラウザの印刷機能（Ctrl+P）で PDF として保存できます。",
-    "pngHelp": "PNG は選択中の概要とホワイトボードを 1536×2048 のキャンバスに描画して保存します。.miz への埋め込みは未対応です。",
+    "pngHelp": "選択した各セクションを 1536×2048 の番号付き PNG として保存します。複数画像は1つの ZIP にまとめ、長い内容は続きの画像へ分割します。.miz への埋め込みは未対応です。",
     "copied": "Markdownをコピーしました",
     "copyFailed": "コピーに失敗しました（ブラウザの権限を確認してください）",
     "pngGenerating": "PNGを生成中…",
-    "pngSaved": "PNGを保存しました",
+    "pngSaved": "PNGを {{count}} 枚保存しました",
     "pngFailed": "PNG生成に失敗しました",
     "markdown": {
       "view": "ビュー",
@@ -347,7 +348,12 @@
       "qnh": "QNH: {{value}}",
       "visibility": "視程: {{value}}",
       "clouds": "雲: {{value}}",
-      "metar": "METAR: {{value}}"
+      "metar": "METAR: {{value}}",
+      "flightDetails": "経路 {{routeCount}} 点 | {{frequency}} MHz {{modulation}}",
+      "noFlights": "フライトはありません",
+      "mapDetails": "経路点 {{routeCount}} | ゾーン {{zoneCount}} | 描画 {{drawingCount}}",
+      "noSupport": "支援アセットはありません",
+      "threat": "{{type}} ×{{count}} | 交戦圏 {{engagement}} | 探知圏 {{detection}}"
     }
   }
 }

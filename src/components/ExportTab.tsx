@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { zipSync } from 'fflate';
 import type { AIGroup, MissionData, DisplaySettings, MissionMeta } from '../types/mission';
 import type { WhiteboardData } from '../types/whiteboard';
 import { formatAltitude, formatSpeed, formatDistance, formatPressure, formatTemperature } from '../utils/units';
@@ -18,6 +19,12 @@ import PrintView from './PrintView';
 import { useSettings } from '../hooks/useSettings';
 import { applyViewMode } from '../utils/viewMode';
 import { hasBriefingSection } from '../utils/briefingSections';
+import {
+  buildBriefingPngSections,
+  paginateBriefingPngSection,
+  wrapBriefingPngLines,
+  type BriefingPngPage,
+} from '../utils/briefingPng';
 
 interface ExportTabProps {
   mission: MissionData;
@@ -32,6 +39,11 @@ export default function ExportTab({ mission, settings, whiteboard }: ExportTabPr
   const [markdown, setMarkdown] = useState('');
   const [copyStatus, setCopyStatus] = useState('');
   const [pngStatus, setPngStatus] = useState('');
+
+  useEffect(() => {
+    setMarkdown('');
+    setCopyStatus('');
+  }, [settings, viewMission, whiteboard]);
 
   const outputT = (key: string, options?: Record<string, string | number>) => t(key, {
     ...options,
@@ -187,23 +199,51 @@ export default function ExportTab({ mission, settings, whiteboard }: ExportTabPr
     setPngStatus(t('export.pngGenerating'));
 
     try {
-      const canvas = document.createElement('canvas');
-      canvas.width = 1536;
-      canvas.height = 2048;
-      const context = canvas.getContext('2d');
-      if (!context) throw new Error('Canvas 2D context unavailable');
+      const pageEntries = buildBriefingPngSections(viewMission, settings, whiteboard, outputT)
+        .flatMap(section => {
+          const measurementCanvas = document.createElement('canvas');
+          const measurementContext = measurementCanvas.getContext('2d');
+          if (!measurementContext) throw new Error('Canvas 2D context unavailable');
+          measurementContext.font = '28px sans-serif';
+          const wrappedLines = wrapBriefingPngLines(
+            section.lines,
+            text => measurementContext.measureText(text).width,
+            1536 - 96 * 2,
+          );
+          return paginateBriefingPngSection(section, wrappedLines);
+        });
+      if (pageEntries.length === 0) throw new Error('No briefing sections selected');
 
-      drawBriefingSummary(context, viewMission, settings, whiteboard, outputT);
-      const blob = await canvasToBlob(canvas);
-      if (!blob) throw new Error('PNG blob unavailable');
+      const baseName = safeFilename(mission.meta.sortie || 'briefing');
+      const pngFiles: Record<string, Uint8Array> = {};
+      for (const [index, page] of pageEntries.entries()) {
+        const canvas = document.createElement('canvas');
+        canvas.width = 1536;
+        canvas.height = 2048;
+        const context = canvas.getContext('2d');
+        if (!context) throw new Error('Canvas 2D context unavailable');
 
-      const objectUrl = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = objectUrl;
-      link.download = `${safeFilename(mission.meta.sortie || 'briefing')}-briefing.png`;
-      link.click();
-      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
-      setPngStatus(t('export.pngSaved'));
+        drawBriefingPngPage(context, viewMission, whiteboard, page, index + 1, pageEntries.length);
+        const blob = await canvasToBlob(canvas);
+        if (!blob) throw new Error('PNG blob unavailable');
+        const filename = `${baseName}-briefing-${String(index + 1).padStart(2, '0')}-${page.sectionId}.png`;
+        pngFiles[filename] = new Uint8Array(await blob.arrayBuffer());
+      }
+
+      const filenames = Object.keys(pngFiles);
+      if (filenames.length === 1) {
+        downloadBlob(
+          new Blob([pngFiles[filenames[0]].buffer as ArrayBuffer], { type: 'image/png' }),
+          filenames[0],
+        );
+      } else {
+        const archive = zipSync(pngFiles, { level: 0 });
+        downloadBlob(
+          new Blob([archive.buffer as ArrayBuffer], { type: 'application/zip' }),
+          `${baseName}-briefing-png.zip`,
+        );
+      }
+      setPngStatus(t('export.pngSaved', { count: pageEntries.length }));
     } catch {
       setPngStatus(t('export.pngFailed'));
     }
@@ -255,64 +295,41 @@ function formatETA(eta: number, meta: MissionMeta): string {
   return `${formatTimeHHMMSS(etaZuluDate(meta, eta))}Z`;
 }
 
-function drawBriefingSummary(
+function drawBriefingPngPage(
   context: CanvasRenderingContext2D,
   mission: MissionData,
-  settings: DisplaySettings,
   whiteboard: WhiteboardData,
-  t: (key: string, options?: Record<string, string | number>) => string,
+  page: BriefingPngPage,
+  pageNumber: number,
+  pageCount: number,
 ): void {
-  const { meta, weather } = mission;
-  const localDate = missionLocalDate(meta);
-  const zuluDate = missionZuluDate(meta);
-  const metar = buildMetar(weather, { time: zuluDate });
   const margin = 96;
   const contentWidth = 1536 - margin * 2;
-  const lineHeight = 42;
-  let y = margin;
 
   context.fillStyle = getThemeColor('--color-export-canvas-background');
   context.fillRect(0, 0, 1536, 2048);
   context.fillStyle = getThemeColor('--color-heading');
-  context.font = 'bold 52px sans-serif';
-  y = drawWrappedCanvasText(context, meta.sortie || t('export.canvas.briefing'), margin, y, contentWidth, lineHeight + 12);
+  context.font = 'bold 48px sans-serif';
+  context.fillText(mission.meta.sortie || 'Briefing', margin, 130, contentWidth);
+
+  context.font = 'bold 36px sans-serif';
+  context.fillText(page.title, margin, 215, contentWidth);
 
   context.fillStyle = getThemeColor('--color-text-tertiary');
   context.font = '28px sans-serif';
-  y += 24;
-  const lines = hasBriefingSection(settings.briefingSections, 'overview') ? [
-    t('export.canvas.map', { value: meta.theatre }),
-    t('export.canvas.date', { value: formatDateYMD(localDate) }),
-    t('export.canvas.local', { value: `${formatTimeHHMM(localDate)} (${formatUtcOffset(meta.utcOffset)})` }),
-    t('export.canvas.zulu', { value: `${formatTimeHHMM(zuluDate)}Z` }),
-    '',
-    t('export.canvas.weather'),
-    t('export.canvas.temperature', { value: formatTemperature(weather.temperature, settings.temperatureUnit) }),
-    t('export.canvas.qnh', { value: formatPressure(weather.qnh, settings.pressureUnit) }),
-    t('export.canvas.visibility', { value: formatDistance(weather.visibility, settings.distanceUnit) }),
-    t('export.canvas.clouds', { value: weather.clouds.label }),
-    t('export.canvas.metar', { value: metar }),
-  ] : [];
-
-  lines.forEach(line => {
-    y = drawWrappedCanvasText(context, line, margin, y, contentWidth, lineHeight);
+  page.lines.forEach((line, index) => {
+    context.fillText(line, margin, 300 + index * 40, contentWidth);
   });
 
-  if (hasBriefingSection(settings.briefingSections, 'whiteboard')) {
-    y += 24;
-    context.fillStyle = getThemeColor('--color-heading');
-    context.font = 'bold 34px sans-serif';
-    y = drawWrappedCanvasText(context, t('export.markdown.whiteboard'), margin, y, contentWidth, lineHeight + 4);
-    context.fillStyle = getThemeColor('--color-text-tertiary');
-    context.font = '26px sans-serif';
-    const notes = whiteboard.notes.trim() || t('export.markdown.noWhiteboardNotes');
-    y = drawWrappedCanvasText(context, notes, margin, y, contentWidth, 36);
-
-    if (whiteboard.strokes.length > 0 && y < 1900) {
-      y += 20;
-      drawWhiteboardSummary(context, whiteboard, margin, y, contentWidth, Math.min(620, 1980 - y));
-    }
+  if (page.drawWhiteboard) {
+    drawWhiteboardSummary(context, whiteboard, margin, 720, contentWidth, 800);
   }
+
+  context.fillStyle = getThemeColor('--color-text-tertiary');
+  context.font = '22px sans-serif';
+  context.textAlign = 'right';
+  context.fillText(`${pageNumber} / ${pageCount}`, 1536 - margin, 1980);
+  context.textAlign = 'left';
 }
 
 function drawWhiteboardSummary(
@@ -352,39 +369,19 @@ function getThemeColor(token: string): string {
   return value || `var(${token})`;
 }
 
-function drawWrappedCanvasText(
-  context: CanvasRenderingContext2D,
-  text: string,
-  x: number,
-  y: number,
-  maxWidth: number,
-  lineHeight: number,
-): number {
-  if (!text) return y + lineHeight;
-
-  let line = '';
-  for (const character of Array.from(text)) {
-    const candidate = line + character;
-    if (line && context.measureText(candidate).width > maxWidth) {
-      context.fillText(line, x, y);
-      y += lineHeight;
-      line = character;
-    } else {
-      line = candidate;
-    }
-  }
-
-  if (line) {
-    context.fillText(line, x, y);
-    y += lineHeight;
-  }
-  return y;
-}
-
 function canvasToBlob(canvas: HTMLCanvasElement): Promise<Blob | null> {
   return new Promise(resolve => {
     canvas.toBlob(resolve, 'image/png');
   });
+}
+
+function downloadBlob(blob: Blob, filename: string): void {
+  const objectUrl = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = objectUrl;
+  link.download = filename;
+  link.click();
+  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
 }
 
 function safeFilename(value: string): string {

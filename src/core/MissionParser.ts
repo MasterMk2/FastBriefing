@@ -5,6 +5,27 @@ export { ZIP_LIMITS } from '../workers/missionParser';
 
 export interface MissionParserResult extends ParsedMissionFile {
   briefingImages: Map<string, Uint8Array>;
+  sourceFingerprint: string;
+}
+
+export async function fingerprintMissionArchive(buffer: ArrayBuffer): Promise<string> {
+  try {
+    const digest = await globalThis.crypto?.subtle?.digest('SHA-256', buffer);
+    if (digest) {
+      return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
+    }
+  } catch {
+    // Older or restricted browsers may not expose SubtleCrypto. The fallback still
+    // keys the board from archive bytes rather than mutable mission metadata.
+  }
+
+  const bytes = new Uint8Array(buffer);
+  let hash = 0x811c9dc5;
+  for (const byte of bytes) {
+    hash ^= byte;
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return `fnv1a-${(hash >>> 0).toString(16).padStart(8, '0')}-${bytes.byteLength}`;
 }
 
 interface ParseRequest {
@@ -59,6 +80,7 @@ export class MissionParser {
       }
 
       const buffer = await file.arrayBuffer();
+      const sourceFingerprint = await fingerprintMissionArchive(buffer);
       if (request.settled) return;
 
       const worker = new Worker(new URL('../workers/missionParser.ts', import.meta.url), { type: 'module' });
@@ -66,7 +88,7 @@ export class MissionParser {
 
       worker.onmessage = (e: MessageEvent<{ type: string; data?: MissionParserResult; error?: string }>) => {
         if (e.data.type === 'success') {
-          if (this.settle(request)) resolve(e.data.data!);
+          if (this.settle(request)) resolve({ ...e.data.data!, sourceFingerprint });
         } else if (e.data.type === 'error') {
           if (this.settle(request)) reject(new Error(e.data.error));
         } else if (this.settle(request)) {

@@ -14,6 +14,8 @@ import WhiteboardDrawing from './WhiteboardDrawing';
 
 interface WhiteboardTabProps {
   data: WhiteboardData;
+  persistenceStatus: 'saved' | 'memory-only';
+  canUndo: boolean;
   onNotesChange: (notes: string) => void;
   onAddStroke: (stroke: WhiteboardStroke) => void;
   onUndoStroke: () => void;
@@ -24,6 +26,8 @@ let nextStrokeId = 1;
 
 export default function WhiteboardTab({
   data,
+  persistenceStatus,
+  canUndo,
   onNotesChange,
   onAddStroke,
   onUndoStroke,
@@ -102,7 +106,9 @@ export default function WhiteboardTab({
             <h2>{t('whiteboard.title')}</h2>
             <p>{t('whiteboard.description')}</p>
           </div>
-          <span className="hint" role="status">{t('whiteboard.savedLocally')}</span>
+          <span className={`hint${persistenceStatus === 'memory-only' ? ' warning-text' : ''}`} role="status">
+            {t(persistenceStatus === 'saved' ? 'whiteboard.savedLocally' : 'whiteboard.storageUnavailable')}
+          </span>
         </div>
 
         <div className="whiteboard-toolbar" role="toolbar" aria-label={t('whiteboard.toolbar')}>
@@ -127,7 +133,7 @@ export default function WhiteboardTab({
               ))}
             </select>
           </label>
-          <button type="button" className="btn btn-secondary" disabled={data.strokes.length === 0} onClick={onUndoStroke}>
+          <button type="button" className="btn btn-secondary" disabled={!canUndo} onClick={onUndoStroke}>
             {t('whiteboard.undo')}
           </button>
           <button type="button" className="btn btn-secondary" disabled={data.strokes.length === 0} onClick={onClearDrawing}>

@@ -141,7 +141,7 @@ function resolveResKey(key: string, mapResource: Record<string, string>): string
 }
 
 export function normalizeMission(
-  parsed: { mission: unknown; theatre: string; warehouses: unknown; dictionary: Record<string, string>; mapResource: Record<string, string> },
+  parsed: { mission: unknown; theatre: string; warehouses: unknown; dictionary: Record<string, string>; mapResource: Record<string, string>; sourceFingerprint?: string },
   _settings: { coordinateFormat: string; unitSystem: string; viewMode: string }
 ): MissionData {
   const mission = parsed.mission as Record<string, unknown>;
@@ -163,12 +163,31 @@ export function normalizeMission(
   const userNotes = createEmptyUserNotes();
   
   return {
+    sourceFingerprint: parsed.sourceFingerprint ?? legacyMissionFingerprint(meta),
     meta,
     weather,
     coalitions,
     userNotes,
     warnings,
   };
+}
+
+function legacyMissionFingerprint(meta: MissionMeta): string {
+  const identity = [
+    meta.sortie,
+    meta.theatre,
+    meta.date.Year,
+    meta.date.Month,
+    meta.date.Day,
+    meta.startTime,
+    meta.meVersion,
+  ].join('|');
+  let hash = 0x811c9dc5;
+  for (const character of identity) {
+    hash ^= character.charCodeAt(0);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return `legacy-${(hash >>> 0).toString(36)}`;
 }
 
 function normalizeMeta(mission: Record<string, unknown>, dictionary: Record<string, string>, mapResource: Record<string, string>, theatre: string, warnings: string[]): MissionMeta {

@@ -274,6 +274,8 @@ export interface DrawingObject {
 }
 
 export interface MissionData {
+  /** Stable fingerprint of the source .miz archive bytes. */
+  sourceFingerprint: string;
   meta: MissionMeta;
   weather: Weather;
   coalitions: { blue: Coalition; red: Coalition; neutral: Coalition };

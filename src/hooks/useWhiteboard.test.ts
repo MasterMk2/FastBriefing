@@ -22,6 +22,7 @@ function createStorage(initialValue: string | null = null): WhiteboardStorage {
 
 function mission(overrides: Partial<MissionData['meta']> = {}): MissionData {
   return {
+    sourceFingerprint: 'archive-one',
     meta: {
       sortie: 'Night Hawk',
       description: '',
@@ -61,7 +62,7 @@ describe('whiteboard persistence', () => {
   it('round-trips a versioned board under the mission key', () => {
     const storage = createStorage();
     const data = { notes: 'Push at 14:30Z', strokes: [{ id: 'one', color: '#175cd3', width: 3, points: [{ x: 10, y: 20 }] }] };
-    saveWhiteboard('mission-a', data, storage);
+    expect(saveWhiteboard('mission-a', data, storage)).toBe(true);
 
     expect(loadWhiteboard('mission-a', storage)).toEqual(data);
     expect(storage.getItem(`${WHITEBOARD_STORAGE_PREFIX}mission-a`)).toContain(`"version":${WHITEBOARD_VERSION}`);
@@ -75,12 +76,15 @@ describe('whiteboard persistence', () => {
       setItem: () => { throw new Error('quota'); },
     };
     expect(loadWhiteboard('mission-a', throwingStorage)).toEqual({ notes: '', strokes: [] });
-    expect(() => saveWhiteboard('mission-a', { notes: '', strokes: [] }, throwingStorage)).not.toThrow();
+    expect(saveWhiteboard('mission-a', { notes: '', strokes: [] }, throwingStorage)).toBe(false);
     expect(warn).toHaveBeenCalled();
   });
 
-  it('keeps identifiers stable for one mission and different across mission revisions', () => {
+  it('keys boards by archive content even when mission metadata is identical', () => {
     expect(getMissionWhiteboardId(mission())).toBe(getMissionWhiteboardId(mission()));
-    expect(getMissionWhiteboardId(mission())).not.toBe(getMissionWhiteboardId(mission({ startTime: 7200 })));
+    expect(getMissionWhiteboardId(mission())).not.toBe(getMissionWhiteboardId({
+      ...mission(),
+      sourceFingerprint: 'archive-two',
+    }));
   });
 });
