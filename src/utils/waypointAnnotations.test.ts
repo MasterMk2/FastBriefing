@@ -3,8 +3,11 @@ import type { MissionData } from '../types/mission';
 import { emptyUserNotes } from './notes';
 import {
   findNearbyWaypoints,
+  filterWaypointAnnotationsForFlights,
   getSyncGroupMembers,
   greatCircleDistanceNm,
+  hasWaypointSyncConflict,
+  intersectWaypointKeys,
   saveWaypointAnnotation,
   syncWaypointAnnotationGroup,
   leaveWaypointSyncGroup,
@@ -56,5 +59,72 @@ describe('waypoint annotation grouping', () => {
     const ungrouped = leaveWaypointSyncGroup(edited, first);
     expect(ungrouped.waypoints[first].syncGroupId).toBeUndefined();
     expect(ungrouped.waypoints[second].syncGroupId).toBeUndefined();
+  });
+
+  it('drops stale selections when the visible candidate set changes', () => {
+    const near = waypointAnnotationKey('blue', 2, 0);
+    const formerCandidate = waypointAnnotationKey('red', 3, 0);
+    expect(intersectWaypointKeys(
+      new Set([near, formerCandidate]),
+      new Set([near]),
+    )).toEqual([near]);
+    expect(intersectWaypointKeys(
+      new Set([near]),
+      new Set([formerCandidate]),
+    )).toEqual([]);
+  });
+
+  it('does not mutate hidden sync members when group updates are visibility-scoped', () => {
+    const mission = missionFixture();
+    const first = waypointAnnotationKey('blue', 1, 0);
+    const second = waypointAnnotationKey('blue', 2, 0);
+    const hidden = waypointAnnotationKey('red', 3, 0);
+    mission.userNotes.waypoints = {
+      [first]: { purpose: 'Old', notes: '', syncGroupId: 'sync_visible' },
+      [second]: { purpose: 'Old', notes: '', syncGroupId: 'sync_visible' },
+      [hidden]: { purpose: 'Hidden value', notes: 'Keep me', syncGroupId: 'sync_visible' },
+    };
+
+    const updated = saveWaypointAnnotation(
+      mission.userNotes,
+      first,
+      { purpose: 'Visible update', notes: '' },
+      true,
+      new Set([first, second]),
+    )!;
+    expect(updated.waypoints[first].purpose).toBe('Visible update');
+    expect(updated.waypoints[second].purpose).toBe('Visible update');
+    expect(updated.waypoints[hidden]).toEqual(mission.userNotes.waypoints[hidden]);
+  });
+
+  it('rejects reassignment from another group instead of stranding its members', () => {
+    const notes = emptyUserNotes('groups');
+    const first = waypointAnnotationKey('blue', 1, 0);
+    const second = waypointAnnotationKey('blue', 2, 0);
+    const third = waypointAnnotationKey('red', 3, 0);
+    const fourth = waypointAnnotationKey('neutral', 4, 0);
+    notes.waypoints = {
+      [first]: { purpose: 'A', notes: '', syncGroupId: 'group_a' },
+      [second]: { purpose: 'A', notes: '', syncGroupId: 'group_a' },
+      [third]: { purpose: 'B', notes: '', syncGroupId: 'group_b' },
+      [fourth]: { purpose: 'B', notes: '', syncGroupId: 'group_b' },
+    };
+
+    expect(hasWaypointSyncConflict(notes, first, [third])).toBe(true);
+    expect(syncWaypointAnnotationGroup(notes, first, [third], { purpose: 'Merged?', notes: '' }, 'group_a')).toBeNull();
+    expect(getSyncGroupMembers(notes, fourth)).toEqual([fourth, third].sort());
+  });
+
+  it('filters pilot waypoint records to exact visible flight keys and removes orphan group metadata', () => {
+    const visible = waypointAnnotationKey('blue', 1, 0);
+    const samePrefixButHidden = waypointAnnotationKey('blue', 10, 0);
+    const hiddenPeer = waypointAnnotationKey('red', 3, 0);
+    const filtered = filterWaypointAnnotationsForFlights({
+      [visible]: { purpose: 'Visible', notes: '', syncGroupId: 'mixed_group' },
+      [samePrefixButHidden]: { purpose: 'Hidden 10', notes: '' },
+      [hiddenPeer]: { purpose: 'Secret', notes: 'Hidden details', syncGroupId: 'mixed_group' },
+    }, new Set(['blue:1']));
+
+    expect(filtered).toEqual({ [visible]: { purpose: 'Visible', notes: '' } });
   });
 });

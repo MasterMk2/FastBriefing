@@ -4,6 +4,8 @@ import {
   emptyFlightNotes,
   emptyUserNotes,
   parseNotesSidecar,
+  removeMapAnnotation,
+  replaceMapAnnotation,
   readStoredNotes,
   saveStoredNotes,
   serializeNotesSidecar,
@@ -129,5 +131,44 @@ describe('mission notes identity and sidecar', () => {
     const invalidWaypoint = JSON.parse(serializeNotesSidecar(notes));
     invalidWaypoint.waypoints = { '../escape': { purpose: 'bad', notes: '' } };
     expect(() => parseNotesSidecar(JSON.stringify(invalidWaypoint), notes.missionKey)).toThrow('Invalid waypoint annotation');
+  });
+
+  it('rejects duplicate map annotation ids across same and mixed annotation kinds', () => {
+    const notes = emptyUserNotes('duplicate-map-ids');
+    const envelope = JSON.parse(serializeNotesSidecar(notes));
+    const pin = { id: 'duplicate', kind: 'pin', position: [42, 43], label: '', notes: '', color: '#e53935' };
+    envelope.mapAnnotations = [pin, { ...pin }];
+    expect(() => parseNotesSidecar(JSON.stringify(envelope), notes.missionKey)).toThrow('Duplicate map annotation id');
+    notes.mapAnnotations = envelope.mapAnnotations;
+    expect(() => serializeNotesSidecar(notes)).toThrow('Duplicate map annotation id');
+
+    envelope.mapAnnotations = [
+      pin,
+      { id: 'duplicate', kind: 'stroke', points: [[42, 43], [42.01, 43.01]], color: '#0066ff', width: 4 },
+    ];
+    expect(() => parseNotesSidecar(JSON.stringify(envelope), notes.missionKey)).toThrow('Duplicate map annotation id');
+  });
+
+  it('edits and individually deletes a middle stroke without changing its neighbours', () => {
+    const notes = emptyUserNotes('stroke-edit-delete');
+    notes.mapAnnotations = [
+      { id: 'stroke_1', kind: 'stroke', points: [[42, 43], [42.01, 43.01]], color: '#111111', width: 2 },
+      { id: 'stroke_2', kind: 'stroke', points: [[42.1, 43.1], [42.11, 43.11]], color: '#222222', width: 3 },
+      { id: 'stroke_3', kind: 'stroke', points: [[42.2, 43.2], [42.21, 43.21]], color: '#333333', width: 4 },
+    ];
+    const middle = notes.mapAnnotations[1];
+    if (middle.kind !== 'stroke') throw new Error('Expected stroke fixture');
+    notes.mapAnnotations = replaceMapAnnotation(notes.mapAnnotations, {
+      ...middle,
+      color: '#abcdef',
+      width: 9,
+    });
+    const restored = parseNotesSidecar(serializeNotesSidecar(notes), notes.missionKey);
+    expect(restored.mapAnnotations[1]).toMatchObject({ id: 'stroke_2', color: '#abcdef', width: 9 });
+
+    const remaining = removeMapAnnotation(restored.mapAnnotations, 'stroke_2');
+    expect(remaining.map(annotation => annotation.id)).toEqual(['stroke_1', 'stroke_3']);
+    expect(remaining[0]).toEqual(notes.mapAnnotations[0]);
+    expect(remaining[1]).toEqual(notes.mapAnnotations[2]);
   });
 });

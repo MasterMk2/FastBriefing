@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import type { DisplaySettings, FlightNotes, MissionData, SMEACNotes, UserNotes } from '../types/mission';
 import { emptyFlightNotes, MAX_FLIGHT_NOTES, parseNotesSidecar, serializeNotesSidecar, updateFlightNotes } from '../utils/notes';
 import { applyViewMode } from '../utils/viewMode';
+import { filterWaypointAnnotationsForFlights } from '../utils/waypointAnnotations';
 
 interface NotesTabProps {
   mission: MissionData;
@@ -51,6 +52,7 @@ export default function NotesTab({ mission, settings, onNotesChange, storageFail
     const sidecarNotes = settings.viewMode === 'creator' ? notes : {
       ...notes,
       perFlight: Object.fromEntries(Object.entries(notes.perFlight).filter(([key]) => visibleKeys.has(key))),
+      waypoints: filterWaypointAnnotationsForFlights(notes.waypoints, visibleKeys),
     };
     try {
       const blob = new Blob([serializeNotesSidecar(sidecarNotes)], { type: 'application/json' });

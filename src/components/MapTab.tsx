@@ -7,7 +7,7 @@ import 'leaflet/dist/leaflet.css';
 import markerIcon from 'leaflet/dist/images/marker-icon.png';
 import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png';
 import markerShadow from 'leaflet/dist/images/marker-shadow.png';
-import type { DisplaySettings, Drawing, Flight, MapAnnotation, MapPinAnnotation, MissionData, SupportAsset, TriggerZone, UserNotes } from '../types/mission';
+import type { DisplaySettings, Drawing, Flight, MapAnnotation, MapPinAnnotation, MapStrokeAnnotation, MissionData, SupportAsset, TriggerZone, UserNotes } from '../types/mission';
 import { dcsToLatLon } from '../utils/coordinates';
 import { applyViewMode } from '../utils/viewMode';
 import {
@@ -16,6 +16,8 @@ import {
   MAX_MAP_NOTE_LENGTH,
   MAX_MAP_POINTS_TOTAL,
   MAX_MAP_STROKE_POINTS,
+  removeMapAnnotation,
+  replaceMapAnnotation,
 } from '../utils/notes';
 import WaypointAnnotationEditor from './WaypointAnnotationEditor';
 
@@ -489,12 +491,20 @@ export default function MapTab({ mission, settings, onNotesChange }: MapTabProps
             <LayerGroup>
               {annotations.map(annotation => annotation.kind === 'stroke' ? (
                 <Polyline
-                  key={annotation.id}
+                  key={`${annotation.id}:${annotation.color}:${annotation.width}`}
                   positions={annotation.points}
                   color={annotation.color}
                   weight={annotation.width}
                   opacity={0.9}
-                />
+                >
+                  <Popup>
+                    <MapStrokeEditor
+                      stroke={annotation}
+                      onUpdate={next => updateAnnotations(replaceMapAnnotation(annotations, next))}
+                      onDelete={() => updateAnnotations(removeMapAnnotation(annotations, annotation.id))}
+                    />
+                  </Popup>
+                </Polyline>
               ) : (
                 <Marker
                   key={annotation.id}
@@ -506,8 +516,8 @@ export default function MapTab({ mission, settings, onNotesChange }: MapTabProps
                   <Popup>
                     <MapPinEditor
                       pin={annotation}
-                      onUpdate={next => updateAnnotations(annotations.map(item => item.id === next.id ? next : item))}
-                      onDelete={() => updateAnnotations(annotations.filter(item => item.id !== annotation.id))}
+                      onUpdate={next => updateAnnotations(replaceMapAnnotation(annotations, next))}
+                      onDelete={() => updateAnnotations(removeMapAnnotation(annotations, annotation.id))}
                     />
                   </Popup>
                 </Marker>
@@ -596,6 +606,44 @@ function MapPinEditor({ pin, onUpdate, onDelete }: {
       </label>
       <div className="waypoint-editor-actions">
         <button type="button" onClick={() => onUpdate({ ...pin, label, notes, color })}>{t('waypoints.save')}</button>
+        <button type="button" className="button-danger-text" onClick={onDelete}>{t('map.annotations.delete')}</button>
+      </div>
+    </div>
+  );
+}
+
+function MapStrokeEditor({ stroke, onUpdate, onDelete }: {
+  stroke: MapStrokeAnnotation;
+  onUpdate: (stroke: MapStrokeAnnotation) => void;
+  onDelete: () => void;
+}) {
+  const { t } = useTranslation();
+  const [color, setColor] = useState(stroke.color);
+  const [width, setWidth] = useState(stroke.width);
+  const save = () => onUpdate({
+    ...stroke,
+    color,
+    width: Math.max(1, Math.min(12, Math.round(width))),
+  });
+  return (
+    <div className="map-pin-editor">
+      <label>
+        <span>{t('map.annotations.color')}</span>
+        <input type="color" value={color} onChange={event => setColor(event.target.value)} />
+      </label>
+      <label>
+        <span>{t('map.annotations.width')}</span>
+        <input
+          type="number"
+          min={1}
+          max={12}
+          step={1}
+          value={width}
+          onChange={event => setWidth(Number(event.target.value) || 1)}
+        />
+      </label>
+      <div className="waypoint-editor-actions">
+        <button type="button" onClick={save}>{t('waypoints.save')}</button>
         <button type="button" className="button-danger-text" onClick={onDelete}>{t('map.annotations.delete')}</button>
       </div>
     </div>

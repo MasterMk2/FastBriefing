@@ -9,6 +9,7 @@ import { buildGeospatialExport, toGeoJson, toKml } from '../utils/geospatialExpo
 import { planKneeboardPages } from '../utils/kneeboard';
 import { renderKneeboardPages } from '../utils/kneeboardRenderer';
 import { createKneeboardMizCopy, createKneeboardPngZip, numberedKneeboardImages } from '../utils/kneeboardArchive';
+import { filterWaypointAnnotationsForFlights } from '../utils/waypointAnnotations';
 import type { MissionMapRenderState } from './MissionMapCanvas';
 
 interface ExportTabProps {
@@ -91,6 +92,7 @@ export default function ExportTab({ mission, settings, sourceFile, whiteboard, p
       ...viewMission.userNotes,
       perFlight: Object.fromEntries(Object.entries(viewMission.userNotes.perFlight)
         .filter(([key]) => visibleFlights.has(key))),
+      waypoints: filterWaypointAnnotationsForFlights(viewMission.userNotes.waypoints, visibleFlights),
     };
     downloadBlob(
       new Blob([JSON.stringify({ ...viewMission, userNotes }, null, 2)], { type: 'application/json' }),

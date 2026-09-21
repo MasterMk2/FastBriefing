@@ -6,6 +6,8 @@ import {
   DEFAULT_WAYPOINT_SYNC_RADIUS_NM,
   findNearbyWaypoints,
   getSyncGroupMembers,
+  hasWaypointSyncConflict,
+  intersectWaypointKeys,
   leaveWaypointSyncGroup,
   MAX_WAYPOINT_NOTES_LENGTH,
   MAX_WAYPOINT_PURPOSE_LENGTH,
@@ -41,15 +43,29 @@ export default function WaypointAnnotationEditor({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [status, setStatus] = useState('');
   const allWaypoints = useMemo(() => collectMissionWaypoints(mission), [mission]);
+  const visibleWaypointKeys = useMemo(
+    () => new Set(allWaypoints.map(item => item.key)),
+    [allWaypoints],
+  );
   const candidates = useMemo(
     () => findNearbyWaypoints(mission, key, radiusNm),
     [key, mission, radiusNm],
   );
-  const groupMembers = getSyncGroupMembers(mission.userNotes, key);
+  const allowedCandidateKeys = useMemo(() => new Set(candidates
+    .filter(candidate => !hasWaypointSyncConflict(mission.userNotes, key, [candidate.key]))
+    .map(candidate => candidate.key)), [candidates, key, mission.userNotes]);
+  const selectedTargets = useMemo(
+    () => intersectWaypointKeys(selected, allowedCandidateKeys),
+    [allowedCandidateKeys, selected],
+  );
+  const groupMembers = getSyncGroupMembers(mission.userNotes, key)
+    .filter(memberKey => visibleWaypointKeys.has(memberKey));
 
   useEffect(() => {
     setPurpose(annotation?.purpose ?? '');
     setNotes(annotation?.notes ?? '');
+    setSelected(new Set());
+    setStatus('');
   }, [annotation?.notes, annotation?.purpose, key]);
 
   const currentValue = () => ({
@@ -59,7 +75,13 @@ export default function WaypointAnnotationEditor({
   });
 
   const save = (applyToGroup: boolean) => {
-    const updated = saveWaypointAnnotation(mission.userNotes, key, currentValue(), applyToGroup);
+    const updated = saveWaypointAnnotation(
+      mission.userNotes,
+      key,
+      currentValue(),
+      applyToGroup,
+      applyToGroup ? visibleWaypointKeys : undefined,
+    );
     if (!updated) {
       setStatus(t('waypoints.limitReached'));
       return;
@@ -69,9 +91,16 @@ export default function WaypointAnnotationEditor({
   };
 
   const createGroup = () => {
-    const targetKeys = [...selected];
+    const targetKeys = selectedTargets;
     const groupId = annotation?.syncGroupId ?? createGroupId();
-    const updated = syncWaypointAnnotationGroup(mission.userNotes, key, targetKeys, currentValue(), groupId);
+    const updated = syncWaypointAnnotationGroup(
+      mission.userNotes,
+      key,
+      targetKeys,
+      currentValue(),
+      groupId,
+      visibleWaypointKeys,
+    );
     if (!updated) {
       setStatus(t(targetKeys.length === 0 ? 'waypoints.selectTarget' : 'waypoints.limitReached'));
       return;
@@ -138,20 +167,24 @@ export default function WaypointAnnotationEditor({
               <label key={candidate.key}>
                 <input
                   type="checkbox"
-                  checked={selected.has(candidate.key)}
+                  checked={allowedCandidateKeys.has(candidate.key) && selected.has(candidate.key)}
+                  disabled={!allowedCandidateKeys.has(candidate.key)}
                   onChange={event => setSelected(previous => {
                     const next = new Set(previous);
                     if (event.target.checked) next.add(candidate.key); else next.delete(candidate.key);
                     return next;
                   })}
                 />
-                <span>{formatWaypointLabel(candidate.side, candidate.flight, candidate.routeIndex, mission)} · {candidate.distanceNm.toFixed(2)} NM</span>
+                <span>
+                  {formatWaypointLabel(candidate.side, candidate.flight, candidate.routeIndex, mission)} · {candidate.distanceNm.toFixed(2)} NM
+                  {!allowedCandidateKeys.has(candidate.key) && ` · ${t('waypoints.groupConflict')}`}
+                </span>
               </label>
             ))}
           </div>
         )}
-        <button type="button" className="button-secondary" disabled={selected.size === 0} onClick={createGroup}>
-          {t('waypoints.createGroup', { count: selected.size + 1 })}
+        <button type="button" className="button-secondary" disabled={selectedTargets.length === 0} onClick={createGroup}>
+          {t('waypoints.createGroup', { count: selectedTargets.length + 1 })}
         </button>
         {groupMembers.length > 1 && (
           <div className="waypoint-group-members">

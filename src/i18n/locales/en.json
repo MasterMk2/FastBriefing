@@ -235,6 +235,7 @@
     "currentGroup": "Current sync group ({{count}} points)",
     "leaveGroup": "Remove this point from the group",
     "leftGroup": "Removed this point from the sync group.",
+    "groupConflict": "Already belongs to another sync group",
     "limitReached": "The annotation limit was reached, so this could not be saved."
   },
   "comms": {
@@ -333,6 +334,7 @@
         "draw": "Drag on the map to draw a line."
       },
       "color": "Color",
+      "width": "Line width",
       "undo": "Undo one",
       "clear": "Clear annotations",
       "clearConfirm": "Clear every user annotation from the map?",

@@ -72,15 +72,62 @@ export function getSyncGroupMembers(notes: UserNotes, key: string): string[] {
     .sort();
 }
 
+export function intersectWaypointKeys(
+  selectedKeys: Iterable<string>,
+  allowedKeys: ReadonlySet<string>,
+): string[] {
+  return [...new Set(selectedKeys)].filter(key => allowedKeys.has(key));
+}
+
+export function hasWaypointSyncConflict(
+  notes: UserNotes,
+  sourceKey: string,
+  targetKeys: Iterable<string>,
+): boolean {
+  const sourceGroupId = notes.waypoints[sourceKey]?.syncGroupId;
+  return [...targetKeys].some(key => {
+    const targetGroupId = notes.waypoints[key]?.syncGroupId;
+    return Boolean(targetGroupId && targetGroupId !== sourceGroupId);
+  });
+}
+
+export function filterWaypointAnnotationsForFlights(
+  waypoints: Readonly<Record<string, WaypointAnnotation>>,
+  visibleFlightKeys: ReadonlySet<string>,
+): Record<string, WaypointAnnotation> {
+  const visible: Record<string, WaypointAnnotation> = {};
+  for (const [key, annotation] of Object.entries(waypoints)) {
+    const match = /^(blue|red|neutral):(\d+):(\d+)$/.exec(key);
+    if (!match || !visibleFlightKeys.has(`${match[1]}:${match[2]}`)) continue;
+    visible[key] = { ...annotation };
+  }
+
+  const groupCounts = new Map<string, number>();
+  for (const annotation of Object.values(visible)) {
+    if (annotation.syncGroupId) {
+      groupCounts.set(annotation.syncGroupId, (groupCounts.get(annotation.syncGroupId) ?? 0) + 1);
+    }
+  }
+  for (const [key, annotation] of Object.entries(visible)) {
+    if (annotation.syncGroupId && groupCounts.get(annotation.syncGroupId) === 1) {
+      visible[key] = { purpose: annotation.purpose, notes: annotation.notes };
+    }
+  }
+  return visible;
+}
+
 export function saveWaypointAnnotation(
   notes: UserNotes,
   key: string,
   value: WaypointAnnotation,
   applyToSyncGroup: boolean,
+  allowedKeys?: ReadonlySet<string>,
 ): UserNotes | null {
   const normalized = normalizeWaypointAnnotation(value);
   const keys = applyToSyncGroup ? getSyncGroupMembers(notes, key) : [];
-  const targets = keys.length > 0 ? keys : [key];
+  const permittedKeys = allowedKeys ?? new Set(keys.length > 0 ? keys : [key]);
+  const targets = intersectWaypointKeys(keys.length > 0 ? keys : [key], permittedKeys);
+  if (targets.length === 0) return null;
   const waypoints = { ...notes.waypoints };
   for (const target of targets) {
     const existing = waypoints[target];
@@ -98,8 +145,18 @@ export function syncWaypointAnnotationGroup(
   targetKeys: readonly string[],
   value: WaypointAnnotation,
   groupId: string,
+  allowedKeys?: ReadonlySet<string>,
 ): UserNotes | null {
-  const safeTargets = [...new Set([sourceKey, ...targetKeys])].filter(isWaypointKey);
+  const sourceGroupId = notes.waypoints[sourceKey]?.syncGroupId;
+  if ((sourceGroupId && sourceGroupId !== groupId)
+    || hasWaypointSyncConflict(notes, sourceKey, targetKeys)) return null;
+  const requestedTargets = [
+    ...(sourceGroupId ? getSyncGroupMembers(notes, sourceKey) : []),
+    sourceKey,
+    ...targetKeys,
+  ];
+  const permittedKeys = allowedKeys ?? new Set(requestedTargets);
+  const safeTargets = intersectWaypointKeys(requestedTargets, permittedKeys).filter(isWaypointKey);
   if (safeTargets.length < 2 || !isSyncGroupId(groupId)) return null;
   const normalized = normalizeWaypointAnnotation(value);
   const waypoints = { ...notes.waypoints };

@@ -125,6 +125,20 @@ export function parseNotesSidecar(json: string, expectedMissionKey: string): Use
   return { missionKey: expectedMissionKey, smeac, perFlight, waypoints, mapAnnotations };
 }
 
+export function replaceMapAnnotation(
+  annotations: readonly MapAnnotation[],
+  replacement: MapAnnotation,
+): MapAnnotation[] {
+  return annotations.map(annotation => annotation.id === replacement.id ? replacement : annotation);
+}
+
+export function removeMapAnnotation(
+  annotations: readonly MapAnnotation[],
+  id: string,
+): MapAnnotation[] {
+  return annotations.filter(annotation => annotation.id !== id);
+}
+
 function readWaypointAnnotations(value: unknown): Record<string, WaypointAnnotation> {
   if (value === undefined) return {};
   if (!isRecord(value)) throw new Error('Invalid waypoint annotations');
@@ -145,9 +159,12 @@ function readMapAnnotations(value: unknown): MapAnnotation[] {
   if (value === undefined) return [];
   if (!Array.isArray(value) || value.length > MAX_MAP_ANNOTATIONS) throw new Error('Invalid map annotations');
   let totalPoints = 0;
+  const ids = new Set<string>();
   return value.map(item => {
     if (!isRecord(item)) throw new Error('Invalid map annotation');
     const id = readId(item.id);
+    if (ids.has(id)) throw new Error('Duplicate map annotation id');
+    ids.add(id);
     const color = readColor(item.color);
     if (item.kind === 'pin') {
       return {

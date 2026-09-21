@@ -77,7 +77,8 @@ export default function MissionMapCanvas({
 
 function hasMapContent(scene: ReturnType<typeof buildMissionMapScene>): boolean {
   return scene.routes.length + scene.zones.length + scene.drawings.length
-    + scene.support.length + scene.threats.length > 0;
+    + scene.support.length + scene.threats.length
+    + scene.userPins.length + scene.userStrokes.length > 0;
 }
 
 function drawMapFailure(context: CanvasRenderingContext2D, canvas: HTMLCanvasElement, message: string): void {
