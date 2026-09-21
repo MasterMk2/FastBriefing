@@ -182,7 +182,7 @@ export default function BriefingPlanner({ selected, presets, onChange, onPresets
                     aria-label={t('planner.deletePreset', { name: preset.name })}
                     onClick={() => {
                       const persisted = onPresetsChange(presets.filter(candidate => candidate.name !== preset.name));
-                      setStatus(t(persisted ? 'planner.presetDeleted' : 'planner.presetMemoryOnly', { name: preset.name }));
+                      setStatus(t(persisted ? 'planner.presetDeleted' : 'planner.presetDeleteMemoryOnly', { name: preset.name }));
                     }}
                   >×</button>
                 </li>

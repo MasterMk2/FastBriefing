@@ -10,6 +10,7 @@ import { planKneeboardPages } from '../utils/kneeboard';
 import { renderKneeboardPages } from '../utils/kneeboardRenderer';
 import { createKneeboardMizCopy, createKneeboardPngZip, numberedKneeboardImages } from '../utils/kneeboardArchive';
 import PrintView from './PrintView';
+import type { MissionMapRenderState } from './MissionMapCanvas';
 
 interface ExportTabProps {
   mission: MissionData;
@@ -30,6 +31,9 @@ export default function ExportTab({ mission, settings, sourceFile, whiteboard }:
   const [kneeboardWidth, setKneeboardWidth] = useState(1536);
   const [aircraftType, setAircraftType] = useState('');
   const canExportPages = settings.briefingSections.length > 0;
+  const hasPrintMap = settings.briefingSections.includes('map');
+  const [printMapState, setPrintMapState] = useState<MissionMapRenderState>(hasPrintMap ? 'loading' : 'ready');
+  const printMapBlocked = hasPrintMap && printMapState !== 'ready';
   const aircraftTypes = useMemo(() => [...new Set([
     ...viewMission.coalitions.blue.flights,
     ...viewMission.coalitions.red.flights,
@@ -132,7 +136,13 @@ export default function ExportTab({ mission, settings, sourceFile, whiteboard }:
         <button type="button" onClick={() => exportGeospatial('geojson')} className="btn btn-secondary">{t('export.geoJson')}</button>
         <button type="button" onClick={() => exportGeospatial('kml')} className="btn btn-secondary">{t('export.kml')}</button>
         <button type="button" onClick={() => void copyMarkdown()} className="btn" disabled={!markdown}>{t('export.copy')}</button>
-        <button type="button" onClick={() => window.print()} className="btn btn-secondary">{t('export.printPdf')}</button>
+        <button
+          type="button"
+          onClick={() => window.print()}
+          className="btn btn-secondary"
+          disabled={printMapBlocked}
+          aria-describedby={printMapBlocked ? 'print-map-status' : undefined}
+        >{t('export.printPdf')}</button>
         <button
           type="button"
           onClick={() => void exportKneeboard('zip')}
@@ -179,6 +189,11 @@ export default function ExportTab({ mission, settings, sourceFile, whiteboard }:
         {copyStatus && <span className="hint" role="status">{copyStatus}</span>}
         {pngStatus && <span className="hint" role="status">{pngStatus}</span>}
         {geoStatus && <span className="hint" role="status">{geoStatus}</span>}
+        {printMapBlocked && (
+          <span id="print-map-status" className={printMapState === 'error' ? 'warning' : 'hint'} role={printMapState === 'error' ? 'alert' : 'status'}>
+            {t(printMapState === 'error' ? 'export.printMapFailed' : 'export.printMapLoading')}
+          </span>
+        )}
         {!canExportPages && <span className="hint" id="png-empty-selection-help">{t('export.pngNoSections')}</span>}
       </div>
 
@@ -196,7 +211,12 @@ export default function ExportTab({ mission, settings, sourceFile, whiteboard }:
       </section>
 
       <div className="print-briefing">
-        <PrintView mission={mission} settings={settings} whiteboard={whiteboard} />
+        <PrintView
+          mission={mission}
+          settings={settings}
+          whiteboard={whiteboard}
+          onMapRenderStateChange={setPrintMapState}
+        />
       </div>
     </div>
   );

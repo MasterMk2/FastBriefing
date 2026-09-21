@@ -9,13 +9,14 @@ import { buildMetar } from '../utils/metar';
 import { addSeconds, formatDateYMD, formatEtaLocal, formatEtaZulu, formatTimeHHMM, formatUtcOffset, missionLocalDate, missionZuluDate } from '../utils/time';
 import { applyViewMode } from '../utils/viewMode';
 import WhiteboardDrawing from './WhiteboardDrawing';
-import MissionMapCanvas from './MissionMapCanvas';
+import MissionMapCanvas, { type MissionMapRenderState } from './MissionMapCanvas';
 import { formatLegDuration, formatRouteCoordinate } from '../utils/routeLegs';
 
 interface PrintViewProps {
   mission: MissionData;
   settings: DisplaySettings;
   whiteboard: WhiteboardData;
+  onMapRenderStateChange?: (state: MissionMapRenderState) => void;
 }
 
 type PrintTranslator = (key: string, options?: Record<string, string | number>) => string;
@@ -30,7 +31,7 @@ const GUARD_FREQUENCIES_MHZ = {
   VHF: 121.500,
 } as const;
 
-export default function PrintView({ mission, settings, whiteboard }: PrintViewProps) {
+export default function PrintView({ mission, settings, whiteboard, onMapRenderStateChange }: PrintViewProps) {
   const { t } = useTranslation();
   const viewMission = useMemo(() => applyViewMode(mission, settings.viewMode), [mission, settings.viewMode]);
   const printT: PrintTranslator = (key, options) => t(key, {
@@ -38,6 +39,14 @@ export default function PrintView({ mission, settings, whiteboard }: PrintViewPr
     lng: settings.outputLanguage,
   });
   const flights = getAllFlights(viewMission);
+  const mapLabels = useMemo(() => ({
+    empty: t('mapRaster.empty', { lng: settings.outputLanguage }),
+    basemapUnavailable: t('mapRaster.basemapUnavailable', { lng: settings.outputLanguage }),
+    routes: t('mapRaster.routes', { lng: settings.outputLanguage }),
+    support: t('mapRaster.support', { lng: settings.outputLanguage }),
+    threats: t('mapRaster.threats', { lng: settings.outputLanguage }),
+    zones: t('mapRaster.zones', { lng: settings.outputLanguage }),
+  }), [settings.outputLanguage, t]);
 
   return (
     <div className="print-view">
@@ -77,14 +86,8 @@ export default function PrintView({ mission, settings, whiteboard }: PrintViewPr
                 <MissionMapCanvas
                   mission={viewMission}
                   className="print-map-canvas"
-                  labels={{
-                    empty: printT('mapRaster.empty'),
-                    basemapUnavailable: printT('mapRaster.basemapUnavailable'),
-                    routes: printT('mapRaster.routes'),
-                    support: printT('mapRaster.support'),
-                    threats: printT('mapRaster.threats'),
-                    zones: printT('mapRaster.zones'),
-                  }}
+                  labels={mapLabels}
+                  onRenderStateChange={onMapRenderStateChange}
                 />
               </section>
             );

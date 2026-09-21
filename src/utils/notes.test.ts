@@ -79,4 +79,23 @@ describe('mission notes identity and sidecar', () => {
     expect(reused?.perFlight['blue:1']).toBeUndefined();
     expect(reused?.perFlight['red:999']?.customNotes).toBe('accepted');
   });
+
+  it('drops content-empty imported records before applying the saved-record limit', () => {
+    const missionKey = 'v1-legacy-empty-records';
+    const perFlight: Record<string, ReturnType<typeof emptyFlightNotes>> = {};
+    for (let index = 0; index < MAX_FLIGHT_NOTES; index += 1) {
+      perFlight[`red:${index + 1}`] = emptyFlightNotes();
+    }
+    perFlight['neutral:999'] = { ...emptyFlightNotes(), customNotes: 'orphaned but meaningful' };
+
+    const imported = parseNotesSidecar(JSON.stringify({
+      version: 1,
+      ...emptyUserNotes(missionKey),
+      perFlight,
+    }), missionKey);
+
+    expect(Object.keys(imported.perFlight)).toEqual(['neutral:999']);
+    const updated = updateFlightNotes(imported, 'blue:1', { ...emptyFlightNotes(), pilotName: 'New pilot' });
+    expect(updated?.perFlight['blue:1']?.pilotName).toBe('New pilot');
+  });
 });

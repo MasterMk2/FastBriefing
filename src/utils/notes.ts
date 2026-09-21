@@ -45,7 +45,7 @@ export function updateFlightNotes(notes: UserNotes, key: string, value: FlightNo
   if (!hasFlightNoteContent(value)) {
     delete perFlight[key];
   } else {
-    if (!(key in perFlight) && Object.keys(perFlight).length >= MAX_FLIGHT_NOTES) return null;
+    if (!Object.prototype.hasOwnProperty.call(perFlight, key) && Object.keys(perFlight).length >= MAX_FLIGHT_NOTES) return null;
     perFlight[key] = value;
   }
   return { ...notes, perFlight };
@@ -90,17 +90,19 @@ export function parseNotesSidecar(json: string, expectedMissionKey: string): Use
   }
 
   const entries = Object.entries(value.perFlight);
-  if (entries.length > MAX_FLIGHT_NOTES) throw new Error('Too many flight notes');
   const perFlight: Record<string, FlightNotes> = {};
   for (const [key, item] of entries) {
     if (!/^(blue|red|neutral):\d+$/.test(key) || !isRecord(item)) throw new Error('Invalid flight notes');
-    perFlight[key] = {
+    const flightNotes = {
       jokerFuel: readFuel(item.jokerFuel),
       bingoFuel: readFuel(item.bingoFuel),
       tot: readText(item.tot),
       pilotName: readText(item.pilotName),
       customNotes: readText(item.customNotes),
     };
+    if (!hasFlightNoteContent(flightNotes)) continue;
+    if (Object.keys(perFlight).length >= MAX_FLIGHT_NOTES) throw new Error('Too many flight notes');
+    perFlight[key] = flightNotes;
   }
 
   return { missionKey: expectedMissionKey, smeac, perFlight };
