@@ -12,6 +12,8 @@ export const MAX_WHITEBOARD_NOTES = 12_000;
 export const MAX_WHITEBOARD_STROKES = 300;
 export const MAX_POINTS_PER_STROKE = 1_500;
 export const MAX_TOTAL_POINTS = 12_000;
+export const MAX_WHITEBOARD_SIDECAR_BYTES = 2 * 1024 * 1024;
+export const WHITEBOARD_SIDECAR_KIND = 'fastbriefing-whiteboard';
 
 export type WhiteboardStorage = Pick<Storage, 'getItem' | 'setItem'>;
 
@@ -86,6 +88,31 @@ export function normalizeWhiteboard(value: unknown): WhiteboardData {
   }
 
   return { notes, strokes };
+}
+
+export function serializeWhiteboardSidecar(sourceFingerprint: string, data: WhiteboardData): string {
+  const normalized = normalizeWhiteboard({ version: WHITEBOARD_VERSION, ...data });
+  return JSON.stringify({
+    kind: WHITEBOARD_SIDECAR_KIND,
+    version: WHITEBOARD_VERSION,
+    sourceFingerprint,
+    data: normalized,
+  }, null, 2);
+}
+
+export function parseWhiteboardSidecar(text: string, expectedFingerprint: string): WhiteboardData {
+  if (new TextEncoder().encode(text).byteLength > MAX_WHITEBOARD_SIDECAR_BYTES) {
+    throw new Error('Whiteboard sidecar is too large');
+  }
+  const value: unknown = JSON.parse(text);
+  if (!isRecord(value)
+    || value.kind !== WHITEBOARD_SIDECAR_KIND
+    || value.version !== WHITEBOARD_VERSION
+    || value.sourceFingerprint !== expectedFingerprint
+    || !isRecord(value.data)) {
+    throw new Error('Whiteboard sidecar is invalid or belongs to another mission');
+  }
+  return normalizeWhiteboard({ version: WHITEBOARD_VERSION, ...value.data });
 }
 
 export function getMissionWhiteboardId(mission: MissionData): string {
@@ -168,6 +195,10 @@ export function useWhiteboard(mission: MissionData) {
       if (data.strokes.length === 0) return;
       setClearedStrokes(data.strokes);
       setData(current => ({ ...current, strokes: [] }));
+    },
+    replaceData: (next: WhiteboardData) => {
+      setClearedStrokes(null);
+      setData(normalizeWhiteboard({ version: WHITEBOARD_VERSION, ...next }));
     },
   };
 }

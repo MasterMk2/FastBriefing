@@ -1,4 +1,4 @@
-import type { BriefingSection } from '../utils/briefingSections';
+import type { BriefingPreset, BriefingSection } from '../utils/briefingSections';
 
 export interface MissionMeta {
   sortie: string;
@@ -180,10 +180,10 @@ export interface RouteTask {
 export interface LegInfo {
   distance: number;
   trueBearing: number;
-  magneticBearing: number;
-  time: number;
+  magneticBearing?: number;
+  time?: number;
   cumulativeDistance: number;
-  cumulativeTime: number;
+  cumulativeTime?: number;
 }
 
 export interface SupportAsset {
@@ -298,8 +298,8 @@ export interface SMEACNotes {
 }
 
 export interface FlightNotes {
-  jokerFuel: number;
-  bingoFuel: number;
+  jokerFuel: number | null;
+  bingoFuel: number | null;
   tot: string;
   pilotName: string;
   customNotes: string;
@@ -331,4 +331,5 @@ export interface DisplaySettings {
   outputLanguage: 'ja' | 'en';
   theme: 'default' | 'ffs';
   briefingSections: BriefingSection[];
+  briefingPresets: BriefingPreset[];
 }

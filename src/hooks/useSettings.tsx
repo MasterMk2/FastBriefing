@@ -9,7 +9,9 @@ import i18n, {
 } from '../i18n';
 import {
   DEFAULT_BRIEFING_SECTIONS,
+  normalizeBriefingPresets,
   normalizeBriefingSections,
+  type BriefingPreset,
   type BriefingSection,
 } from '../utils/briefingSections';
 
@@ -30,6 +32,7 @@ export const DEFAULT_SETTINGS: Readonly<DisplaySettings> = {
   outputLanguage: DEFAULT_LANGUAGE,
   theme: 'ffs',
   briefingSections: [...DEFAULT_BRIEFING_SECTIONS],
+  briefingPresets: [],
 };
 
 export type SettingsStorage = Pick<Storage, 'getItem' | 'setItem'>;
@@ -55,7 +58,11 @@ function getStorage(): SettingsStorage | null {
 }
 
 function cloneDefaultSettings(): DisplaySettings {
-  return { ...DEFAULT_SETTINGS, briefingSections: [...DEFAULT_BRIEFING_SECTIONS] };
+  return {
+    ...DEFAULT_SETTINGS,
+    briefingSections: [...DEFAULT_BRIEFING_SECTIONS],
+    briefingPresets: [],
+  };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -81,7 +88,17 @@ function validateSettings(value: Record<string, unknown>): DisplaySettings {
     // Unknown or missing theme values fall back to the default theme (FFS).
     theme: enumOrDefault(value.theme, THEMES, DEFAULT_SETTINGS.theme),
     briefingSections: normalizeBriefingSections(value.briefingSections),
+    briefingPresets: normalizeBriefingPresets(value.briefingPresets),
   };
+}
+
+function migrateV3Sections(value: unknown): BriefingSection[] {
+  const sections: BriefingSection[] = normalizeBriefingSections(value).filter(section => section !== 'notes');
+  if (sections.length === 0) return [];
+  const overviewIndex = sections.indexOf('overview');
+  const insertionIndex = overviewIndex < 0 ? 0 : overviewIndex + 1;
+  sections.splice(insertionIndex, 0, 'notes');
+  return sections;
 }
 
 /**
@@ -98,6 +115,8 @@ export function migrateSettings(value: unknown): DisplaySettings {
   switch (value.settingsVersion) {
     case SETTINGS_VERSION:
       return validateSettings(value);
+    case 3:
+      return { ...validateSettings(value), briefingSections: migrateV3Sections(value.briefingSections) };
     case 2:
       return validateSettings(value);
     case 1:
@@ -157,6 +176,7 @@ interface SettingsContextType {
   setOutputLanguage: (lang: DisplaySettings['outputLanguage']) => void;
   setTheme: (theme: DisplaySettings['theme']) => void;
   setBriefingSections: (sections: BriefingSection[]) => void;
+  setBriefingPresets: (presets: BriefingPreset[]) => void;
 }
 
 const SettingsContext = createContext<SettingsContextType | null>(null);
@@ -190,6 +210,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     setOutputLanguage: (v) => updateSetting('outputLanguage', v),
     setTheme: (v) => updateSetting('theme', v),
     setBriefingSections: (v) => updateSetting('briefingSections', normalizeBriefingSections(v)),
+    setBriefingPresets: (v) => updateSetting('briefingPresets', normalizeBriefingPresets(v)),
   };
   
   return (

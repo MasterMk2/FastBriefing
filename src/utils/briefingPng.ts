@@ -1,6 +1,6 @@
 import type { DisplaySettings, MissionData } from '../types/mission';
 import type { WhiteboardData } from '../types/whiteboard';
-import { BRIEFING_SECTIONS, type BriefingSection } from './briefingSections';
+import type { BriefingSection } from './briefingSections';
 import { formatDistance, formatPressure, formatTemperature } from './units';
 import { buildMetar } from './metar';
 import {
@@ -76,6 +76,23 @@ export function buildBriefingPngSections(
         t('export.canvas.visibility', { value: formatDistance(weather.visibility, settings.distanceUnit) }),
         t('export.canvas.clouds', { value: weather.clouds.label }),
         t('export.canvas.metar', { value: buildMetar(weather, { time: zuluDate }) }),
+      ],
+    },
+    notes: {
+      id: 'notes',
+      title: t('planner.sections.notes'),
+      includeWhiteboardDrawing: false,
+      lines: [
+        ...Object.entries(mission.userNotes.smeac)
+          .filter(([, value]) => value.trim())
+          .flatMap(([field, value]) => [t(`notes.smeac.${field}`), value, '']),
+        ...Object.entries(mission.userNotes.perFlight)
+          .filter(([, notes]) => notes.pilotName || notes.tot || notes.jokerFuel !== null || notes.bingoFuel !== null || notes.customNotes)
+          .flatMap(([key, notes]) => [
+            key,
+            [notes.pilotName, notes.tot, notes.jokerFuel, notes.bingoFuel, notes.customNotes].filter(value => value !== null && value !== '').join(' | '),
+            '',
+          ]),
       ],
     },
     flights: {
@@ -164,9 +181,7 @@ export function buildBriefingPngSections(
     },
   };
 
-  return BRIEFING_SECTIONS
-    .filter(section => settings.briefingSections.includes(section))
-    .map(section => sections[section]);
+  return settings.briefingSections.map(section => sections[section]);
 }
 
 export function wrapBriefingPngLines(

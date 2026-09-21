@@ -3,6 +3,8 @@ import {
   BRIEFING_SECTIONS,
   DEFAULT_BRIEFING_SECTIONS,
   hasBriefingSection,
+  moveBriefingSection,
+  normalizeBriefingPresets,
   normalizeBriefingSections,
 } from './briefingSections';
 
@@ -11,10 +13,10 @@ describe('briefing section selection', () => {
     expect(normalizeBriefingSections(undefined)).toEqual(DEFAULT_BRIEFING_SECTIONS);
   });
 
-  it('drops unknown and duplicate values while restoring canonical order', () => {
+  it('drops unknown and duplicate values while preserving user order', () => {
     expect(normalizeBriefingSections(['whiteboard', 'unknown', 'overview', 'whiteboard'])).toEqual([
-      'overview',
       'whiteboard',
+      'overview',
     ]);
   });
 
@@ -26,5 +28,20 @@ describe('briefing section selection', () => {
     const selected = BRIEFING_SECTIONS.filter(section => section !== 'threats');
     expect(hasBriefingSection(selected, 'map')).toBe(true);
     expect(hasBriefingSection(selected, 'threats')).toBe(false);
+  });
+
+  it('moves a selected section to a bounded position', () => {
+    expect(moveBriefingSection(['overview', 'map', 'whiteboard'], 'whiteboard', 1)).toEqual([
+      'overview', 'whiteboard', 'map',
+    ]);
+    expect(moveBriefingSection(['overview', 'map'], 'overview', 99)).toEqual(['map', 'overview']);
+  });
+
+  it('normalizes named presets and rejects case-insensitive duplicates', () => {
+    expect(normalizeBriefingPresets([
+      { name: ' Pilot ', sections: ['map', 'overview', 'map'] },
+      { name: 'pilot', sections: ['threats'] },
+      { name: '', sections: [] },
+    ])).toEqual([{ name: 'Pilot', sections: ['map', 'overview'] }]);
   });
 });

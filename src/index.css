@@ -653,6 +653,15 @@ body {
 
 .flight-detail {
   min-height: 400px;
+  min-width: 0;
+}
+
+.flight-route-scroll {
+  overflow-x: auto;
+}
+
+.flight-route-scroll .data-table {
+  min-width: 90rem;
 }
 
 .flight-detail.empty {
@@ -1275,4 +1284,141 @@ body {
     border-color: #999;
     box-shadow: none;
   }
+}
+
+.notes-fields,
+.notes-flight-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
+  gap: 1rem;
+}
+
+.notes-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.notes-field-wide {
+  grid-column: 1 / -1;
+}
+
+.notes-field input,
+.notes-field textarea {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 0.6rem;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+}
+
+.notes-flight {
+  margin: 0.75rem 0;
+  padding: 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+}
+
+.notes-flight summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.notes-flight-fields {
+  margin-top: 1rem;
+}
+
+.notes-print-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.planner-option.selected {
+  cursor: grab;
+}
+
+.planner-option.dragging {
+  opacity: 0.55;
+}
+
+.planner-drag-handle {
+  color: var(--color-text-tertiary);
+  font-size: 1.1rem;
+  letter-spacing: -0.2rem;
+  user-select: none;
+}
+
+.planner-option-copy {
+  min-width: 0;
+  flex: 1;
+}
+
+.planner-order-controls {
+  display: inline-flex;
+  gap: 0.25rem;
+}
+
+.planner-order-button {
+  min-width: 2rem;
+  min-height: 2rem;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.planner-order-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.planner-presets {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--color-border);
+}
+
+.planner-preset-save,
+.planner-preset-list li {
+  display: flex;
+  align-items: end;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.planner-preset-save label {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.planner-preset-list {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0;
+  list-style: none;
+}
+
+.planner-preset-count {
+  color: var(--color-text-tertiary);
+  font-size: 0.9rem;
+}
+
+.planner-status {
+  margin-bottom: 0;
+}
+
+.whiteboard-share {
+  margin-top: 1rem;
+}
+
+.print-map-canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--color-border);
 }

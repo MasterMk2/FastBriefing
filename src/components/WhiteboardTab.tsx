@@ -1,18 +1,22 @@
 import { useRef, useState } from 'react';
-import type { PointerEvent as ReactPointerEvent } from 'react';
+import type { ChangeEvent, PointerEvent as ReactPointerEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   MAX_POINTS_PER_STROKE,
   MAX_WHITEBOARD_NOTES,
+  MAX_WHITEBOARD_SIDECAR_BYTES,
   WHITEBOARD_COLORS,
   WHITEBOARD_HEIGHT,
   WHITEBOARD_PEN_WIDTHS,
   WHITEBOARD_WIDTH,
+  parseWhiteboardSidecar,
+  serializeWhiteboardSidecar,
 } from '../hooks/useWhiteboard';
 import type { WhiteboardData, WhiteboardPoint, WhiteboardStroke } from '../types/whiteboard';
 import WhiteboardDrawing from './WhiteboardDrawing';
 
 interface WhiteboardTabProps {
+  sourceFingerprint: string;
   data: WhiteboardData;
   persistenceStatus: 'saved' | 'memory-only';
   canUndo: boolean;
@@ -20,11 +24,13 @@ interface WhiteboardTabProps {
   onAddStroke: (stroke: WhiteboardStroke) => void;
   onUndoStroke: () => void;
   onClearDrawing: () => void;
+  onReplaceData: (data: WhiteboardData) => void;
 }
 
 let nextStrokeId = 1;
 
 export default function WhiteboardTab({
+  sourceFingerprint,
   data,
   persistenceStatus,
   canUndo,
@@ -32,11 +38,13 @@ export default function WhiteboardTab({
   onAddStroke,
   onUndoStroke,
   onClearDrawing,
+  onReplaceData,
 }: WhiteboardTabProps) {
   const { t } = useTranslation();
   const [penColor, setPenColor] = useState<string>(WHITEBOARD_COLORS[0]);
   const [penWidth, setPenWidth] = useState<number>(WHITEBOARD_PEN_WIDTHS[1]);
   const [draft, setDraft] = useState<WhiteboardStroke | null>(null);
+  const [shareStatus, setShareStatus] = useState('');
   const draftRef = useRef<WhiteboardStroke | null>(null);
   const pointerIdRef = useRef<number | null>(null);
 
@@ -96,6 +104,33 @@ export default function WhiteboardTab({
     pointerIdRef.current = null;
     draftRef.current = null;
     setDraft(null);
+  };
+
+  const exportSidecar = () => {
+    const blob = new Blob([serializeWhiteboardSidecar(sourceFingerprint, data)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'fastbriefing-whiteboard.json';
+    link.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
+    setShareStatus(t('whiteboard.exported'));
+  };
+
+  const importSidecar = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    if (file.size > MAX_WHITEBOARD_SIDECAR_BYTES) {
+      setShareStatus(t('whiteboard.importFailed'));
+      return;
+    }
+    try {
+      onReplaceData(parseWhiteboardSidecar(await file.text(), sourceFingerprint));
+      setShareStatus(t('whiteboard.imported'));
+    } catch {
+      setShareStatus(t('whiteboard.importFailed'));
+    }
   };
 
   return (
@@ -168,6 +203,19 @@ export default function WhiteboardTab({
           placeholder={t('whiteboard.notesPlaceholder')}
           onChange={event => onNotesChange(event.target.value)}
         />
+      </section>
+
+      <section className="section whiteboard-share" aria-labelledby="whiteboard-share-title">
+        <h3 id="whiteboard-share-title">{t('whiteboard.shareTitle')}</h3>
+        <p className="hint">{t('whiteboard.shareHelp')}</p>
+        <div className="export-actions">
+          <button type="button" className="btn btn-secondary" onClick={exportSidecar}>{t('whiteboard.exportJson')}</button>
+          <label className="btn btn-secondary">
+            {t('whiteboard.importJson')}
+            <input className="visually-hidden" type="file" accept=".json,application/json" onChange={event => void importSidecar(event)} />
+          </label>
+        </div>
+        {shareStatus && <p role="status">{shareStatus}</p>}
       </section>
     </div>
   );

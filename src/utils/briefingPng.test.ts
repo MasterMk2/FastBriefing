@@ -8,7 +8,7 @@ import {
 } from './briefingPng';
 
 const settings = {
-  briefingSections: ['overview', 'flights', 'map', 'comms', 'support', 'threats', 'whiteboard'],
+  briefingSections: ['overview', 'notes', 'flights', 'map', 'comms', 'support', 'threats', 'whiteboard'],
   temperatureUnit: 'C',
   pressureUnit: 'hPa',
   distanceUnit: 'nm',
@@ -65,6 +65,11 @@ const mission = {
       aiGroups: [],
     },
   },
+  userNotes: {
+    missionKey: 'fixture',
+    smeac: { situation: 'Enemy SAMs', mission: '', execution: '', adminLogistics: '', commandSignal: '' },
+    perFlight: {},
+  },
 } as unknown as MissionData;
 
 const t = (key: string, options?: Record<string, string | number>) => (
@@ -83,6 +88,7 @@ describe('briefing PNG content', () => {
     expect(sections.map(section => section.id)).toEqual(settings.briefingSections);
     const byId = Object.fromEntries(sections.map(section => [section.id, section.lines.join('\n')]));
     expect(byId.overview).toContain('Sinai');
+    expect(byId.notes).toContain('Enemy SAMs');
     expect(byId.flights).toContain('Viper 1');
     expect(mission.coalitions.blue.zones).toBe(mission.coalitions.red.zones);
     expect(byId.map).toContain('5 2 1');

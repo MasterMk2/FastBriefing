@@ -120,7 +120,39 @@ describe('useSettings persistence', () => {
     });
   });
 
-  it('保存されたセクションを検証して正規順へ戻す', () => {
+  it('v3の選択順を保ちつつ新しい記入欄を概要の後へ追加する', () => {
+    const stored = JSON.stringify({
+      settingsVersion: 3,
+      briefingSections: ['whiteboard', 'overview', 'map'],
+    });
+
+    expect(loadSettings(createStorage(stored)).briefingSections).toEqual([
+      'whiteboard', 'overview', 'notes', 'map',
+    ]);
+  });
+
+  it('v3の意図的な空選択は空のまま移行する', () => {
+    const stored = JSON.stringify({ settingsVersion: 3, briefingSections: [] });
+    expect(loadSettings(createStorage(stored)).briefingSections).toEqual([]);
+  });
+
+  it('名前付きプリセットを検証して重複と上限外データを除く', () => {
+    const stored = JSON.stringify({
+      settingsVersion: SETTINGS_VERSION,
+      briefingPresets: [
+        { name: ' Pilot ', sections: ['map', 'overview', 'map'] },
+        { name: 'pilot', sections: ['threats'] },
+        { name: '', sections: ['overview'] },
+        { name: 'Broken', sections: 'overview' },
+      ],
+    });
+
+    expect(loadSettings(createStorage(stored)).briefingPresets).toEqual([
+      { name: 'Pilot', sections: ['map', 'overview'] },
+    ]);
+  });
+
+  it('保存されたセクションを検証してユーザーの順序を保つ', () => {
     const stored = JSON.stringify({
       settingsVersion: SETTINGS_VERSION,
       briefingSections: ['whiteboard', 'invalid', 'overview', 'whiteboard'],
@@ -128,7 +160,7 @@ describe('useSettings persistence', () => {
 
     expect(loadSettings(createStorage(stored))).toEqual({
       ...DEFAULT_SETTINGS,
-      briefingSections: ['overview', 'whiteboard'],
+      briefingSections: ['whiteboard', 'overview'],
     });
   });
 

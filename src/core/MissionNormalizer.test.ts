@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { normalizeMission } from './MissionNormalizer';
 import utcOffsetData from '../data/utcOffsets.json';
 import { formatTimeHHMM, missionLocalDate, missionZuluDate } from '../utils/time';
+import { calculateBearing, calculateDistance } from '../utils/coordinates';
 
 const settings = { coordinateFormat: 'DDM', unitSystem: 'metric', viewMode: 'creator' };
 
@@ -222,6 +223,8 @@ describe('MissionNormalizer reference-backed layers', () => {
     const flight = normalized.coalitions.blue.flights[0];
     expect(flight.units).toHaveLength(2);
     expect(flight.route.map(point => point.index)).toEqual([1, 3]);
+    expect(flight.route[1].leg?.distance).toBeCloseTo(calculateDistance(...flight.route[0].latlon, ...flight.route[1].latlon));
+    expect(flight.route[1].leg?.trueBearing).toBeCloseTo(calculateBearing(...flight.route[0].latlon, ...flight.route[1].latlon));
     expect(flight.units[0].radios.map(radio => radio.channel)).toEqual([1, 3]);
     expect(flight.units[0].payload.pylons.map(pylon => pylon.station)).toEqual(['1', '3']);
     expect(flight.units[0].payload.pylons[0].name).toContain('AIM-9L');

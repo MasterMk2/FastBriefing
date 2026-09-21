@@ -8,7 +8,9 @@ import {
   getMissionWhiteboardId,
   loadWhiteboard,
   normalizeWhiteboard,
+  parseWhiteboardSidecar,
   saveWhiteboard,
+  serializeWhiteboardSidecar,
   type WhiteboardStorage,
 } from './useWhiteboard';
 
@@ -86,5 +88,14 @@ describe('whiteboard persistence', () => {
       ...mission(),
       sourceFingerprint: 'archive-two',
     }));
+  });
+
+  it('shares bounded JSON only with the matching source mission', () => {
+    const data = { notes: 'Package flow', strokes: [{ id: 'one', color: '#067647', width: 6, points: [{ x: 12, y: 34 }] }] };
+    const sidecar = serializeWhiteboardSidecar('archive-one', data);
+
+    expect(parseWhiteboardSidecar(sidecar, 'archive-one')).toEqual(data);
+    expect(() => parseWhiteboardSidecar(sidecar, 'archive-two')).toThrow();
+    expect(() => parseWhiteboardSidecar('{"version":1}', 'archive-one')).toThrow();
   });
 });

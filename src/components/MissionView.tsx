@@ -1,9 +1,8 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import type { ComponentType, KeyboardEvent, LazyExoticComponent } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { MissionData, DisplaySettings } from '../types/mission';
+import type { DisplaySettings, MissionData, UserNotes } from '../types/mission';
 import type { BriefingSection } from '../utils/briefingSections';
-import { hasBriefingSection } from '../utils/briefingSections';
 import { getMissionWhiteboardId, useWhiteboard } from '../hooks/useWhiteboard';
 import { useSettings } from '../hooks/useSettings';
 import BriefingPlanner from './BriefingPlanner';
@@ -14,12 +13,16 @@ const MapTab = lazy(() => import('./MapTab'));
 const CommsTab = lazy(() => import('./CommsTab'));
 const SupportTab = lazy(() => import('./SupportTab'));
 const ThreatsTab = lazy(() => import('./ThreatsTab'));
+const NotesTab = lazy(() => import('./NotesTab'));
 const WhiteboardTab = lazy(() => import('./WhiteboardTab'));
 const ExportTab = lazy(() => import('./ExportTab'));
 
 interface MissionViewProps {
   mission: MissionData;
   settings: DisplaySettings;
+  sourceFile: File | null;
+  onNotesChange: (notes: UserNotes) => void;
+  storageFailed: boolean;
 }
 
 interface StandardTabProps {
@@ -27,7 +30,7 @@ interface StandardTabProps {
   settings: DisplaySettings;
 }
 
-type StandardSection = Exclude<BriefingSection, 'whiteboard'>;
+type StandardSection = Exclude<BriefingSection, 'notes' | 'whiteboard'>;
 type MissionTabId = BriefingSection | 'export';
 
 const standardTabs: ReadonlyArray<{
@@ -47,18 +50,14 @@ export default function MissionView(props: MissionViewProps) {
   return <MissionWorkspace key={missionId} {...props} />;
 }
 
-function MissionWorkspace({ mission, settings }: MissionViewProps) {
+function MissionWorkspace({ mission, settings, sourceFile, onNotesChange, storageFailed }: MissionViewProps) {
   const { t } = useTranslation();
-  const { setBriefingSections } = useSettings();
+  const { setBriefingSections, setBriefingPresets } = useSettings();
   const whiteboard = useWhiteboard(mission);
-  const visibleTabIds = useMemo<MissionTabId[]>(() => {
-    const selected = settings.briefingSections;
-    return [
-      ...standardTabs.filter(tab => hasBriefingSection(selected, tab.id)).map(tab => tab.id),
-      ...(hasBriefingSection(selected, 'whiteboard') ? ['whiteboard' as const] : []),
-      'export',
-    ];
-  }, [settings.briefingSections]);
+  const visibleTabIds = useMemo<MissionTabId[]>(() => [
+    ...settings.briefingSections,
+    'export',
+  ], [settings.briefingSections]);
   const [activeTab, setActiveTab] = useState<MissionTabId>(() => visibleTabIds[0] ?? 'export');
   const tabRefs = useRef<Partial<Record<MissionTabId, HTMLButtonElement | null>>>({});
 
@@ -72,7 +71,6 @@ function MissionWorkspace({ mission, settings }: MissionViewProps) {
 
   const handleTabKeyDown = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
     let nextIndex: number | null = null;
-
     switch (event.key) {
       case 'ArrowRight':
         nextIndex = (index + 1) % visibleTabIds.length;
@@ -89,15 +87,25 @@ function MissionWorkspace({ mission, settings }: MissionViewProps) {
       default:
         return;
     }
-
     event.preventDefault();
     setActiveTab(visibleTabIds[nextIndex]);
   };
 
   const renderTab = (tabId: MissionTabId) => {
+    if (tabId === 'notes') {
+      return (
+        <NotesTab
+          mission={mission}
+          settings={settings}
+          onNotesChange={onNotesChange}
+          storageFailed={storageFailed}
+        />
+      );
+    }
     if (tabId === 'whiteboard') {
       return (
         <WhiteboardTab
+          sourceFingerprint={mission.sourceFingerprint}
           data={whiteboard.data}
           persistenceStatus={whiteboard.persistenceStatus}
           canUndo={whiteboard.canUndo}
@@ -105,11 +113,19 @@ function MissionWorkspace({ mission, settings }: MissionViewProps) {
           onAddStroke={whiteboard.addStroke}
           onUndoStroke={whiteboard.undoStroke}
           onClearDrawing={whiteboard.clearDrawing}
+          onReplaceData={whiteboard.replaceData}
         />
       );
     }
     if (tabId === 'export') {
-      return <ExportTab mission={mission} settings={settings} whiteboard={whiteboard.data} />;
+      return (
+        <ExportTab
+          mission={mission}
+          settings={settings}
+          sourceFile={sourceFile}
+          whiteboard={whiteboard.data}
+        />
+      );
     }
 
     const definition = standardTabs.find(tab => tab.id === tabId);
@@ -120,13 +136,17 @@ function MissionWorkspace({ mission, settings }: MissionViewProps) {
 
   return (
     <div className="mission-view">
-      <BriefingPlanner selected={settings.briefingSections} onChange={setBriefingSections} />
+      <BriefingPlanner
+        selected={settings.briefingSections}
+        presets={settings.briefingPresets}
+        onChange={setBriefingSections}
+        onPresetsChange={setBriefingPresets}
+      />
 
       <nav className="tab-nav" role="tablist" aria-label={t('tabs.missionSections')}>
         {visibleTabIds.map((tabId, index) => {
           const tabDomId = `mission-tab-${tabId}`;
           const panelId = `mission-panel-${tabId}`;
-
           return (
             <button
               key={tabId}
@@ -151,7 +171,6 @@ function MissionWorkspace({ mission, settings }: MissionViewProps) {
         const tabDomId = `mission-tab-${tabId}`;
         const panelId = `mission-panel-${tabId}`;
         const isActive = activeTab === tabId;
-
         return (
           <div
             key={tabId}
