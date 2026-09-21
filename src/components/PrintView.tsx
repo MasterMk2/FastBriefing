@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { AIGroup, DisplaySettings, Flight, MissionData, MissionMeta, SupportAsset } from '../types/mission';
+import type { WhiteboardData } from '../types/whiteboard';
 import { calculateBearing, dcsToLatLon, formatCoordinate, getDefaultCoordinateFormat } from '../utils/coordinates';
 import { getMagneticVariation, trueToMagnetic } from '../utils/magvar';
 import { formatAltitude, formatDistance, formatPressure, formatSpeed, formatTemperature } from '../utils/units';
@@ -8,10 +9,13 @@ import { getMoonInfo, getSunTimes, type SunTimes } from '../utils/astro';
 import { buildMetar } from '../utils/metar';
 import { addSeconds, formatDateYMD, formatEtaLocal, formatEtaZulu, formatTimeHHMM, formatUtcOffset, missionLocalDate, missionZuluDate } from '../utils/time';
 import { applyViewMode } from '../utils/viewMode';
+import { hasBriefingSection } from '../utils/briefingSections';
+import WhiteboardDrawing from './WhiteboardDrawing';
 
 interface PrintViewProps {
   mission: MissionData;
   settings: DisplaySettings;
+  whiteboard: WhiteboardData;
 }
 
 type PrintTranslator = (key: string, options?: Record<string, string | number>) => string;
@@ -26,7 +30,7 @@ const GUARD_FREQUENCIES_MHZ = {
   VHF: 121.500,
 } as const;
 
-export default function PrintView({ mission, settings }: PrintViewProps) {
+export default function PrintView({ mission, settings, whiteboard }: PrintViewProps) {
   const { t } = useTranslation();
   const viewMission = useMemo(() => applyViewMode(mission, settings.viewMode), [mission, settings.viewMode]);
   const printT: PrintTranslator = (key, options) => t(key, {
@@ -41,25 +45,55 @@ export default function PrintView({ mission, settings }: PrintViewProps) {
         <h1>{viewMission.meta.sortie || printT('export.canvas.briefing')}</h1>
       </header>
 
-      <PrintOverview mission={viewMission} settings={settings} t={printT} />
+      {hasBriefingSection(settings.briefingSections, 'overview') && (
+        <PrintOverview mission={viewMission} settings={settings} t={printT} />
+      )}
 
-      <p className="print-map-note hint">{printT('export.mapPrintNote')}</p>
+      {hasBriefingSection(settings.briefingSections, 'map') && (
+        <p className="print-map-note hint">{printT('export.mapPrintNote')}</p>
+      )}
 
-      <section className="section print-flight-list">
-        <h2>{printT('export.printFlights')}</h2>
-        {flights.length === 0 ? (
-          <p>{printT('flights.empty')}</p>
-        ) : (
-          flights.map(({ flight, side }) => (
-            <PrintFlight key={`${side}:${flight.groupId}`} flight={flight} side={side} meta={viewMission.meta} settings={settings} t={printT} />
-          ))
-        )}
-      </section>
+      {hasBriefingSection(settings.briefingSections, 'flights') && (
+        <section className="section print-flight-list">
+          <h2>{printT('export.printFlights')}</h2>
+          {flights.length === 0 ? (
+            <p>{printT('flights.empty')}</p>
+          ) : (
+            flights.map(({ flight, side }) => (
+              <PrintFlight key={`${side}:${flight.groupId}`} flight={flight} side={side} meta={viewMission.meta} settings={settings} t={printT} />
+            ))
+          )}
+        </section>
+      )}
 
-      <PrintComms mission={viewMission} t={printT} />
-      <PrintSupport mission={viewMission} settings={settings} t={printT} />
-      <PrintThreats mission={viewMission} settings={settings} t={printT} />
+      {hasBriefingSection(settings.briefingSections, 'comms') && <PrintComms mission={viewMission} t={printT} />}
+      {hasBriefingSection(settings.briefingSections, 'support') && <PrintSupport mission={viewMission} settings={settings} t={printT} />}
+      {hasBriefingSection(settings.briefingSections, 'threats') && <PrintThreats mission={viewMission} settings={settings} t={printT} />}
+      {hasBriefingSection(settings.briefingSections, 'whiteboard') && (
+        <PrintWhiteboard whiteboard={whiteboard} t={printT} />
+      )}
     </div>
+  );
+}
+
+function PrintWhiteboard({ whiteboard, t }: { whiteboard: WhiteboardData; t: PrintTranslator }) {
+  return (
+    <section className="section print-section print-whiteboard">
+      <h2>{t('whiteboard.title')}</h2>
+      {whiteboard.notes.trim() ? (
+        <div className="whiteboard-print-notes">
+          <h3>{t('whiteboard.notes')}</h3>
+          <p>{whiteboard.notes}</p>
+        </div>
+      ) : (
+        <p className="hint">{t('export.markdown.noWhiteboardNotes')}</p>
+      )}
+      {whiteboard.strokes.length > 0 && (
+        <div className="whiteboard-board print-whiteboard-board">
+          <WhiteboardDrawing strokes={whiteboard.strokes} label={t('whiteboard.canvasLabel')} />
+        </div>
+      )}
+    </section>
   );
 }
 

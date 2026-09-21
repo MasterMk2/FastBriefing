@@ -31,9 +31,54 @@
     "comms": "通信",
     "support": "支援機",
     "threats": "脅威",
+    "whiteboard": "ホワイトボード",
     "export": "出力",
     "missionSections": "ミッションセクション",
     "loading": "タブを読み込み中..."
+  },
+  "planner": {
+    "title": "ブリーフィング・プランナー",
+    "selectedCount": "{{count}} / {{total}} セクション",
+    "description": "画面に表示し、Markdown・印刷/PDF・PNG要約へ含める情報を選択します。選択はこのブラウザに保存されます。",
+    "sectionLegend": "ブリーフィングに含める情報",
+    "selectAll": "すべて選択",
+    "clearAll": "すべて解除",
+    "exportAlwaysAvailable": "出力タブは常に利用できます。",
+    "sections": {
+      "overview": "概要・天候",
+      "flights": "フライト・経路",
+      "map": "地図",
+      "comms": "通信",
+      "support": "支援機",
+      "threats": "脅威",
+      "whiteboard": "ホワイトボード"
+    },
+    "sectionHelp": {
+      "overview": "時刻、気象、タスク文、警告",
+      "flights": "機体、搭載、無線プリセット、ナビログ",
+      "map": "経路・ゾーン・脅威を地図で確認",
+      "comms": "コムカードと重複周波数",
+      "support": "Tanker、AWACS、Carrier、JTAC",
+      "threats": "交戦圏・探知圏と敵航空機",
+      "whiteboard": "自由描画と作戦ノート"
+    }
+  },
+  "whiteboard": {
+    "title": "ミッション・ホワイトボード",
+    "description": "経路、役割分担、攻撃順序などを自由に描き、テキストでも補足できます。",
+    "savedLocally": "このミッション用にローカル保存",
+    "toolbar": "ホワイトボード描画ツール",
+    "penColor": "ペン色",
+    "selectColor": "ペン色 {{color}} を選択",
+    "penWidth": "太さ",
+    "widthValue": "{{width}} px",
+    "undo": "1画戻す",
+    "clearDrawing": "描画を消去",
+    "canvasLabel": "保存済みのホワイトボード描画",
+    "drawingSurface": "ポインターで描画するホワイトボード",
+    "notes": "作戦ノート",
+    "notesHelp": "キーボード利用者にも伝わるよう、描画の要点をテキストで残してください。",
+    "notesPlaceholder": "例: Dodge 1 は北から進入。Push 14:30Z。SEAD 完了を確認してから Strike。"
   },
   "common": {
     "blue": "Blue",
@@ -229,8 +274,8 @@
     "printFlights": "全フライト詳細",
     "mapPrintNote": "地図は印刷用ビューに含めていません。画面の地図タブで確認してください。",
     "printImageExport": "印刷・画像出力",
-    "printHelp": "印刷用レイアウトには概要、フライト、地図、通信、支援機、脅威の各セクションが含まれます。ブラウザの印刷機能（Ctrl+P）で PDF として保存できます。",
-    "pngHelp": "PNG はブリーフィング要約を 1536×2048 のキャンバスに描画して保存します。.miz への埋め込みは未対応です。",
+    "printHelp": "ブリーフィング・プランナーで選択したセクションだけを印刷します。ブラウザの印刷機能（Ctrl+P）で PDF として保存できます。",
+    "pngHelp": "PNG は選択中の概要とホワイトボードを 1536×2048 のキャンバスに描画して保存します。.miz への埋め込みは未対応です。",
     "copied": "Markdownをコピーしました",
     "copyFailed": "コピーに失敗しました（ブラウザの権限を確認してください）",
     "pngGenerating": "PNGを生成中…",
@@ -241,6 +286,8 @@
       "creatorView": "作成者ビュー",
       "pilotView": "パイロットビュー",
       "map": "マップ",
+      "mapSection": "地図",
+      "mapScreenNote": "詳細な地図レイヤーは FastBriefing の地図タブで確認してください。",
       "date": "日付",
       "startLocal": "開始時刻 (Local)",
       "startZulu": "開始時刻 (Zulu)",
@@ -284,7 +331,10 @@
       "all": "All",
       "guard": "Guard",
       "local": "Local",
-      "zulu": "Zulu"
+      "zulu": "Zulu",
+      "whiteboard": "ホワイトボード",
+      "noWhiteboardNotes": "作戦ノートは未入力です",
+      "whiteboardDrawing": "自由描画 {{count}} 画は印刷/PDFまたはPNGで確認できます"
     },
     "canvas": {
       "briefing": "Briefing",

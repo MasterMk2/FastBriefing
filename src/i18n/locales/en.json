@@ -31,9 +31,54 @@
     "comms": "Comms",
     "support": "Support Assets",
     "threats": "Threats",
+    "whiteboard": "Whiteboard",
     "export": "Export",
     "missionSections": "Mission sections",
     "loading": "Loading tab..."
+  },
+  "planner": {
+    "title": "Briefing Planner",
+    "selectedCount": "{{count}} / {{total}} sections",
+    "description": "Choose which information appears on screen and in Markdown, print/PDF, and PNG summary output. The selection is saved in this browser.",
+    "sectionLegend": "Information to include in the briefing",
+    "selectAll": "Select all",
+    "clearAll": "Clear all",
+    "exportAlwaysAvailable": "The Export tab is always available.",
+    "sections": {
+      "overview": "Overview and weather",
+      "flights": "Flights and routes",
+      "map": "Map",
+      "comms": "Communications",
+      "support": "Support assets",
+      "threats": "Threats",
+      "whiteboard": "Whiteboard"
+    },
+    "sectionHelp": {
+      "overview": "Times, weather, task text, and warnings",
+      "flights": "Aircraft, loadouts, radio presets, and nav logs",
+      "map": "Routes, zones, and threats on the map",
+      "comms": "Comms card and duplicate frequencies",
+      "support": "Tanker, AWACS, Carrier, and JTAC",
+      "threats": "Engagement/detection rings and hostile aircraft",
+      "whiteboard": "Freehand drawing and mission notes"
+    }
+  },
+  "whiteboard": {
+    "title": "Mission Whiteboard",
+    "description": "Sketch routes, assignments, attack order, or other mission coordination and add a text explanation.",
+    "savedLocally": "Saved locally for this mission",
+    "toolbar": "Whiteboard drawing tools",
+    "penColor": "Pen color",
+    "selectColor": "Select pen color {{color}}",
+    "penWidth": "Width",
+    "widthValue": "{{width}} px",
+    "undo": "Undo stroke",
+    "clearDrawing": "Clear drawing",
+    "canvasLabel": "Saved whiteboard drawing",
+    "drawingSurface": "Whiteboard drawing surface",
+    "notes": "Mission notes",
+    "notesHelp": "Summarize the drawing in text so the same operational information is available to keyboard users.",
+    "notesPlaceholder": "Example: Dodge 1 enters from the north. Push 14:30Z. Strike waits for SEAD complete."
   },
   "common": {
     "blue": "Blue",
@@ -229,8 +274,8 @@
     "printFlights": "All Flight Details",
     "mapPrintNote": "The map is omitted from the print view. Check the Map tab on screen.",
     "printImageExport": "Print and Image Export",
-    "printHelp": "The print layout includes Overview, Flights, Map, Comms, Support Assets, and Threats sections. Use the browser print function (Ctrl+P) to save it as a PDF.",
-    "pngHelp": "PNG renders a briefing summary to a 1536×2048 canvas and saves it. Embedding into .miz files is not supported.",
+    "printHelp": "Only sections selected in the Briefing Planner are printed. Use the browser print function (Ctrl+P) to save the result as a PDF.",
+    "pngHelp": "PNG renders the selected overview and whiteboard to a 1536×2048 canvas. Embedding into .miz files is not supported.",
     "copied": "Markdown copied",
     "copyFailed": "Copy failed (check browser permissions)",
     "pngGenerating": "Generating PNG…",
@@ -241,6 +286,8 @@
       "creatorView": "Creator View",
       "pilotView": "Pilot View",
       "map": "Map",
+      "mapSection": "Map",
+      "mapScreenNote": "Open the FastBriefing Map tab to inspect the interactive layers.",
       "date": "Date",
       "startLocal": "Start Time (Local)",
       "startZulu": "Start Time (Zulu)",
@@ -284,7 +331,10 @@
       "all": "All",
       "guard": "Guard",
       "local": "Local",
-      "zulu": "Zulu"
+      "zulu": "Zulu",
+      "whiteboard": "Whiteboard",
+      "noWhiteboardNotes": "No mission notes were entered",
+      "whiteboardDrawing": "{{count}} freehand stroke(s) are available in print/PDF or PNG output"
     },
     "canvas": {
       "briefing": "Briefing",

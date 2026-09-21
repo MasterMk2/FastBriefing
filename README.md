@@ -49,6 +49,8 @@ FastBriefing は DCS World のミッションファイル（`.miz` = ZIP + Lua�
 | **通信計画** | コムカード自動生成、重複周波数の警告、Guard 243.0/121.5 を併記（FR-67, FR-68） |
 | **出力** | 印刷CSS → PDF（A4縦）、Markdown（Discord貼り付け）、PNG/GeoJSON（予定）（FR-80〜84） |
 | **ビュー制御** | 作成者ビュー / パイロットビュー（`hidden` 尊重）（FR-70） |
+| **ブリーフィング・プランナー** | 概要・フライト・地図・通信・支援機・脅威・ホワイトボードを選び、画面と Markdown / 印刷 / PNG の構成を統一。選択はブラウザに保存 |
+| **ホワイトボード** | ミッションごとの自由描画、色・太さ、取り消し・消去、作戦ノートをローカル保存し、印刷 / Markdown / PNG に反映 |
 
 ---
 
@@ -120,7 +122,8 @@ COPY --from=build /app/dist /usr/share/nginx/html
 2. **概要を確認** — ソーティ名 / マップ / 日付 / 開始時刻（Local/Zulu併記）/ 天候 / タスク文（青・赤・中立）。
 3. **フライトを選ぶ** — 青/赤タブでフライト一覧 → 機体構成・搭載・無線・経路（ナビログ）を確認。`viewMode` で作成者/パイロットを切替（FR-70）。
 4. **地図で俯瞰** — レイヤ切替（フライト経路 / ゾーン / 描画 / 脅威 / 支援機 / 敵 / Bullseye / NavPoints / 飛行場）で必要な情報だけを表示（FR-62）。
-5. **出力** — 「出力」タブで Markdown 生成 → コピー（Discord 貼り付け）、印刷 / PDF（Ctrl+P, A4縦）、PNG/`.miz` 埋め込みは Phase 2 で実装（FR-80〜83）。
+5. **構成を選ぶ** — 「ブリーフィング・プランナー」で画面と出力に含めるセクションを選択。作戦中の追記は「ホワイトボード」に描画・入力します。
+6. **出力** — 「出力」タブで Markdown 生成 → コピー（Discord 貼り付け）、印刷 / PDF（Ctrl+P, A4縦）、PNG生成。`.miz` 埋め込みは Phase 2 で実装（FR-80〜83）。
 
 > **ヒント:** 設定（座標形式・単位・言語）はヘッダー右のセレクトで切替。`localStorage` に保存され再訪時に復元されます。
 
@@ -138,13 +141,15 @@ Main
 ├── DropZone（未読込時）
 │   └── .miz ドロップ / ファイル選択 / エラー表示
 └── MissionView（読込後）
+    ├── BriefingPlanner — 表示・出力する情報セクションを選択
     ├── [概要]     OverviewTab — メタ情報 / 天候 / 風 / タスク文 / 警告
     ├── [フライト] FlightsTab — フライト一覧 + 詳細（構成/搭載/無線/経路）
     ├── [地図]     MapTab — Leaflet + レイヤ切替 + Bullseye/NavPoints/脅威リング
     ├── [通信]     CommsTab — フライト別 / 支援機 / 共通周波数 / 重複警告
     ├── [支援機]   SupportTab — Tanker/AWACS/Carrier/JTAC
     ├── [脅威]     ThreatsTab — SAM/AAA リング / 敵航空機
-    └── [出力]     ExportTab — Markdown / 印刷 / PNG（予定）
+    ├── [ホワイトボード] WhiteboardTab — 自由描画 / 作戦ノート
+    └── [出力]     ExportTab — Markdown / 印刷 / PNG
 ```
 
 ---

@@ -4,7 +4,7 @@ import en from './locales/en.json';
 import ja from './locales/ja.json';
 
 export const SETTINGS_STORAGE_KEY = 'fastbriefing-settings';
-export const SETTINGS_VERSION = 2;
+export const SETTINGS_VERSION = 3;
 export const SUPPORTED_LANGUAGES = ['ja', 'en'] as const;
 export type SupportedLanguage = typeof SUPPORTED_LANGUAGES[number];
 export const DEFAULT_LANGUAGE: SupportedLanguage = 'ja';
@@ -39,7 +39,11 @@ export function loadInitialLanguage(storage: Pick<Storage, 'getItem'> | null = g
     if (serialized === null) return DEFAULT_LANGUAGE;
 
     const value: unknown = JSON.parse(serialized);
-    if (!isRecord(value) || value.settingsVersion !== SETTINGS_VERSION || !isSupportedLanguage(value.language)) {
+    if (!isRecord(value)) return DEFAULT_LANGUAGE;
+    const isReadableVersion = value.settingsVersion === SETTINGS_VERSION
+      || value.settingsVersion === 2
+      || value.settingsVersion === 1;
+    if (!isReadableVersion || !isSupportedLanguage(value.language)) {
       return DEFAULT_LANGUAGE;
     }
 

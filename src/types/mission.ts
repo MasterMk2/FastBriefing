@@ -1,3 +1,5 @@
+import type { BriefingSection } from '../utils/briefingSections';
+
 export interface MissionMeta {
   sortie: string;
   description: string;
@@ -326,4 +328,5 @@ export interface DisplaySettings {
   language: 'ja' | 'en';
   outputLanguage: 'ja' | 'en';
   theme: 'default' | 'ffs';
+  briefingSections: BriefingSection[];
 }

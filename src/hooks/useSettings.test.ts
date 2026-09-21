@@ -106,6 +106,32 @@ describe('useSettings persistence', () => {
     });
   });
 
+  it('v2記録を既定のブリーフィング構成付きでv3へ移行する', () => {
+    const stored = JSON.stringify({
+      settingsVersion: 2,
+      language: 'en',
+      theme: 'default',
+    });
+
+    expect(loadSettings(createStorage(stored))).toEqual({
+      ...DEFAULT_SETTINGS,
+      language: 'en',
+      theme: 'default',
+    });
+  });
+
+  it('保存されたセクションを検証して正規順へ戻す', () => {
+    const stored = JSON.stringify({
+      settingsVersion: SETTINGS_VERSION,
+      briefingSections: ['whiteboard', 'invalid', 'overview', 'whiteboard'],
+    });
+
+    expect(loadSettings(createStorage(stored))).toEqual({
+      ...DEFAULT_SETTINGS,
+      briefingSections: ['overview', 'whiteboard'],
+    });
+  });
+
   it('保存値には現在のスキーマバージョンを付ける', () => {
     const storage = createStorage();
     saveSettings({ ...DEFAULT_SETTINGS, coordinateFormat: 'MGRS' }, storage);
