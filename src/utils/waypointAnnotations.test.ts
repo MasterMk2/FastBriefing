@@ -5,6 +5,7 @@ import {
   findNearbyWaypoints,
   filterWaypointAnnotationsForFlights,
   getSyncGroupMembers,
+  getWaypointSyncTargets,
   greatCircleDistanceNm,
   hasWaypointSyncConflict,
   intersectWaypointKeys,
@@ -115,6 +116,33 @@ describe('waypoint annotation grouping', () => {
     expect(getSyncGroupMembers(notes, fourth)).toEqual([fourth, third].sort());
   });
 
+  it('uses the same full target set when extending an existing group', () => {
+    const notes = emptyUserNotes('extend');
+    const first = waypointAnnotationKey('blue', 1, 0);
+    const second = waypointAnnotationKey('blue', 2, 0);
+    const third = waypointAnnotationKey('red', 3, 0);
+    const added = waypointAnnotationKey('neutral', 4, 0);
+    notes.waypoints = {
+      [first]: { purpose: 'A', notes: '', syncGroupId: 'group_a' },
+      [second]: { purpose: 'B', notes: '', syncGroupId: 'group_a' },
+      [third]: { purpose: 'C', notes: '', syncGroupId: 'group_a' },
+    };
+    const allowed = new Set([first, second, third, added]);
+    const targets = getWaypointSyncTargets(notes, first, [added], allowed);
+
+    expect(targets).toEqual([first, second, third, added]);
+    const updated = syncWaypointAnnotationGroup(
+      notes,
+      first,
+      [added],
+      { purpose: 'Merged', notes: 'Same value' },
+      'group_a',
+      allowed,
+    )!;
+    expect(targets.every(key => updated.waypoints[key].purpose === 'Merged')).toBe(true);
+    expect(getSyncGroupMembers(updated, first)).toEqual([...targets].sort());
+  });
+
   it('filters pilot waypoint records to exact visible flight keys and removes orphan group metadata', () => {
     const visible = waypointAnnotationKey('blue', 1, 0);
     const samePrefixButHidden = waypointAnnotationKey('blue', 10, 0);
@@ -126,5 +154,16 @@ describe('waypoint annotation grouping', () => {
     }, new Set(['blue:1']));
 
     expect(filtered).toEqual({ [visible]: { purpose: 'Visible', notes: '' } });
+  });
+
+  it('removes an empty visible record when its only sync peer is hidden', () => {
+    const visible = waypointAnnotationKey('blue', 1, 0);
+    const hidden = waypointAnnotationKey('red', 3, 0);
+    const filtered = filterWaypointAnnotationsForFlights({
+      [visible]: { purpose: '', notes: '', syncGroupId: 'mixed_group' },
+      [hidden]: { purpose: '', notes: '', syncGroupId: 'mixed_group' },
+    }, new Set(['blue:1']));
+
+    expect(filtered).toEqual({});
   });
 });

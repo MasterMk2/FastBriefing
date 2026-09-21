@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { KneeboardPage, KneeboardTranslate } from './kneeboard';
+import type { MissionMapScene } from './missionMapRaster';
 import {
+  assertMissionMapRendered,
   assertKneeboardRenderBudget,
   estimateKneeboardPageCount,
   MAX_KNEEBOARD_PIXELS,
@@ -31,5 +33,29 @@ describe('kneeboard render budget', () => {
     expect(count).toBeGreaterThan(10);
     expect(() => assertKneeboardRenderBudget(count, 3072, t)).toThrow('kneeboard.tooManyPixels');
     expect(count * 3072 * 4096).toBeGreaterThan(MAX_KNEEBOARD_PIXELS);
+  });
+});
+
+describe('kneeboard map rendering', () => {
+  const emptyScene = (): MissionMapScene => ({
+    theatre: 'Caucasus',
+    routes: [],
+    zones: [],
+    drawings: [],
+    support: [],
+    threats: [],
+    userPins: [],
+    userStrokes: [],
+  });
+
+  it('fails closed when an annotation-only map could not be rendered', () => {
+    const scene = emptyScene();
+    scene.userPins.push({ id: 'pin-1', position: [0, 0], label: 'IP', color: '#ff0000' });
+
+    expect(() => assertMissionMapRendered(scene, false, t)).toThrow('kneeboard.basemapUnavailable');
+  });
+
+  it('allows a genuinely empty map page when no map content exists', () => {
+    expect(() => assertMissionMapRendered(emptyScene(), false, t)).not.toThrow();
   });
 });

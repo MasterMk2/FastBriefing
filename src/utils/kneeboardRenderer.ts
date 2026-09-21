@@ -1,6 +1,6 @@
 import type { KneeboardPage, KneeboardTranslate } from './kneeboard';
 import { WHITEBOARD_HEIGHT, WHITEBOARD_WIDTH } from '../hooks/useWhiteboard';
-import { drawMissionMap } from './missionMapRaster';
+import { drawMissionMap, hasMissionMapContent, type MissionMapScene } from './missionMapRaster';
 
 const BASE_WIDTH = 1536;
 const BASE_HEIGHT = 2048;
@@ -263,9 +263,15 @@ async function renderMapPage(
     threats: t('mapRaster.threats'),
     zones: t('mapRaster.zones'),
   });
-  if (!rendered && page.scene.routes.length + page.scene.zones.length + page.scene.drawings.length > 0) {
-    throw new Error(t('kneeboard.basemapUnavailable'));
-  }
+  assertMissionMapRendered(page.scene, rendered, t);
+}
+
+export function assertMissionMapRendered(
+  scene: MissionMapScene,
+  rendered: boolean,
+  t: KneeboardTranslate,
+): void {
+  if (!rendered && hasMissionMapContent(scene)) throw new Error(t('kneeboard.basemapUnavailable'));
 }
 
 function renderWhiteboardPage(

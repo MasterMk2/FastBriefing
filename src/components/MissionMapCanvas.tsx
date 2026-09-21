@@ -1,7 +1,12 @@
 import { useLayoutEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { MissionData } from '../types/mission';
-import { buildMissionMapScene, drawMissionMap, type MissionMapLabels } from '../utils/missionMapRaster';
+import {
+  buildMissionMapScene,
+  drawMissionMap,
+  hasMissionMapContent,
+  type MissionMapLabels,
+} from '../utils/missionMapRaster';
 
 interface MissionMapCanvasProps {
   mission: MissionData;
@@ -54,7 +59,7 @@ export default function MissionMapCanvas({
           canvas.height,
           resolvedLabels,
         );
-        state = rendered || !hasMapContent(scene) ? 'ready' : 'error';
+        state = rendered || !hasMissionMapContent(scene) ? 'ready' : 'error';
       } catch {
         drawMapFailure(renderedContext, renderedCanvas, resolvedLabels.basemapUnavailable);
       } finally {
@@ -73,12 +78,6 @@ export default function MissionMapCanvas({
   }, [labels, mission, onRenderStateChange, t]);
 
   return <canvas ref={canvasRef} className={className} width={1536} height={1024} aria-label={t('mapRaster.label')} />;
-}
-
-function hasMapContent(scene: ReturnType<typeof buildMissionMapScene>): boolean {
-  return scene.routes.length + scene.zones.length + scene.drawings.length
-    + scene.support.length + scene.threats.length
-    + scene.userPins.length + scene.userStrokes.length > 0;
 }
 
 function drawMapFailure(context: CanvasRenderingContext2D, canvas: HTMLCanvasElement, message: string): void {

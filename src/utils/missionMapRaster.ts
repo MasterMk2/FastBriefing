@@ -85,6 +85,12 @@ export function buildMissionMapScene(mission: MissionData, flights?: readonly Fl
   };
 }
 
+export function hasMissionMapContent(scene: MissionMapScene): boolean {
+  return scene.routes.length + scene.zones.length + scene.drawings.length
+    + scene.support.length + scene.threats.length
+    + scene.userPins.length + scene.userStrokes.length > 0;
+}
+
 export async function drawMissionMap(
   context: CanvasRenderingContext2D,
   scene: MissionMapScene,

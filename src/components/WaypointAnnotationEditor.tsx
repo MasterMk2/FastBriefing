@@ -6,6 +6,7 @@ import {
   DEFAULT_WAYPOINT_SYNC_RADIUS_NM,
   findNearbyWaypoints,
   getSyncGroupMembers,
+  getWaypointSyncTargets,
   hasWaypointSyncConflict,
   intersectWaypointKeys,
   leaveWaypointSyncGroup,
@@ -58,6 +59,10 @@ export default function WaypointAnnotationEditor({
     () => intersectWaypointKeys(selected, allowedCandidateKeys),
     [allowedCandidateKeys, selected],
   );
+  const syncTargets = useMemo(
+    () => getWaypointSyncTargets(mission.userNotes, key, selectedTargets, visibleWaypointKeys),
+    [key, mission.userNotes, selectedTargets, visibleWaypointKeys],
+  );
   const groupMembers = getSyncGroupMembers(mission.userNotes, key)
     .filter(memberKey => visibleWaypointKeys.has(memberKey));
 
@@ -107,7 +112,7 @@ export default function WaypointAnnotationEditor({
     }
     onNotesChange(updated);
     setSelected(new Set());
-    setStatus(t('waypoints.groupCreated', { count: targetKeys.length + 1 }));
+    setStatus(t('waypoints.groupCreated', { count: syncTargets.length }));
   };
 
   const leaveGroup = () => {
@@ -184,7 +189,7 @@ export default function WaypointAnnotationEditor({
           </div>
         )}
         <button type="button" className="button-secondary" disabled={selectedTargets.length === 0} onClick={createGroup}>
-          {t('waypoints.createGroup', { count: selectedTargets.length + 1 })}
+          {t('waypoints.createGroup', { count: syncTargets.length })}
         </button>
         {groupMembers.length > 1 && (
           <div className="waypoint-group-members">
