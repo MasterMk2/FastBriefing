@@ -120,7 +120,8 @@
     "zulu": "Zulu",
     "rangeSeparator": " – ",
     "missionStart": "Mission Start",
-    "timeOffset": "T+{{hours}}h {{minutes}}m"
+    "timeOffset": "T+{{hours}}h {{minutes}}m",
+    "save": "Save"
   },
   "overview": {
     "title": "Mission Overview",
@@ -214,6 +215,28 @@
     "team": "Team",
     "etaValue": "{{localTime}} Local / {{zuluTime}}Z"
   },
+  "waypoints": {
+    "annotation": "Purpose, notes, and sync",
+    "purpose": "Purpose",
+    "purposePlaceholder": "Example: IP, push, attack start, egress",
+    "notes": "Waypoint notes",
+    "notesPlaceholder": "Altitude, formation, threats, radios, etc.",
+    "save": "Save",
+    "saved": "Saved to this waypoint.",
+    "savedGroup": "Saved to the complete sync group.",
+    "saveGroup": "Save to {{count}} synced points",
+    "syncNearby": "Sync nearby waypoints",
+    "syncHelp": "Distance finds candidates despite DCS Mission Editor coordinate offsets. Nothing syncs automatically; only checked targets join the group.",
+    "radius": "Candidate radius",
+    "noCandidates": "No waypoint from another flight is inside this radius.",
+    "selectTarget": "Select at least one sync target.",
+    "createGroup": "Sync selected {{count}} points",
+    "groupCreated": "Created a {{count}}-point sync group.",
+    "currentGroup": "Current sync group ({{count}} points)",
+    "leaveGroup": "Remove this point from the group",
+    "leftGroup": "Removed this point from the sync group.",
+    "limitReached": "The annotation limit was reached, so this could not be saved."
+  },
   "comms": {
     "sameAircraftPreset": "Duplicate presets within the same aircraft",
     "differentFlight": "Different flights use the same frequency (may be intentional)",
@@ -283,7 +306,8 @@
       "enemies": "Enemy Units",
       "bullseye": "Bullseye",
       "navpoints": "Nav Points",
-      "airbases": "Airbases"
+      "airbases": "Airbases",
+      "annotations": "User Annotations"
     },
     "blueBullseye": "Blue Bullseye",
     "redBullseye": "Red Bullseye",
@@ -295,7 +319,29 @@
     "supportPopup": "{{side}} {{kind}}: {{callsign}}",
     "threatPopup": "{{type}} - {{range}}m",
     "detectionPopup": "{{type}} - {{range}}m",
-    "enemyPopup": "{{type}} ×{{count}}"
+    "enemyPopup": "{{type}} ×{{count}}",
+    "annotations": {
+      "toolbar": "Map annotation tools",
+      "modes": {
+        "navigate": "Pan / inspect",
+        "pin": "Note pin",
+        "draw": "Freehand line"
+      },
+      "help": {
+        "navigate": "Pan the map or click a pin to edit it.",
+        "pin": "Click the map to add a note pin.",
+        "draw": "Drag on the map to draw a line."
+      },
+      "color": "Color",
+      "undo": "Undo one",
+      "clear": "Clear annotations",
+      "clearConfirm": "Clear every user annotation from the map?",
+      "defaultPin": "Map note {{count}}",
+      "label": "Label",
+      "notes": "Notes",
+      "delete": "Delete",
+      "drawingsCount": "Freehand lines: {{count}}"
+    }
   },
   "notes": {
     "smeacTitle": "SMEAC Briefing",

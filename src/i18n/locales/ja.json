@@ -120,7 +120,8 @@
     "zulu": "Zulu",
     "rangeSeparator": " ～ ",
     "missionStart": "Mission Start",
-    "timeOffset": "T+{{hours}}h {{minutes}}m"
+    "timeOffset": "T+{{hours}}h {{minutes}}m",
+    "save": "保存"
   },
   "overview": {
     "title": "ミッション概要",
@@ -214,6 +215,28 @@
     "team": "チーム",
     "etaValue": "{{localTime}} Local / {{zuluTime}}Z"
   },
+  "waypoints": {
+    "annotation": "用途・メモ / 同期",
+    "purpose": "用途",
+    "purposePlaceholder": "例: IP、Push、攻撃開始、離脱点",
+    "notes": "ウェイポイントメモ",
+    "notesPlaceholder": "高度・編隊・脅威・無線など",
+    "save": "保存",
+    "saved": "このウェイポイントへ保存しました。",
+    "savedGroup": "同期グループ全体へ保存しました。",
+    "saveGroup": "同期中の {{count}} 点へ保存",
+    "syncNearby": "近傍ウェイポイントとの同期",
+    "syncHelp": "DCS Mission Editorの座標ずれを距離で候補化します。自動同期はせず、チェックした対象だけを同じグループにします。",
+    "radius": "候補距離",
+    "noCandidates": "この距離内に別フライトのウェイポイントはありません。",
+    "selectTarget": "同期する対象を1点以上選んでください。",
+    "createGroup": "選択した {{count}} 点を同期",
+    "groupCreated": "{{count}} 点の同期グループを作成しました。",
+    "currentGroup": "現在の同期グループ（{{count}} 点）",
+    "leaveGroup": "この点をグループから外す",
+    "leftGroup": "この点を同期グループから外しました。",
+    "limitReached": "注釈の保存上限に達したため保存できませんでした。"
+  },
   "comms": {
     "sameAircraftPreset": "同一機体内のプリセット重複",
     "differentFlight": "異なる編隊が同じ周波数を使用（意図的な場合もある）",
@@ -283,7 +306,8 @@
       "enemies": "敵ユニット",
       "bullseye": "ブルズアイ",
       "navpoints": "ナビポイント",
-      "airbases": "飛行場"
+      "airbases": "飛行場",
+      "annotations": "ユーザー注釈"
     },
     "blueBullseye": "Blue Bullseye",
     "redBullseye": "Red Bullseye",
@@ -295,7 +319,29 @@
     "supportPopup": "{{side}} {{kind}}: {{callsign}}",
     "threatPopup": "{{type}} - {{range}}m",
     "detectionPopup": "{{type}} - {{range}}m",
-    "enemyPopup": "{{type}} ×{{count}}"
+    "enemyPopup": "{{type}} ×{{count}}",
+    "annotations": {
+      "toolbar": "マップ注釈ツール",
+      "modes": {
+        "navigate": "移動・閲覧",
+        "pin": "メモピン",
+        "draw": "手描き線"
+      },
+      "help": {
+        "navigate": "地図を移動し、ピンをクリックして編集できます。",
+        "pin": "地図上をクリックするとメモピンを追加します。",
+        "draw": "地図上をドラッグして線を描きます。"
+      },
+      "color": "色",
+      "undo": "1つ戻す",
+      "clear": "注釈を全消去",
+      "clearConfirm": "マップ上のユーザー注釈をすべて消去しますか？",
+      "defaultPin": "マップメモ {{count}}",
+      "label": "ラベル",
+      "notes": "メモ",
+      "delete": "削除",
+      "drawingsCount": "手描き線: {{count}} 本"
+    }
   },
   "notes": {
     "smeacTitle": "SMEAC ブリーフィング",

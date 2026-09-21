@@ -98,4 +98,36 @@ describe('mission notes identity and sidecar', () => {
     const updated = updateFlightNotes(imported, 'blue:1', { ...emptyFlightNotes(), pilotName: 'New pilot' });
     expect(updated?.perFlight['blue:1']?.pilotName).toBe('New pilot');
   });
+
+  it('migrates a version 1 sidecar and writes bounded map and waypoint annotations as version 2', () => {
+    const missionKey = 'v1-migrate';
+    const legacy = {
+      version: 1,
+      missionKey,
+      smeac: { situation: '', mission: '', execution: '', adminLogistics: '', commandSignal: '' },
+      perFlight: {},
+    };
+    expect(parseNotesSidecar(JSON.stringify(legacy), missionKey)).toEqual(emptyUserNotes(missionKey));
+
+    const notes = emptyUserNotes(missionKey);
+    notes.waypoints['blue:1:0'] = { purpose: 'IP', notes: 'Push at 14:30Z', syncGroupId: 'sync_1' };
+    notes.mapAnnotations = [
+      { id: 'pin_1', kind: 'pin', position: [42, 43], label: 'Target', notes: 'North to south', color: '#e53935' },
+      { id: 'stroke_1', kind: 'stroke', points: [[42, 43], [42.01, 43.01]], color: '#0066ff', width: 4 },
+    ];
+    const serialized = serializeNotesSidecar(notes);
+    expect(JSON.parse(serialized).version).toBe(2);
+    expect(parseNotesSidecar(serialized, missionKey)).toEqual(notes);
+  });
+
+  it('rejects invalid imported map coordinates and waypoint keys', () => {
+    const notes = emptyUserNotes('v1-invalid-annotations');
+    const invalidCoordinate = JSON.parse(serializeNotesSidecar(notes));
+    invalidCoordinate.mapAnnotations = [{ id: 'pin', kind: 'pin', position: [95, 0], label: '', notes: '', color: '#e53935' }];
+    expect(() => parseNotesSidecar(JSON.stringify(invalidCoordinate), notes.missionKey)).toThrow('Invalid map coordinate');
+
+    const invalidWaypoint = JSON.parse(serializeNotesSidecar(notes));
+    invalidWaypoint.waypoints = { '../escape': { purpose: 'bad', notes: '' } };
+    expect(() => parseNotesSidecar(JSON.stringify(invalidWaypoint), notes.missionKey)).toThrow('Invalid waypoint annotation');
+  });
 });

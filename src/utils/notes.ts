@@ -1,9 +1,22 @@
-import type { FlightNotes, SMEACNotes, UserNotes } from '../types/mission';
+import type { FlightNotes, MapAnnotation, SMEACNotes, UserNotes, WaypointAnnotation } from '../types/mission';
+import {
+  hasWaypointAnnotationContent,
+  isSyncGroupId,
+  isWaypointKey,
+  MAX_WAYPOINT_ANNOTATIONS,
+  MAX_WAYPOINT_NOTES_LENGTH,
+  MAX_WAYPOINT_PURPOSE_LENGTH,
+} from './waypointAnnotations';
 
 const STORAGE_PREFIX = 'fastbriefing:notes:';
-const SIDECAR_VERSION = 1;
+const SIDECAR_VERSION = 2;
 const MAX_NOTE_LENGTH = 10000;
 export const MAX_FLIGHT_NOTES = 200;
+export const MAX_MAP_ANNOTATIONS = 200;
+export const MAX_MAP_STROKE_POINTS = 2000;
+export const MAX_MAP_POINTS_TOTAL = 10000;
+export const MAX_MAP_LABEL_LENGTH = 80;
+export const MAX_MAP_NOTE_LENGTH = 1000;
 
 const smeacFields: (keyof SMEACNotes)[] = [
   'situation', 'mission', 'execution', 'adminLogistics', 'commandSignal',
@@ -33,6 +46,8 @@ export function emptyUserNotes(missionKey: string): UserNotes {
       situation: '', mission: '', execution: '', adminLogistics: '', commandSignal: '',
     },
     perFlight: {},
+    waypoints: {},
+    mapAnnotations: [],
   };
 }
 
@@ -77,7 +92,7 @@ export function serializeNotesSidecar(notes: UserNotes): string {
 
 export function parseNotesSidecar(json: string, expectedMissionKey: string): UserNotes {
   const value: unknown = JSON.parse(json);
-  if (!isRecord(value) || value.version !== SIDECAR_VERSION || value.missionKey !== expectedMissionKey) {
+  if (!isRecord(value) || (value.version !== 1 && value.version !== SIDECAR_VERSION) || value.missionKey !== expectedMissionKey) {
     throw new Error('Notes sidecar does not match this mission');
   }
   if (!isRecord(value.smeac) || !isRecord(value.perFlight)) {
@@ -105,7 +120,64 @@ export function parseNotesSidecar(json: string, expectedMissionKey: string): Use
     perFlight[key] = flightNotes;
   }
 
-  return { missionKey: expectedMissionKey, smeac, perFlight };
+  const waypoints = readWaypointAnnotations(value.waypoints);
+  const mapAnnotations = readMapAnnotations(value.mapAnnotations);
+  return { missionKey: expectedMissionKey, smeac, perFlight, waypoints, mapAnnotations };
+}
+
+function readWaypointAnnotations(value: unknown): Record<string, WaypointAnnotation> {
+  if (value === undefined) return {};
+  if (!isRecord(value)) throw new Error('Invalid waypoint annotations');
+  const result: Record<string, WaypointAnnotation> = {};
+  for (const [key, item] of Object.entries(value)) {
+    if (!isWaypointKey(key) || !isRecord(item)) throw new Error('Invalid waypoint annotation');
+    if (Object.keys(result).length >= MAX_WAYPOINT_ANNOTATIONS) throw new Error('Too many waypoint annotations');
+    const purpose = readBoundedText(item.purpose, MAX_WAYPOINT_PURPOSE_LENGTH, 'waypoint purpose');
+    const notes = readBoundedText(item.notes, MAX_WAYPOINT_NOTES_LENGTH, 'waypoint notes');
+    const syncGroupId = item.syncGroupId === undefined ? undefined : readSyncGroupId(item.syncGroupId);
+    const annotation = { purpose, notes, ...(syncGroupId ? { syncGroupId } : {}) };
+    if (hasWaypointAnnotationContent(annotation)) result[key] = annotation;
+  }
+  return result;
+}
+
+function readMapAnnotations(value: unknown): MapAnnotation[] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value) || value.length > MAX_MAP_ANNOTATIONS) throw new Error('Invalid map annotations');
+  let totalPoints = 0;
+  return value.map(item => {
+    if (!isRecord(item)) throw new Error('Invalid map annotation');
+    const id = readId(item.id);
+    const color = readColor(item.color);
+    if (item.kind === 'pin') {
+      return {
+        id,
+        kind: 'pin' as const,
+        position: readLatLon(item.position),
+        label: readBoundedText(item.label, MAX_MAP_LABEL_LENGTH, 'map label'),
+        notes: readBoundedText(item.notes, MAX_MAP_NOTE_LENGTH, 'map notes'),
+        color,
+      };
+    }
+    if (item.kind === 'stroke') {
+      if (!Array.isArray(item.points) || item.points.length < 2 || item.points.length > MAX_MAP_STROKE_POINTS) {
+        throw new Error('Invalid map stroke');
+      }
+      totalPoints += item.points.length;
+      if (totalPoints > MAX_MAP_POINTS_TOTAL) throw new Error('Too many map points');
+      if (typeof item.width !== 'number' || !Number.isFinite(item.width) || item.width < 1 || item.width > 12) {
+        throw new Error('Invalid map stroke width');
+      }
+      return {
+        id,
+        kind: 'stroke' as const,
+        points: item.points.map(readLatLon),
+        color,
+        width: item.width,
+      };
+    }
+    throw new Error('Invalid map annotation kind');
+  });
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -115,6 +187,35 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function readText(value: unknown): string {
   if (typeof value !== 'string' || value.length > MAX_NOTE_LENGTH) throw new Error('Invalid note text');
   return value;
+}
+
+function readBoundedText(value: unknown, maximum: number, label: string): string {
+  if (typeof value !== 'string' || value.length > maximum) throw new Error(`Invalid ${label}`);
+  return value;
+}
+
+function readId(value: unknown): string {
+  if (typeof value !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/.test(value)) throw new Error('Invalid annotation id');
+  return value;
+}
+
+function readSyncGroupId(value: unknown): string {
+  if (typeof value !== 'string' || !isSyncGroupId(value)) throw new Error('Invalid sync group');
+  return value;
+}
+
+function readColor(value: unknown): string {
+  if (typeof value !== 'string' || !/^#[0-9a-f]{6}$/i.test(value)) throw new Error('Invalid annotation color');
+  return value;
+}
+
+function readLatLon(value: unknown): [number, number] {
+  if (!Array.isArray(value) || value.length !== 2
+    || typeof value[0] !== 'number' || !Number.isFinite(value[0]) || value[0] < -90 || value[0] > 90
+    || typeof value[1] !== 'number' || !Number.isFinite(value[1]) || value[1] < -180 || value[1] > 180) {
+    throw new Error('Invalid map coordinate');
+  }
+  return [value[0], value[1]];
 }
 
 function readFuel(value: unknown): number | null {

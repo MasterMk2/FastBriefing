@@ -287,7 +287,34 @@ export interface UserNotes {
   missionKey: string;
   smeac: SMEACNotes;
   perFlight: Record<string, FlightNotes>;
+  waypoints: Record<string, WaypointAnnotation>;
+  mapAnnotations: MapAnnotation[];
 }
+
+export interface WaypointAnnotation {
+  purpose: string;
+  notes: string;
+  syncGroupId?: string;
+}
+
+export interface MapPinAnnotation {
+  id: string;
+  kind: 'pin';
+  position: [number, number];
+  label: string;
+  notes: string;
+  color: string;
+}
+
+export interface MapStrokeAnnotation {
+  id: string;
+  kind: 'stroke';
+  points: [number, number][];
+  color: string;
+  width: number;
+}
+
+export type MapAnnotation = MapPinAnnotation | MapStrokeAnnotation;
 
 export interface SMEACNotes {
   situation: string;

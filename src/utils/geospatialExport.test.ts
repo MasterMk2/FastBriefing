@@ -25,6 +25,7 @@ function missionFixture(theatre = 'Caucasus'): MissionData {
       red: emptyCoalition(),
       neutral: emptyCoalition(),
     },
+    userNotes: { waypoints: {}, mapAnnotations: [] },
   } as unknown as MissionData;
 }
 
@@ -61,5 +62,19 @@ describe('geospatial export', () => {
     const result = buildGeospatialExport(mission, 'pilot');
     expect(result.features).toHaveLength(0);
     expect(result.skipped).toBe(3);
+  });
+
+  it('exports waypoint and map annotations as geographic features', () => {
+    const mission = missionFixture();
+    mission.userNotes.waypoints['blue:4:0'] = { purpose: 'IP', notes: 'Attack north', syncGroupId: 'sync_ip' };
+    mission.userNotes.mapAnnotations = [
+      { id: 'pin_1', kind: 'pin', position: [41.2, 42.2], label: 'Rally', notes: 'Hold', color: '#e53935' },
+      { id: 'stroke_1', kind: 'stroke', points: [[41.2, 42.2], [41.3, 42.3]], color: '#0066ff', width: 4 },
+    ];
+    const result = buildGeospatialExport(mission, 'pilot');
+    expect(result.features.map(feature => feature.properties.kind)).toContain('waypoint-annotation');
+    expect(result.features.map(feature => feature.properties.kind)).toContain('map-pin');
+    expect(result.features.map(feature => feature.properties.kind)).toContain('map-stroke');
+    expect(toKml(result)).toContain('Attack north');
   });
 });

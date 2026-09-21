@@ -1,6 +1,7 @@
 import type { DisplaySettings, MissionData } from '../types/mission';
 import { dcsToLatLon } from './coordinates';
 import { applyViewMode } from './viewMode';
+import { waypointAnnotationKey } from './waypointAnnotations';
 
 type LonLat = [number, number];
 type Geometry =
@@ -12,12 +13,17 @@ export interface GeoFeature {
   type: 'Feature';
   geometry: Geometry;
   properties: {
-    kind: 'route' | 'zone';
+    kind: 'route' | 'zone' | 'waypoint-annotation' | 'map-pin' | 'map-stroke';
     name: string;
     side?: 'blue' | 'red' | 'neutral';
     callsign?: string;
     groupId?: number;
     zoneId?: number;
+    waypointIndex?: number;
+    purpose?: string;
+    notes?: string;
+    syncGroupId?: string;
+    color?: string;
   };
 }
 
@@ -43,6 +49,26 @@ export function buildGeospatialExport(
     for (const flight of visible.coalitions[side].flights) {
       const coordinates = flight.route.map(point =>
         point.latlonResolved === false ? null : toLonLat(point.latlon));
+      flight.route.forEach((point, routeIndex) => {
+        const annotation = visible.userNotes.waypoints[waypointAnnotationKey(side, flight.groupId, routeIndex)];
+        const position = point.latlonResolved === false ? null : toLonLat(point.latlon);
+        if (!annotation || !position) return;
+        features.push({
+          type: 'Feature',
+          geometry: { type: 'Point', coordinates: position },
+          properties: {
+            kind: 'waypoint-annotation',
+            name: annotation.purpose || point.name || `WP ${point.index}`,
+            callsign: flight.callsign,
+            groupId: flight.groupId,
+            side,
+            waypointIndex: point.index,
+            purpose: annotation.purpose,
+            notes: annotation.notes,
+            syncGroupId: annotation.syncGroupId,
+          },
+        });
+      });
       if (coordinates.some(coordinate => coordinate === null) || coordinates.length < 2) {
         skipped += 1;
         continue;
@@ -51,6 +77,26 @@ export function buildGeospatialExport(
         type: 'Feature',
         geometry: { type: 'LineString', coordinates: coordinates as LonLat[] },
         properties: { kind: 'route', name: flight.name, callsign: flight.callsign, groupId: flight.groupId, side },
+      });
+    }
+  }
+
+  for (const annotation of visible.userNotes.mapAnnotations) {
+    if (annotation.kind === 'pin') {
+      const position = toLonLat(annotation.position);
+      if (!position) { skipped += 1; continue; }
+      features.push({
+        type: 'Feature',
+        geometry: { type: 'Point', coordinates: position },
+        properties: { kind: 'map-pin', name: annotation.label, notes: annotation.notes, color: annotation.color },
+      });
+    } else {
+      const points = annotation.points.map(toLonLat);
+      if (points.some(point => point === null) || points.length < 2) { skipped += 1; continue; }
+      features.push({
+        type: 'Feature',
+        geometry: { type: 'LineString', coordinates: points as LonLat[] },
+        properties: { kind: 'map-stroke', name: 'Map drawing', color: annotation.color },
       });
     }
   }
@@ -96,7 +142,7 @@ export function toKml(result: GeospatialExport): string {
   const placemarks = result.features.map(feature => {
     const description = feature.properties.kind === 'route'
       ? `${feature.properties.side ?? ''} ${feature.properties.callsign ?? ''}`.trim()
-      : 'Trigger zone';
+      : [feature.properties.purpose, feature.properties.notes, feature.properties.kind].filter(Boolean).join(' · ');
     return `<Placemark><name>${escapeXml(feature.properties.name)}</name><description>${escapeXml(description)}</description>${geometryToKml(feature.geometry)}</Placemark>`;
   }).join('');
   return `<?xml version="1.0" encoding="UTF-8"?><kml xmlns="http://www.opengis.net/kml/2.2"><Document>${placemarks}</Document></kml>`;

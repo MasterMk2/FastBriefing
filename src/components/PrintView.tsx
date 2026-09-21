@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { AIGroup, DisplaySettings, Flight, FlightNotes, MissionData, MissionMeta, SMEACNotes, SupportAsset } from '../types/mission';
+import type { AIGroup, DisplaySettings, Flight, FlightNotes, MissionData, MissionMeta, SMEACNotes, SupportAsset, WaypointAnnotation } from '../types/mission';
 import type { WhiteboardData } from '../types/whiteboard';
 import { dcsToLatLon, formatCoordinate, getDefaultCoordinateFormat } from '../utils/coordinates';
 import { formatAltitude, formatDistance, formatPressure, formatSpeed, formatTemperature } from '../utils/units';
@@ -11,6 +11,7 @@ import { applyViewMode } from '../utils/viewMode';
 import WhiteboardDrawing from './WhiteboardDrawing';
 import MissionMapCanvas, { type MissionMapRenderState } from './MissionMapCanvas';
 import { formatLegDuration, formatRouteCoordinate } from '../utils/routeLegs';
+import { waypointAnnotationKey } from '../utils/waypointAnnotations';
 
 interface PrintViewProps {
   mission: MissionData;
@@ -75,6 +76,7 @@ export default function PrintView({ mission, settings, whiteboard, onMapRenderSt
                     settings={settings}
                     t={printT}
                     notes={viewMission.userNotes.perFlight[`${side.toLowerCase()}:${flight.groupId}`]}
+                    waypointNotes={viewMission.userNotes.waypoints}
                   />
                 ))}
               </section>
@@ -339,7 +341,7 @@ function PrintOverview({ mission, settings, t }: { mission: MissionData; setting
   );
 }
 
-function PrintFlight({ flight, side, meta, settings, t, notes }: { flight: Flight; side: 'Blue' | 'Red' | 'Neutral'; meta: MissionMeta; settings: DisplaySettings; t: PrintTranslator; notes?: FlightNotes }) {
+function PrintFlight({ flight, side, meta, settings, t, notes, waypointNotes }: { flight: Flight; side: 'Blue' | 'Red' | 'Neutral'; meta: MissionMeta; settings: DisplaySettings; t: PrintTranslator; notes?: FlightNotes; waypointNotes: Record<string, WaypointAnnotation> }) {
   const leadUnit = flight.units[0];
   const aircraftDefaultCoordinateFormat = getDefaultCoordinateFormat(flight.type);
   const props = leadUnit ? Object.entries(leadUnit.props) : [];
@@ -469,11 +471,13 @@ function PrintFlight({ flight, side, meta, settings, t, notes }: { flight: Fligh
               <th>{t('flights.altitude')}</th>
               <th>{t('flights.speed')}</th>
               <th>{t('flights.eta')}</th>
+              <th>{t('waypoints.purpose')}</th>
+              <th>{t('waypoints.notes')}</th>
             </tr>
           </thead>
           <tbody>
             {flight.route.length === 0 ? (
-              <tr><td colSpan={7}>{t('common.notAvailable')}</td></tr>
+              <tr><td colSpan={9}>{t('common.notAvailable')}</td></tr>
             ) : flight.route.map((waypoint, routeIndex) => (
                 <tr key={`${waypoint.index}:${routeIndex}`}>
                   <td>{waypoint.index}</td>
@@ -483,6 +487,8 @@ function PrintFlight({ flight, side, meta, settings, t, notes }: { flight: Fligh
                   <td>{formatAltitude(waypoint.alt, settings.altitudeUnit)}</td>
                   <td>{formatSpeed(waypoint.speed, settings.speedUnit)}</td>
                   <td>{formatFlightEta(waypoint.eta, meta, t)}</td>
+                  <td>{waypointNotes[waypointAnnotationKey(side.toLowerCase() as 'blue' | 'red' | 'neutral', flight.groupId, routeIndex)]?.purpose || '-'}</td>
+                  <td>{waypointNotes[waypointAnnotationKey(side.toLowerCase() as 'blue' | 'red' | 'neutral', flight.groupId, routeIndex)]?.notes || '-'}</td>
                 </tr>
               ))}
           </tbody>

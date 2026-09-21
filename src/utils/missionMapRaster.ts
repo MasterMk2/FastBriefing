@@ -1,5 +1,5 @@
 import type { AIGroup, DrawingObject, Flight, MissionData, SupportAsset, TriggerZone } from '../types/mission';
-import { dcsToLatLon } from './coordinates';
+import { dcsToLatLon, latLonToDCS } from './coordinates';
 
 export interface MissionMapRoute {
   key: string;
@@ -15,6 +15,8 @@ export interface MissionMapScene {
   drawings: DrawingObject[];
   support: SupportAsset[];
   threats: AIGroup[];
+  userPins: Array<{ id: string; position: [number, number]; label: string; color: string }>;
+  userStrokes: Array<{ id: string; points: [number, number][]; color: string; width: number }>;
 }
 
 export interface MissionMapLabels {
@@ -47,6 +49,22 @@ export function buildMissionMapScene(mission: MissionData, flights?: readonly Fl
     }
   }
 
+  const userPins: MissionMapScene['userPins'] = [];
+  const userStrokes: MissionMapScene['userStrokes'] = [];
+  for (const annotation of mission.userNotes?.mapAnnotations ?? []) {
+    if (annotation.kind === 'pin') {
+      const position = latLonToDCS(mission.meta.theatre, annotation.position[0], annotation.position[1]);
+      if (position) userPins.push({ id: annotation.id, position, label: annotation.label, color: annotation.color });
+    } else {
+      const points = annotation.points
+        .map(point => latLonToDCS(mission.meta.theatre, point[0], point[1]))
+        .filter((point): point is [number, number] => point !== null);
+      if (points.length > 1) userStrokes.push({
+        id: annotation.id, points, color: annotation.color, width: annotation.width,
+      });
+    }
+  }
+
   return {
     theatre: mission.meta.theatre,
     routes,
@@ -62,6 +80,8 @@ export function buildMissionMapScene(mission: MissionData, flights?: readonly Fl
       ...mission.coalitions.neutral.support,
     ]),
     threats: mission.coalitions.red.aiGroups.filter(group => isFinitePoint(group.position)),
+    userPins,
+    userStrokes,
   };
 }
 
@@ -116,6 +136,8 @@ export async function drawMissionMap(
   for (const threat of scene.threats) drawThreat(context, threat, project, scale);
   for (const route of scene.routes) drawRoute(context, route, project, left, top, width);
   for (const asset of scene.support) drawSupport(context, asset, project);
+  for (const stroke of scene.userStrokes) drawUserStroke(context, stroke, project);
+  for (const pin of scene.userPins) drawUserPin(context, pin, project);
   if (tileCount > 0) drawAttribution(context, left, top, width, height);
   context.restore();
 
@@ -275,6 +297,8 @@ function calculateExtent(scene: MissionMapScene) {
     ...scene.drawings.flatMap(object => object.points).filter(isFinitePoint),
     ...scene.support.map(asset => asset.position).filter(isFinitePoint),
     ...scene.threats.map(group => group.position).filter(isFinitePoint),
+    ...scene.userPins.map(pin => pin.position).filter(isFinitePoint),
+    ...scene.userStrokes.flatMap(stroke => stroke.points).filter(isFinitePoint),
   ];
   for (const zone of scene.zones) {
     if (zone.type === 2 && zone.vertices) points.push(...zone.vertices.filter(isFinitePoint));
@@ -410,6 +434,50 @@ function drawSupport(context: CanvasRenderingContext2D, asset: SupportAsset, pro
   context.beginPath();
   context.moveTo(x, y - 8); context.lineTo(x + 8, y); context.lineTo(x, y + 8); context.lineTo(x - 8, y); context.closePath();
   context.fill();
+}
+
+function drawUserStroke(
+  context: CanvasRenderingContext2D,
+  stroke: MissionMapScene['userStrokes'][number],
+  project: (point: [number, number]) => [number, number],
+) {
+  const points = stroke.points.map(project);
+  if (points.length < 2) return;
+  context.save();
+  context.strokeStyle = normalizeCanvasColor(stroke.color, '#e53935');
+  context.lineWidth = Math.max(1, Math.min(12, stroke.width));
+  context.lineCap = 'round';
+  context.lineJoin = 'round';
+  context.beginPath();
+  context.moveTo(points[0][0], points[0][1]);
+  for (const point of points.slice(1)) context.lineTo(point[0], point[1]);
+  context.stroke();
+  context.restore();
+}
+
+function drawUserPin(
+  context: CanvasRenderingContext2D,
+  pin: MissionMapScene['userPins'][number],
+  project: (point: [number, number]) => [number, number],
+) {
+  const [x, y] = project(pin.position);
+  context.save();
+  context.fillStyle = normalizeCanvasColor(pin.color, '#e53935');
+  context.beginPath();
+  context.arc(x, y, 9, 0, Math.PI * 2);
+  context.fill();
+  context.strokeStyle = '#ffffff';
+  context.lineWidth = 3;
+  context.stroke();
+  if (pin.label) {
+    context.font = 'bold 20px sans-serif';
+    const labelWidth = context.measureText(pin.label).width;
+    context.fillStyle = 'rgba(255, 255, 255, 0.9)';
+    context.fillRect(x + 12, y - 23, labelWidth + 12, 28);
+    context.fillStyle = '#101828';
+    context.fillText(pin.label, x + 18, y - 3);
+  }
+  context.restore();
 }
 
 function drawNorthArrow(context: CanvasRenderingContext2D, x: number, y: number) {

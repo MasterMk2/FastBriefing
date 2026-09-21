@@ -1,19 +1,21 @@
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
-import type { MissionData, DisplaySettings, Flight, MissionMeta } from '../types/mission';
+import type { MissionData, DisplaySettings, Flight, MissionMeta, UserNotes } from '../types/mission';
 import { getDefaultCoordinateFormat } from '../utils/coordinates';
 import { formatEtaLocal, formatEtaZulu } from '../utils/time';
 import { formatAltitude, formatSpeed, formatDistance } from '../utils/units';
 import { applyViewMode } from '../utils/viewMode';
 import { formatLegDuration, formatRouteCoordinate } from '../utils/routeLegs';
+import WaypointAnnotationEditor from './WaypointAnnotationEditor';
 
 interface FlightsTabProps {
   mission: MissionData;
   settings: DisplaySettings;
+  onNotesChange?: (notes: UserNotes) => void;
 }
 
-export default function FlightsTab({ mission, settings }: FlightsTabProps) {
+export default function FlightsTab({ mission, settings, onNotesChange }: FlightsTabProps) {
   const { t } = useTranslation();
   const [selectedFlight, setSelectedFlight] = useState<Flight | null>(null);
   const [side, setSide] = useState<'blue' | 'red'>('blue');
@@ -50,7 +52,14 @@ export default function FlightsTab({ mission, settings }: FlightsTabProps) {
         
         {visibleSelectedFlight && (
           <main className="flight-detail">
-            <FlightDetail flight={visibleSelectedFlight} settings={settings} meta={viewMission.meta} />
+            <FlightDetail
+              flight={visibleSelectedFlight}
+              side={side}
+              mission={viewMission}
+              settings={settings}
+              meta={viewMission.meta}
+              onNotesChange={onNotesChange}
+            />
           </main>
         )}
         
@@ -70,7 +79,14 @@ export default function FlightsTab({ mission, settings }: FlightsTabProps) {
   );
 }
 
-function FlightDetail({ flight, settings, meta }: { flight: Flight; settings: DisplaySettings; meta: MissionMeta }) {
+function FlightDetail({ flight, side, mission, settings, meta, onNotesChange }: {
+  flight: Flight;
+  side: 'blue' | 'red';
+  mission: MissionData;
+  settings: DisplaySettings;
+  meta: MissionMeta;
+  onNotesChange?: (notes: UserNotes) => void;
+}) {
   const { t } = useTranslation();
   const leadUnit = flight.units[0];
   const aircraftDefaultCoordinateFormat = getDefaultCoordinateFormat(flight.type);
@@ -185,11 +201,12 @@ function FlightDetail({ flight, settings, meta }: { flight: Flight; settings: Di
               <th>{t('flights.legTime')}</th>
               <th>{t('flights.cumulativeDistance')}</th>
               <th>{t('flights.cumulativeTime')}</th>
+              {onNotesChange && <th>{t('waypoints.annotation')}</th>}
             </tr>
           </thead>
           <tbody>
-            {flight.route.map(wp => (
-              <tr key={wp.index}>
+            {flight.route.map((wp, routeIndex) => (
+              <tr key={`${wp.index}:${routeIndex}`}>
                 <td>{wp.index}</td>
                 <td>{wp.name}</td>
                 <td>{wp.action}</td>
@@ -204,6 +221,18 @@ function FlightDetail({ flight, settings, meta }: { flight: Flight; settings: Di
                 <td>{formatLegDuration(wp.leg?.time)}</td>
                 <td>{wp.leg ? formatDistance(wp.leg.cumulativeDistance, settings.distanceUnit) : '-'}</td>
                 <td>{formatLegDuration(wp.leg?.cumulativeTime)}</td>
+                {onNotesChange && (
+                  <td className="waypoint-editor-cell">
+                    <WaypointAnnotationEditor
+                      mission={mission}
+                      side={side}
+                      flight={flight}
+                      routeIndex={routeIndex}
+                      onNotesChange={onNotesChange}
+                      compact
+                    />
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>

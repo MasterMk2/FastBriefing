@@ -1123,5 +1123,7 @@ function createEmptyUserNotes(): UserNotes {
       commandSignal: '',
     },
     perFlight: {},
+    waypoints: {},
+    mapAnnotations: [],
   };
 }

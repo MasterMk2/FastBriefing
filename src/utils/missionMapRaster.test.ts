@@ -14,6 +14,13 @@ function mission(): MissionData {
       red: { ...coalition, flights: [flight(2, 'Red')], aiGroups: [{ type: 'SAM', category: 'vehicle', count: 1, position: [5, 6], hidden: false, lateActivation: false, startTime: 0 }] },
       neutral: { ...coalition, flights: [flight(3, 'Neutral')] },
     },
+    userNotes: {
+      waypoints: {},
+      mapAnnotations: [
+        { id: 'pin_1', kind: 'pin', position: [42, 43], label: 'IP', notes: '', color: '#e53935' },
+        { id: 'stroke_1', kind: 'stroke', points: [[42, 43], [42.01, 43.01]], color: '#0066ff', width: 4 },
+      ],
+    },
   } as unknown as MissionData;
 }
 
@@ -25,6 +32,8 @@ describe('mission map raster scene', () => {
     expect(scene.zones).toHaveLength(1);
     expect(scene.drawings).toHaveLength(1);
     expect(scene.threats).toHaveLength(1);
+    expect(scene.userPins).toHaveLength(1);
+    expect(scene.userStrokes).toHaveLength(1);
   });
 
   it('filters routes without dropping mission-level overlays', () => {

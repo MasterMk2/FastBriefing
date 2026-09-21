@@ -35,6 +35,7 @@ interface MissionViewProps {
 interface StandardTabProps {
   mission: MissionData;
   settings: DisplaySettings;
+  onNotesChange?: (notes: UserNotes) => void;
 }
 
 type StandardSection = Exclude<BriefingSection, 'notes' | 'whiteboard'>;
@@ -166,7 +167,7 @@ function MissionWorkspace({ mission, settings, sourceFile, onNotesChange, storag
     const definition = standardTabs.find(tab => tab.id === tabId);
     if (!definition) return null;
     const Tab = definition.component;
-    return <Tab mission={mission} settings={settings} />;
+    return <Tab mission={mission} settings={settings} onNotesChange={onNotesChange} />;
   };
 
   return (

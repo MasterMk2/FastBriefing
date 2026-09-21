@@ -2,6 +2,7 @@ import type { DisplaySettings, Flight, MissionData } from '../types/mission';
 import type { WhiteboardData } from '../types/whiteboard';
 import type { BriefingSection } from './briefingSections';
 import { buildMissionMapScene, type MissionMapScene } from './missionMapRaster';
+import { waypointAnnotationKey } from './waypointAnnotations';
 import { formatRouteCoordinate, formatLegDuration } from './routeLegs';
 import { formatAltitude, formatDistance, formatPressure, formatSpeed, formatTemperature } from './units';
 import { formatDateYMD, formatEtaZulu, formatTimeHHMM, missionLocalDate, missionZuluDate } from './time';
@@ -150,11 +151,12 @@ function planFlights(mission: MissionData, flights: Flight[], settings: DisplayS
     if (notes?.jokerFuel !== null && notes?.jokerFuel !== undefined) flightLines.push(`Joker: ${notes.jokerFuel}`);
     if (notes?.bingoFuel !== null && notes?.bingoFuel !== undefined) flightLines.push(`Bingo: ${notes.bingoFuel}`);
     const sections: KneeboardSection[] = [{ heading: t('kneeboard.flight'), lines: flightLines }];
-    for (const point of flight.route) {
+    for (const [routeIndex, point] of flight.route.entries()) {
       const leg = point.leg;
       const bearing = leg
         ? `${leg.trueBearing.toFixed(0)}°T${leg.magneticBearing === undefined ? '' : ` / ${leg.magneticBearing.toFixed(0)}°M`}`
         : '-';
+      const annotation = mission.userNotes.waypoints[waypointAnnotationKey(side, flight.groupId, routeIndex)];
       sections.push({
         heading: `${point.index}. ${point.name || point.action || t('kneeboard.waypoint')}`,
         lines: [
@@ -162,6 +164,8 @@ function planFlights(mission: MissionData, flights: Flight[], settings: DisplayS
           `${formatAltitude(point.alt, settings.altitudeUnit)} · ${formatSpeed(point.speed, settings.speedUnit)} · ${formatEtaZulu(mission.meta, point.eta)}Z`,
           `${t('flights.distance')}: ${leg ? formatDistance(leg.distance, settings.distanceUnit) : '-'} · ${t('flights.bearing')}: ${bearing}`,
           `${t('flights.legTime')}: ${formatLegDuration(leg?.time)} · ${t('flights.cumulativeDistance')}: ${leg ? formatDistance(leg.cumulativeDistance, settings.distanceUnit) : '-'}`,
+          ...(annotation?.purpose ? [`${t('waypoints.purpose')}: ${annotation.purpose}`] : []),
+          ...(annotation?.notes ? annotation.notes.split(/\r?\n/) : []),
         ],
       });
     }

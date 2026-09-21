@@ -4,6 +4,7 @@ import { buildMetar } from './metar';
 import { formatLegDuration, formatRouteCoordinate } from './routeLegs';
 import { etaZuluDate, formatDateYMD, formatTimeHHMM, formatTimeHHMMSS, formatUtcOffset, missionLocalDate, missionZuluDate } from './time';
 import { formatAltitude, formatDistance, formatPressure, formatSpeed, formatTemperature } from './units';
+import { waypointAnnotationKey } from './waypointAnnotations';
 
 export type BriefingMarkdownTranslate = (key: string, options?: Record<string, string | number>) => string;
 
@@ -86,14 +87,15 @@ function flightsMarkdown(mission: MissionData, settings: DisplaySettings, t: Bri
       lines.push(`- **${t('export.markdown.task')}**: ${flight.task}`);
       lines.push(`- **${t('export.markdown.groupFrequency')}**: ${(flight.frequency / 1_000_000).toFixed(3)} MHz (${flight.modulation === 0 ? 'AM' : 'FM'})\n`);
       lines.push(`#### ${t('export.markdown.route')}\n`);
-      lines.push(`| # | ${t('export.markdown.name')} | ${t('export.markdown.type')} | ${t('export.markdown.coordinate')} | ${t('export.markdown.altitude')} | ${t('export.markdown.speed')} | ${t('export.markdown.eta')} | ${t('flights.distance')} | ${t('flights.bearing')} | ${t('flights.legTime')} |\n|---|---|---|---|---|---|---|---|---|---|`);
-      for (const waypoint of flight.route) {
+      lines.push(`| # | ${t('export.markdown.name')} | ${t('export.markdown.type')} | ${t('waypoints.purpose')} | ${t('waypoints.notes')} | ${t('export.markdown.coordinate')} | ${t('export.markdown.altitude')} | ${t('export.markdown.speed')} | ${t('export.markdown.eta')} | ${t('flights.distance')} | ${t('flights.bearing')} | ${t('flights.legTime')} |\n|---|---|---|---|---|---|---|---|---|---|---|---|`);
+      for (const [routeIndex, waypoint] of flight.route.entries()) {
+        const annotation = mission.userNotes.waypoints[waypointAnnotationKey(side, flight.groupId, routeIndex)];
         const bearing = waypoint.leg
           ? waypoint.leg.magneticBearing === undefined
             ? t('flights.trueBearingOnly', { trueBearing: waypoint.leg.trueBearing.toFixed(0) })
             : t('flights.bearingValue', { trueBearing: waypoint.leg.trueBearing.toFixed(0), magneticBearing: waypoint.leg.magneticBearing.toFixed(0) })
           : '-';
-        lines.push(`| ${waypoint.index} | ${tableValue(waypoint.name)} | ${tableValue(waypoint.action)} | ${formatRouteCoordinate(waypoint, settings.coordinateFormat)} | ${formatAltitude(waypoint.alt, settings.altitudeUnit)} | ${formatSpeed(waypoint.speed, settings.speedUnit)} | ${formatEta(waypoint.eta, mission.meta)} | ${waypoint.leg ? formatDistance(waypoint.leg.distance, settings.distanceUnit) : '-'} | ${bearing} | ${formatLegDuration(waypoint.leg?.time)} |`);
+        lines.push(`| ${waypoint.index} | ${tableValue(waypoint.name)} | ${tableValue(waypoint.action)} | ${tableValue(annotation?.purpose ?? '-')} | ${tableValue(annotation?.notes ?? '-')} | ${formatRouteCoordinate(waypoint, settings.coordinateFormat)} | ${formatAltitude(waypoint.alt, settings.altitudeUnit)} | ${formatSpeed(waypoint.speed, settings.speedUnit)} | ${formatEta(waypoint.eta, mission.meta)} | ${waypoint.leg ? formatDistance(waypoint.leg.distance, settings.distanceUnit) : '-'} | ${bearing} | ${formatLegDuration(waypoint.leg?.time)} |`);
       }
       lines.push('');
     }
@@ -103,10 +105,14 @@ function flightsMarkdown(mission: MissionData, settings: DisplaySettings, t: Bri
 }
 
 function mapMarkdown(mission: MissionData, t: BriefingMarkdownTranslate): string {
+  const pins = mission.userNotes.mapAnnotations.filter(annotation => annotation.kind === 'pin');
+  const strokes = mission.userNotes.mapAnnotations.filter(annotation => annotation.kind === 'stroke');
   return [
     `## ${t('export.markdown.mapSection')}\n`,
     `- **${t('export.markdown.map')}**: ${mission.meta.theatre}`,
     t('export.markdown.mapExportNote'),
+    ...(pins.length ? pins.map(pin => `- **${tableValue(pin.label)}**: ${tableValue(pin.notes || t('common.notAvailable'))}`) : []),
+    ...(strokes.length ? [`- ${t('map.annotations.drawingsCount', { count: strokes.length })}`] : []),
     '',
   ].join('\n');
 }

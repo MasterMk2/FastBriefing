@@ -69,6 +69,8 @@ const mission = {
     missionKey: 'fixture',
     smeac: { situation: 'Enemy SAMs', mission: '', execution: '', adminLogistics: '', commandSignal: '' },
     perFlight: {},
+    waypoints: {},
+    mapAnnotations: [],
   },
 } as unknown as MissionData;
 

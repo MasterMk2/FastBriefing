@@ -29,6 +29,8 @@ function fixture(): MissionData {
       missionKey: 'test',
       smeac: { situation: 'Friendly forces', mission: '', execution: '', adminLogistics: '', commandSignal: '' },
       perFlight: { 'blue:1': { pilotName: 'Pilot', customNotes: 'Hold north' } },
+      waypoints: {},
+      mapAnnotations: [],
     },
   } as unknown as MissionData;
 }
@@ -70,5 +72,13 @@ describe('kneeboard plan', () => {
     const ordered = { ...settings, briefingSections: ['whiteboard', 'map', 'overview'] as BriefingSection[] };
     const pages = planKneeboardPages(fixture(), ordered, translate, null, { notes: 'board', strokes: [] });
     expect(pages.map(page => page.section)).toEqual(['whiteboard', 'map', 'overview']);
+  });
+
+  it('includes waypoint purpose and notes in the navigation log', () => {
+    const mission = fixture();
+    mission.userNotes.waypoints['blue:1:0'] = { purpose: 'Initial point', notes: 'Push south' };
+    const pages = planKneeboardPages(mission, { ...settings, briefingSections: ['flights'] }, translate);
+    expect(JSON.stringify(pages)).toContain('waypoints.purpose: Initial point');
+    expect(JSON.stringify(pages)).toContain('Push south');
   });
 });
