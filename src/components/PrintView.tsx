@@ -127,19 +127,44 @@ function PrintNotes({ mission, t }: { mission: MissionData; t: PrintTranslator }
     'situation', 'mission', 'execution', 'adminLogistics', 'commandSignal',
   ];
   const filled = sections.filter(section => mission.userNotes.smeac[section].trim());
-  if (filled.length === 0) return null;
+  const flightNotes = getAllFlights(mission).flatMap(({ flight, side }) => {
+    const notes = mission.userNotes.perFlight[`${side.toLowerCase()}:${flight.groupId}`];
+    return notes && hasFlightNotes(notes) ? [{ flight, side, notes }] : [];
+  });
+  if (filled.length === 0 && flightNotes.length === 0) return null;
 
   return (
     <section className="section print-section print-notes">
-      <h2>{t('notes.smeacTitle')}</h2>
-      {filled.map(section => (
-        <section className="print-subsection" key={section}>
-          <h3>{t(`notes.smeac.${section}`)}</h3>
-          <p className="notes-print-text">{mission.userNotes.smeac[section]}</p>
+      <h2>{t('tabs.notes')}</h2>
+      {filled.length > 0 && (
+        <section className="print-subsection">
+          <h3>{t('notes.smeacTitle')}</h3>
+          {filled.map(section => (
+            <section className="print-subsection" key={section}>
+              <h4>{t(`notes.smeac.${section}`)}</h4>
+              <p className="notes-print-text">{mission.userNotes.smeac[section]}</p>
+            </section>
+          ))}
+        </section>
+      )}
+      {flightNotes.map(({ flight, side, notes }) => (
+        <section className="print-subsection" key={`${side}:${flight.groupId}`}>
+          <h3>{flight.callsign || flight.name}</h3>
+          <dl className="info-grid">
+            {notes.pilotName && <><dt>{t('notes.pilotName')}</dt><dd>{notes.pilotName}</dd></>}
+            {notes.tot && <><dt>{t('notes.tot')}</dt><dd>{notes.tot}</dd></>}
+            {notes.jokerFuel !== null && <><dt>{t('notes.jokerFuel')}</dt><dd>{notes.jokerFuel}</dd></>}
+            {notes.bingoFuel !== null && <><dt>{t('notes.bingoFuel')}</dt><dd>{notes.bingoFuel}</dd></>}
+          </dl>
+          {notes.customNotes && <p className="notes-print-text">{notes.customNotes}</p>}
         </section>
       ))}
     </section>
   );
+}
+
+function hasFlightNotes(notes: FlightNotes): boolean {
+  return Boolean(notes.pilotName || notes.tot || notes.jokerFuel !== null || notes.bingoFuel !== null || notes.customNotes);
 }
 
 function PrintOverview({ mission, settings, t }: { mission: MissionData; settings: DisplaySettings; t: PrintTranslator }) {

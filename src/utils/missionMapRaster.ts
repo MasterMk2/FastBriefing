@@ -171,6 +171,7 @@ function drawObject(context: CanvasRenderingContext2D, object: DrawingObject, pr
 }
 
 function drawZone(context: CanvasRenderingContext2D, zone: TriggerZone, project: (point: [number, number]) => [number, number], scale: number) {
+  context.save();
   context.strokeStyle = '#b54708';
   context.fillStyle = 'rgba(245, 158, 11, 0.08)';
   context.lineWidth = 3;
@@ -178,7 +179,10 @@ function drawZone(context: CanvasRenderingContext2D, zone: TriggerZone, project:
   context.beginPath();
   if (zone.type === 2 && zone.vertices?.length) {
     const points = zone.vertices.filter(isFinitePoint).map(project);
-    if (points.length === 0) return;
+    if (points.length === 0) {
+      context.restore();
+      return;
+    }
     context.moveTo(points[0][0], points[0][1]);
     for (const point of points.slice(1)) context.lineTo(point[0], point[1]);
     context.closePath();
@@ -188,10 +192,11 @@ function drawZone(context: CanvasRenderingContext2D, zone: TriggerZone, project:
   }
   context.fill();
   context.stroke();
-  context.setLineDash([]);
+  context.restore();
 }
 
 function drawThreat(context: CanvasRenderingContext2D, threat: AIGroup, project: (point: [number, number]) => [number, number], scale: number) {
+  context.save();
   const center = project(threat.position);
   if ((threat.detectionRange ?? 0) > 0) {
     context.strokeStyle = 'rgba(180, 35, 24, 0.55)';
@@ -211,6 +216,7 @@ function drawThreat(context: CanvasRenderingContext2D, threat: AIGroup, project:
   }
   context.fillStyle = '#7a271a';
   context.fillRect(center[0] - 4, center[1] - 4, 8, 8);
+  context.restore();
 }
 
 function drawRoute(context: CanvasRenderingContext2D, route: MissionMapRoute, project: (point: [number, number]) => [number, number]) {
