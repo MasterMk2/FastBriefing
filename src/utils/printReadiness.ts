@@ -1,5 +1,18 @@
 export const PRINT_MAP_BLOCKED_CLASS = 'print-map-blocked';
 
+export type PrintMapState = 'loading' | 'ready' | 'error';
+export type NativePrintBlockReason = 'export-unavailable' | 'map-unavailable' | null;
+
+export function getNativePrintBlockReason(
+  exportActive: boolean,
+  hasPrintMap: boolean,
+  mapState: PrintMapState,
+): NativePrintBlockReason {
+  if (!exportActive) return 'export-unavailable';
+  if (hasPrintMap && mapState !== 'ready') return 'map-unavailable';
+  return null;
+}
+
 interface PrintEventTarget {
   addEventListener(type: 'beforeprint' | 'afterprint', listener: () => void): void;
   removeEventListener(type: 'beforeprint' | 'afterprint', listener: () => void): void;

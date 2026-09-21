@@ -1,11 +1,14 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { ComponentType, KeyboardEvent, LazyExoticComponent } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { DisplaySettings, MissionData, UserNotes } from '../types/mission';
 import type { BriefingSection } from '../utils/briefingSections';
 import { getMissionWhiteboardId, useWhiteboard } from '../hooks/useWhiteboard';
 import { useSettings } from '../hooks/useSettings';
+import { getNativePrintBlockReason, installPrintReadinessGuard } from '../utils/printReadiness';
 import BriefingPlanner from './BriefingPlanner';
+import PrintView from './PrintView';
+import type { MissionMapRenderState } from './MissionMapCanvas';
 
 const OverviewTab = lazy(() => import('./OverviewTab'));
 const FlightsTab = lazy(() => import('./FlightsTab'));
@@ -60,10 +63,37 @@ function MissionWorkspace({ mission, settings, sourceFile, onNotesChange, storag
   ], [settings.briefingSections]);
   const [activeTab, setActiveTab] = useState<MissionTabId>(() => visibleTabIds[0] ?? 'export');
   const tabRefs = useRef<Partial<Record<MissionTabId, HTMLButtonElement | null>>>({});
+  const hasPrintMap = settings.briefingSections.includes('map');
+  const printMapKey = `${mission.sourceFingerprint}:${settings.viewMode}:${settings.outputLanguage}`;
+  const [printMapRender, setPrintMapRender] = useState<{ key: string; state: MissionMapRenderState }>({
+    key: '', state: 'loading',
+  });
+  const printMapState: MissionMapRenderState = !hasPrintMap
+    ? 'ready'
+    : printMapRender.key === printMapKey ? printMapRender.state : 'loading';
+  const printBlockReason = getNativePrintBlockReason(activeTab === 'export', hasPrintMap, printMapState);
+  const printBlocked = printBlockReason !== null;
+
+  const activateTab = useCallback((tabId: MissionTabId) => {
+    if (tabId === 'export' && hasPrintMap) {
+      setPrintMapRender({ key: printMapKey, state: 'loading' });
+    }
+    setActiveTab(tabId);
+  }, [hasPrintMap, printMapKey]);
+
+  const handlePrintMapStateChange = useCallback((state: MissionMapRenderState) => {
+    setPrintMapRender({ key: printMapKey, state });
+  }, [printMapKey]);
+
+  useLayoutEffect(() => installPrintReadinessGuard(
+    window,
+    document.documentElement,
+    () => printBlocked,
+  ), [printBlocked]);
 
   useEffect(() => {
-    if (!visibleTabIds.includes(activeTab)) setActiveTab(visibleTabIds[0] ?? 'export');
-  }, [activeTab, visibleTabIds]);
+    if (!visibleTabIds.includes(activeTab)) activateTab(visibleTabIds[0] ?? 'export');
+  }, [activeTab, activateTab, visibleTabIds]);
 
   useEffect(() => {
     tabRefs.current[activeTab]?.focus();
@@ -88,7 +118,7 @@ function MissionWorkspace({ mission, settings, sourceFile, onNotesChange, storag
         return;
     }
     event.preventDefault();
-    setActiveTab(visibleTabIds[nextIndex]);
+    activateTab(visibleTabIds[nextIndex]);
   };
 
   const renderTab = (tabId: MissionTabId) => {
@@ -124,6 +154,7 @@ function MissionWorkspace({ mission, settings, sourceFile, onNotesChange, storag
           settings={settings}
           sourceFile={sourceFile}
           whiteboard={whiteboard.data}
+          printMapState={printMapState}
         />
       );
     }
@@ -158,7 +189,7 @@ function MissionWorkspace({ mission, settings, sourceFile, onNotesChange, storag
               aria-controls={panelId}
               tabIndex={activeTab === tabId ? 0 : -1}
               className={`tab-button ${activeTab === tabId ? 'active' : ''}`}
-              onClick={() => setActiveTab(tabId)}
+              onClick={() => activateTab(tabId)}
               onKeyDown={(event) => handleTabKeyDown(event, index)}
             >
               {t(`tabs.${tabId}`)}
@@ -189,6 +220,22 @@ function MissionWorkspace({ mission, settings, sourceFile, onNotesChange, storag
           </div>
         );
       })}
+
+      <div className="print-briefing">
+        <div className="print-map-blocked-message" role="alert">
+          {printBlockReason === 'export-unavailable'
+            ? t('export.nativePrintOpenExport')
+            : t(printMapState === 'error' ? 'export.printMapFailed' : 'export.printMapLoading')}
+        </div>
+        {activeTab === 'export' && (
+          <PrintView
+            mission={mission}
+            settings={settings}
+            whiteboard={whiteboard.data}
+            onMapRenderStateChange={handlePrintMapStateChange}
+          />
+        )}
+      </div>
     </div>
   );
 }

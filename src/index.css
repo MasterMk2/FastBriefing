@@ -300,6 +300,10 @@ body {
     display: none !important;
   }
 
+  .print-map-blocked .mission-view > :not(.print-briefing) {
+    display: none !important;
+  }
+
   .print-map-blocked .print-map-blocked-message {
     display: block !important;
     margin: 24mm auto;

@@ -363,6 +363,7 @@
     "printPdf": "印刷 / PDF",
     "printMapLoading": "印刷用の地理地図を準備しています。完了すると印刷 / PDFを選べます。",
     "printMapFailed": "印刷用の地理地図を取得できませんでした。ネットワーク接続を確認して再読み込みするか、プランナーで地図を外してください。",
+    "nativePrintOpenExport": "Ctrl+Pまたはブラウザの印刷メニューを使う前に「出力」タブを開き、印刷用ブリーフィングの準備完了を待ってください。",
     "generatePng": "ニーボードPNG一式（ZIP）",
     "embedMiz": "ニーボード入り.mizコピー",
     "kneeboardWidth": "PNG幅（px、3:4）",

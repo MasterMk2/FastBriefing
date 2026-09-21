@@ -363,6 +363,7 @@
     "printPdf": "Print / PDF",
     "printMapLoading": "Preparing the geographic map for printing. Print / PDF will become available when it is ready.",
     "printMapFailed": "The geographic map for printing could not be loaded. Check the network and reload, or exclude Map in the planner.",
+    "nativePrintOpenExport": "Open the Export tab and wait for the printable briefing to be ready before using Ctrl+P or the browser print menu.",
     "generatePng": "Kneeboard PNG Set (ZIP)",
     "embedMiz": "Download .miz Copy with Kneeboard",
     "kneeboardWidth": "PNG Width (px, 3:4)",

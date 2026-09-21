@@ -9,18 +9,17 @@ import { buildGeospatialExport, toGeoJson, toKml } from '../utils/geospatialExpo
 import { planKneeboardPages } from '../utils/kneeboard';
 import { renderKneeboardPages } from '../utils/kneeboardRenderer';
 import { createKneeboardMizCopy, createKneeboardPngZip, numberedKneeboardImages } from '../utils/kneeboardArchive';
-import PrintView from './PrintView';
 import type { MissionMapRenderState } from './MissionMapCanvas';
-import { installPrintReadinessGuard } from '../utils/printReadiness';
 
 interface ExportTabProps {
   mission: MissionData;
   settings: DisplaySettings;
   sourceFile: File | null;
   whiteboard: WhiteboardData;
+  printMapState: MissionMapRenderState;
 }
 
-export default function ExportTab({ mission, settings, sourceFile, whiteboard }: ExportTabProps) {
+export default function ExportTab({ mission, settings, sourceFile, whiteboard, printMapState }: ExportTabProps) {
   const { t } = useTranslation();
   const { setOutputLanguage } = useSettings();
   const viewMission = useMemo(() => applyViewMode(mission, settings.viewMode), [mission, settings.viewMode]);
@@ -33,7 +32,6 @@ export default function ExportTab({ mission, settings, sourceFile, whiteboard }:
   const [aircraftType, setAircraftType] = useState('');
   const canExportPages = settings.briefingSections.length > 0;
   const hasPrintMap = settings.briefingSections.includes('map');
-  const [printMapState, setPrintMapState] = useState<MissionMapRenderState>(hasPrintMap ? 'loading' : 'ready');
   const printMapBlocked = hasPrintMap && printMapState !== 'ready';
   const aircraftTypes = useMemo(() => [...new Set([
     ...viewMission.coalitions.blue.flights,
@@ -54,12 +52,6 @@ export default function ExportTab({ mission, settings, sourceFile, whiteboard }:
   useEffect(() => {
     if (aircraftType && !aircraftTypes.includes(aircraftType)) setAircraftType('');
   }, [aircraftType, aircraftTypes]);
-
-  useEffect(() => installPrintReadinessGuard(
-    window,
-    document.documentElement,
-    () => printMapBlocked,
-  ), [printMapBlocked]);
 
   const generateMarkdown = () => {
     setMarkdown(buildBriefingMarkdown(viewMission, settings, whiteboard, outputT));
@@ -217,17 +209,6 @@ export default function ExportTab({ mission, settings, sourceFile, whiteboard }:
         <p className="hint">{t('export.pngHelp')}</p>
       </section>
 
-      <div className="print-briefing">
-        <div className="print-map-blocked-message" role="alert">
-          {t(printMapState === 'error' ? 'export.printMapFailed' : 'export.printMapLoading')}
-        </div>
-        <PrintView
-          mission={mission}
-          settings={settings}
-          whiteboard={whiteboard}
-          onMapRenderStateChange={setPrintMapState}
-        />
-      </div>
     </div>
   );
 }

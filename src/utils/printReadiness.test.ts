@@ -1,7 +1,20 @@
 import { describe, expect, it, vi } from 'vitest';
-import { installPrintReadinessGuard, PRINT_MAP_BLOCKED_CLASS } from './printReadiness';
+import {
+  getNativePrintBlockReason,
+  installPrintReadinessGuard,
+  PRINT_MAP_BLOCKED_CLASS,
+} from './printReadiness';
 
 describe('native print readiness guard', () => {
+  it('blocks every non-export tab and every non-ready selected map', () => {
+    expect(getNativePrintBlockReason(false, false, 'ready')).toBe('export-unavailable');
+    expect(getNativePrintBlockReason(false, true, 'ready')).toBe('export-unavailable');
+    expect(getNativePrintBlockReason(true, true, 'loading')).toBe('map-unavailable');
+    expect(getNativePrintBlockReason(true, true, 'error')).toBe('map-unavailable');
+    expect(getNativePrintBlockReason(true, true, 'ready')).toBeNull();
+    expect(getNativePrintBlockReason(true, false, 'loading')).toBeNull();
+  });
+
   it('fails closed for native print while the map is blocked and clears after printing', () => {
     const listeners = new Map<string, () => void>();
     const classes = new Set<string>();
