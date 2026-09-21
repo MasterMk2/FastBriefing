@@ -233,7 +233,16 @@ function drawRoute(context: CanvasRenderingContext2D, route: MissionMapRoute, pr
     context.beginPath();
     context.arc(point[0], point[1], 7, 0, Math.PI * 2);
     context.fill();
-    if (index === 0) context.fillText(route.label, point[0] + 12, point[1] - 10);
+    if (index === 0) {
+      const labelWidth = context.measureText(route.label).width;
+      const rightEdge = context.canvas.width - 20;
+      const preferredX = point[0] + 12;
+      const labelX = Math.max(20, Math.min(
+        preferredX + labelWidth <= rightEdge ? preferredX : point[0] - labelWidth - 12,
+        rightEdge - labelWidth,
+      ));
+      context.fillText(route.label, labelX, Math.max(30, point[1] - 10));
+    }
   });
 }
 
