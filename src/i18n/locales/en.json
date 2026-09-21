@@ -372,7 +372,7 @@
     "printFlights": "All Flight Details",
     "mapPrintNote": "The map is omitted from the print view. Check the Map tab on screen.",
     "printImageExport": "Print and Image Export",
-    "printHelp": "Only sections selected in the Briefing Planner are printed. Use the browser print function (Ctrl+P) to save the result as a PDF.",
+    "printHelp": "Only sections selected in the Briefing Planner are printed. Use Print / PDF or the browser print function (Ctrl+P) to save the result as a PDF. If the selected map is not ready, native printing shows a stop message instead of an incomplete briefing.",
     "pngHelp": "Exports the selected sections in planner order as numbered 3:4 kneeboard PNG pages. The raster map includes routes, zones, drawings, support, and threat rings. Save a ZIP or a non-destructive .miz copy; an aircraft choice filters flight-specific pages.",
     "copied": "Markdown copied",
     "copyFailed": "Copy failed (check browser permissions)",

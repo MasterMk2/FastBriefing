@@ -11,6 +11,7 @@ import { renderKneeboardPages } from '../utils/kneeboardRenderer';
 import { createKneeboardMizCopy, createKneeboardPngZip, numberedKneeboardImages } from '../utils/kneeboardArchive';
 import PrintView from './PrintView';
 import type { MissionMapRenderState } from './MissionMapCanvas';
+import { installPrintReadinessGuard } from '../utils/printReadiness';
 
 interface ExportTabProps {
   mission: MissionData;
@@ -53,6 +54,12 @@ export default function ExportTab({ mission, settings, sourceFile, whiteboard }:
   useEffect(() => {
     if (aircraftType && !aircraftTypes.includes(aircraftType)) setAircraftType('');
   }, [aircraftType, aircraftTypes]);
+
+  useEffect(() => installPrintReadinessGuard(
+    window,
+    document.documentElement,
+    () => printMapBlocked,
+  ), [printMapBlocked]);
 
   const generateMarkdown = () => {
     setMarkdown(buildBriefingMarkdown(viewMission, settings, whiteboard, outputT));
@@ -211,6 +218,9 @@ export default function ExportTab({ mission, settings, sourceFile, whiteboard }:
       </section>
 
       <div className="print-briefing">
+        <div className="print-map-blocked-message" role="alert">
+          {t(printMapState === 'error' ? 'export.printMapFailed' : 'export.printMapLoading')}
+        </div>
         <PrintView
           mission={mission}
           settings={settings}

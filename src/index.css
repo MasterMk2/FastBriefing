@@ -240,6 +240,10 @@ body {
   display: none;
 }
 
+.print-map-blocked-message {
+  display: none;
+}
+
 @media print {
   @page {
     size: A4 portrait;
@@ -290,6 +294,20 @@ body {
 
   .print-briefing .print-view {
     display: block !important;
+  }
+
+  .print-map-blocked .print-briefing .print-view {
+    display: none !important;
+  }
+
+  .print-map-blocked .print-map-blocked-message {
+    display: block !important;
+    margin: 24mm auto;
+    max-width: 42rem;
+    padding: 1rem;
+    border: 2px solid var(--color-warning-border);
+    background: var(--color-surface-warning);
+    color: var(--color-warning-text);
   }
 
   .section,
