@@ -39,6 +39,7 @@ export default function ExportTab({ mission, settings, whiteboard }: ExportTabPr
   const [markdown, setMarkdown] = useState('');
   const [copyStatus, setCopyStatus] = useState('');
   const [pngStatus, setPngStatus] = useState('');
+  const canExportPng = settings.briefingSections.length > 0;
 
   useEffect(() => {
     setMarkdown('');
@@ -255,7 +256,14 @@ export default function ExportTab({ mission, settings, whiteboard }: ExportTabPr
         <button onClick={generateMarkdown} className="btn btn-primary">{t('export.generateMarkdown')}</button>
         <button onClick={copyMarkdown} className="btn" disabled={!markdown}>{t('export.copy')}</button>
         <button onClick={printBriefing} className="btn btn-secondary">{t('export.printPdf')}</button>
-        <button onClick={exportPng} className="btn btn-secondary">{t('export.generatePng')}</button>
+        <button
+          onClick={exportPng}
+          className="btn btn-secondary"
+          disabled={!canExportPng}
+          aria-describedby={!canExportPng ? 'png-empty-selection-help' : undefined}
+        >
+          {t('export.generatePng')}
+        </button>
         <label>
           {t('app.outputLanguage')}
           <select
@@ -269,6 +277,9 @@ export default function ExportTab({ mission, settings, whiteboard }: ExportTabPr
         </label>
         {copyStatus && <span className="hint" role="status">{copyStatus}</span>}
         {pngStatus && <span className="hint" role="status">{pngStatus}</span>}
+        {!canExportPng && (
+          <span className="hint" id="png-empty-selection-help">{t('export.pngNoSections')}</span>
+        )}
       </div>
 
       {markdown && (

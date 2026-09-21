@@ -20,12 +20,23 @@ export async function fingerprintMissionArchive(buffer: ArrayBuffer): Promise<st
   }
 
   const bytes = new Uint8Array(buffer);
-  let hash = 0x811c9dc5;
-  for (const byte of bytes) {
-    hash ^= byte;
-    hash = Math.imul(hash, 0x01000193);
+  let hashA = 0x811c9dc5;
+  let hashB = 0x9e3779b9;
+  let hashC = 0x85ebca6b;
+  let hashD = 0xc2b2ae35;
+  const yieldInterval = 1 << 20;
+  for (let index = 0; index < bytes.length; index += 1) {
+    const byte = bytes[index];
+    hashA = Math.imul(hashA ^ byte, 0x01000193);
+    hashB = Math.imul(hashB ^ byte, 0x5bd1e995);
+    hashC = Math.imul(hashC ^ byte, 0x27d4eb2d);
+    hashD = Math.imul(hashD ^ byte, 0x165667b1);
+    if (index > 0 && index % yieldInterval === 0) {
+      await new Promise<void>(resolve => globalThis.setTimeout(resolve, 0));
+    }
   }
-  return `fnv1a-${(hash >>> 0).toString(16).padStart(8, '0')}-${bytes.byteLength}`;
+  const hex = (value: number) => (value >>> 0).toString(16).padStart(8, '0');
+  return `hash128-${hex(hashA)}${hex(hashB)}${hex(hashC)}${hex(hashD)}-${bytes.byteLength}`;
 }
 
 interface ParseRequest {

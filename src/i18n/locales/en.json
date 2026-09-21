@@ -73,7 +73,7 @@
     "selectColor": "Select pen color {{color}}",
     "penWidth": "Width",
     "widthValue": "{{width}} px",
-    "undo": "Undo stroke",
+    "undo": "Undo",
     "clearDrawing": "Clear drawing",
     "canvasLabel": "Saved whiteboard drawing",
     "drawingSurface": "Whiteboard drawing surface",
@@ -282,6 +282,7 @@
     "pngGenerating": "Generating PNG…",
     "pngSaved": "Saved {{count}} PNG file(s)",
     "pngFailed": "PNG generation failed",
+    "pngNoSections": "Select at least one section in the Briefing Planner for PNG output",
     "markdown": {
       "view": "View",
       "creatorView": "Creator View",

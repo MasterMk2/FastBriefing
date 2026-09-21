@@ -70,7 +70,7 @@ describe('MissionParser', () => {
     expect(worker?.postedMessage).toEqual({ file: buffer });
     expect(worker?.transferList).toEqual([buffer]);
     expect(result.theatre).toBe('Caucasus');
-    expect(result.sourceFingerprint).toMatch(/^(?:[a-f0-9]{64}|fnv1a-)/);
+    expect(result.sourceFingerprint).toMatch(/^(?:[a-f0-9]{64}|hash128-)/);
     expect(worker?.terminated).toBe(true);
   });
 
@@ -80,6 +80,19 @@ describe('MissionParser', () => {
 
     expect(first).not.toBe(second);
     expect(await fingerprintMissionArchive(Uint8Array.from([1, 2, 3]).buffer)).toBe(first);
+  });
+
+  it('SubtleCryptoが失敗しても幅広い内容指紋へ安定してフォールバックする', async () => {
+    vi.stubGlobal('crypto', {
+      subtle: { digest: vi.fn().mockRejectedValue(new Error('unavailable')) },
+    });
+    const input = Uint8Array.from([10, 20, 30, 40]).buffer;
+    const first = await fingerprintMissionArchive(input);
+    const second = await fingerprintMissionArchive(Uint8Array.from([10, 20, 30, 41]).buffer);
+
+    expect(first).toMatch(/^hash128-[a-f0-9]{32}-4$/);
+    expect(await fingerprintMissionArchive(input)).toBe(first);
+    expect(second).not.toBe(first);
   });
 
   it('圧縮後サイズが上限ちょうどならarrayBufferを呼び出す', async () => {

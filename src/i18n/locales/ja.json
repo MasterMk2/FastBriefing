@@ -73,7 +73,7 @@
     "selectColor": "ペン色 {{color}} を選択",
     "penWidth": "太さ",
     "widthValue": "{{width}} px",
-    "undo": "1画戻す",
+    "undo": "元に戻す",
     "clearDrawing": "描画を消去",
     "canvasLabel": "保存済みのホワイトボード描画",
     "drawingSurface": "ポインターで描画するホワイトボード",
@@ -282,6 +282,7 @@
     "pngGenerating": "PNGを生成中…",
     "pngSaved": "PNGを {{count}} 枚保存しました",
     "pngFailed": "PNG生成に失敗しました",
+    "pngNoSections": "PNGに含めるセクションをプランナーで1つ以上選択してください",
     "markdown": {
       "view": "ビュー",
       "creatorView": "作成者ビュー",

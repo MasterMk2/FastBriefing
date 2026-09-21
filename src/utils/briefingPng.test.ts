@@ -14,6 +14,9 @@ const settings = {
   distanceUnit: 'nm',
 } as DisplaySettings;
 
+const sharedZones = [{}, {}];
+const sharedDrawings = [{}];
+
 const mission = {
   sourceFingerprint: 'fixture',
   meta: {
@@ -43,18 +46,24 @@ const mission = {
         units: [{ radios: [{ channel: 1, frequency: 251, modulation: 0, name: 'Package' }] }],
       }],
       support: [{ kind: 'awacs', callsign: 'Darkstar', frequency: 255_000_000 }],
-      zones: [{}, {}],
-      drawings: [{}],
+      zones: sharedZones,
+      drawings: sharedDrawings,
       aiGroups: [],
     },
     red: {
       flights: [],
       support: [],
-      zones: [],
-      drawings: [],
+      zones: sharedZones,
+      drawings: sharedDrawings,
       aiGroups: [{ category: 'vehicle', type: 'SA-10', count: 4, threatRange: 80_000, detectionRange: 120_000 }],
     },
-    neutral: { flights: [], support: [], zones: [], drawings: [], aiGroups: [] },
+    neutral: {
+      flights: [{ route: [{}, {}, {}] }],
+      support: [],
+      zones: sharedZones,
+      drawings: sharedDrawings,
+      aiGroups: [],
+    },
   },
 } as unknown as MissionData;
 
@@ -75,7 +84,8 @@ describe('briefing PNG content', () => {
     const byId = Object.fromEntries(sections.map(section => [section.id, section.lines.join('\n')]));
     expect(byId.overview).toContain('Sinai');
     expect(byId.flights).toContain('Viper 1');
-    expect(byId.map).toContain('2 2 1');
+    expect(mission.coalitions.blue.zones).toBe(mission.coalitions.red.zones);
+    expect(byId.map).toContain('5 2 1');
     expect(byId.comms).toContain('Package');
     expect(byId.support).toContain('Darkstar');
     expect(byId.threats).toContain('SA-10');

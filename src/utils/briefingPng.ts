@@ -43,6 +43,10 @@ export function buildBriefingPngSections(
     ...coalitions.blue.flights.map(flight => ({ side: 'Blue', flight })),
     ...coalitions.red.flights.map(flight => ({ side: 'Red', flight })),
   ];
+  const mapFlights = [
+    ...flights,
+    ...coalitions.neutral.flights.map(flight => ({ side: 'Neutral', flight })),
+  ];
   const support = [
     ...coalitions.blue.support.map(asset => ({ side: 'Blue', asset })),
     ...coalitions.red.support.map(asset => ({ side: 'Red', asset })),
@@ -97,9 +101,9 @@ export function buildBriefingPngSections(
       lines: [
         t('export.canvas.map', { value: meta.theatre }),
         t('export.canvas.mapDetails', {
-          routeCount: flights.reduce((sum, { flight }) => sum + flight.route.length, 0),
-          zoneCount: Object.values(coalitions).reduce((sum, coalition) => sum + coalition.zones.length, 0),
-          drawingCount: Object.values(coalitions).reduce((sum, coalition) => sum + coalition.drawings.length, 0),
+          routeCount: mapFlights.reduce((sum, { flight }) => sum + flight.route.length, 0),
+          zoneCount: coalitions.blue.zones.length,
+          drawingCount: coalitions.blue.drawings.length,
         }),
         t('export.markdown.mapScreenNote'),
       ],
