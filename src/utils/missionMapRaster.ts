@@ -1,4 +1,5 @@
 import type { AIGroup, DrawingObject, Flight, MissionData, SupportAsset, TriggerZone } from '../types/mission';
+import { dcsToLatLon } from './coordinates';
 
 export interface MissionMapRoute {
   key: string;
@@ -8,6 +9,7 @@ export interface MissionMapRoute {
 }
 
 export interface MissionMapScene {
+  theatre: string;
   routes: MissionMapRoute[];
   zones: TriggerZone[];
   drawings: DrawingObject[];
@@ -17,6 +19,7 @@ export interface MissionMapScene {
 
 export interface MissionMapLabels {
   empty: string;
+  basemapUnavailable: string;
   routes: string;
   support: string;
   threats: string;
@@ -24,6 +27,11 @@ export interface MissionMapLabels {
 }
 
 const ROUTE_COLORS = { blue: '#175cd3', red: '#b42318', neutral: '#667085' } as const;
+const TILE_SIZE = 256;
+const MIN_TILE_ZOOM = 2;
+const MAX_TILE_ZOOM = 14;
+const TILE_LOAD_TIMEOUT_MS = 8000;
+const tileCache = new Map<string, Promise<HTMLImageElement | null>>();
 
 export function buildMissionMapScene(mission: MissionData, flights?: readonly Flight[]): MissionMapScene {
   const selectedFlights = flights
@@ -40,6 +48,7 @@ export function buildMissionMapScene(mission: MissionData, flights?: readonly Fl
   }
 
   return {
+    theatre: mission.meta.theatre,
     routes,
     // Normalization intentionally shares mission-level drawings and zones between coalitions.
     // Read the canonical blue collection once so exports do not triple-count them.
@@ -56,7 +65,7 @@ export function buildMissionMapScene(mission: MissionData, flights?: readonly Fl
   };
 }
 
-export function drawMissionMap(
+export async function drawMissionMap(
   context: CanvasRenderingContext2D,
   scene: MissionMapScene,
   left: number,
@@ -64,7 +73,7 @@ export function drawMissionMap(
   width: number,
   height: number,
   labels: MissionMapLabels,
-): boolean {
+): Promise<boolean> {
   context.save();
   context.fillStyle = '#f5f8fb';
   context.fillRect(left, top, width, height);
@@ -81,36 +90,183 @@ export function drawMissionMap(
     return false;
   }
 
-  const padding = Math.max(32, Math.min(width, height) * 0.06);
-  const availableWidth = Math.max(1, width - padding * 2);
-  const availableHeight = Math.max(1, height - padding * 2);
-  const spanNorth = Math.max(1000, extent.maxNorth - extent.minNorth);
-  const spanEast = Math.max(1000, extent.maxEast - extent.minEast);
-  const scale = Math.min(availableWidth / spanEast, availableHeight / spanNorth);
-  const centerNorth = (extent.minNorth + extent.maxNorth) / 2;
-  const centerEast = (extent.minEast + extent.maxEast) / 2;
-  const project = ([north, east]: [number, number]): [number, number] => [
-    left + width / 2 + (east - centerEast) * scale,
-    top + height / 2 - (north - centerNorth) * scale,
-  ];
+  const projection = createMapProjection(scene.theatre, extent, left, top, width, height);
+  if (!projection) {
+    drawMapMessage(context, labels.basemapUnavailable, left, top);
+    context.restore();
+    return false;
+  }
+  const project = projection.projectDcs;
+  const scale = projection.dcsScale;
 
   context.save();
   context.beginPath();
   context.rect(left, top, width, height);
   context.clip();
-  drawGrid(context, left, top, width, height);
+  const tileCount = await drawBasemapTiles(context, projection, left, top, width, height);
+  if (tileCount === 0) {
+    context.restore();
+    drawMapMessage(context, labels.basemapUnavailable, left, top);
+    context.restore();
+    return false;
+  }
 
   for (const object of scene.drawings) drawObject(context, object, project);
   for (const zone of scene.zones) drawZone(context, zone, project, scale);
   for (const threat of scene.threats) drawThreat(context, threat, project, scale);
   for (const route of scene.routes) drawRoute(context, route, project, left, top, width);
   for (const asset of scene.support) drawSupport(context, asset, project);
+  if (tileCount > 0) drawAttribution(context, left, top, width, height);
   context.restore();
 
   drawNorthArrow(context, left + width - 54, top + 34);
   drawLegend(context, scene, left + 20, top + height - 28, labels);
   context.restore();
   return true;
+}
+
+interface MapProjection {
+  zoom: number;
+  centerX: number;
+  centerY: number;
+  worldSize: number;
+  dcsScale: number;
+  projectDcs: (point: [number, number]) => [number, number];
+}
+
+function createMapProjection(
+  theatre: string,
+  extent: NonNullable<ReturnType<typeof calculateExtent>>,
+  left: number,
+  top: number,
+  width: number,
+  height: number,
+): MapProjection | null {
+  const corners = [
+    [extent.minNorth, extent.minEast],
+    [extent.minNorth, extent.maxEast],
+    [extent.maxNorth, extent.minEast],
+    [extent.maxNorth, extent.maxEast],
+  ] as [number, number][];
+  const geographic = corners.map(([north, east]) => dcsToLatLon(theatre, north, east));
+  if (geographic.some(point => point === null)) return null;
+  const normalized = geographic.map(point => webMercator(point![0], point![1]));
+  const minX = Math.min(...normalized.map(point => point[0]));
+  const maxX = Math.max(...normalized.map(point => point[0]));
+  const minY = Math.min(...normalized.map(point => point[1]));
+  const maxY = Math.max(...normalized.map(point => point[1]));
+  const padding = Math.max(32, Math.min(width, height) * 0.06);
+  const availableWidth = Math.max(1, width - padding * 2);
+  const availableHeight = Math.max(1, height - padding * 2);
+  const spanX = Math.max(1 / 2 ** MAX_TILE_ZOOM, maxX - minX);
+  const spanY = Math.max(1 / 2 ** MAX_TILE_ZOOM, maxY - minY);
+  const fittingZoom = Math.floor(Math.log2(Math.min(
+    availableWidth / (spanX * TILE_SIZE),
+    availableHeight / (spanY * TILE_SIZE),
+  )));
+  const zoom = Math.max(MIN_TILE_ZOOM, Math.min(MAX_TILE_ZOOM, fittingZoom));
+  const worldSize = TILE_SIZE * 2 ** zoom;
+  const centerX = (minX + maxX) / 2 * worldSize;
+  const centerY = (minY + maxY) / 2 * worldSize;
+  const projectDcs = ([north, east]: [number, number]): [number, number] => {
+    const latlon = dcsToLatLon(theatre, north, east);
+    if (!latlon) return [left + width / 2, top + height / 2];
+    const [x, y] = webMercator(latlon[0], latlon[1]);
+    return [left + width / 2 + x * worldSize - centerX, top + height / 2 + y * worldSize - centerY];
+  };
+  const west = projectDcs([extent.minNorth, extent.minEast]);
+  const east = projectDcs([extent.minNorth, extent.maxEast]);
+  const south = projectDcs([extent.minNorth, extent.minEast]);
+  const north = projectDcs([extent.maxNorth, extent.minEast]);
+  const eastScale = Math.abs(east[0] - west[0]) / Math.max(1, extent.maxEast - extent.minEast);
+  const northScale = Math.abs(north[1] - south[1]) / Math.max(1, extent.maxNorth - extent.minNorth);
+  return { zoom, centerX, centerY, worldSize, dcsScale: Math.min(eastScale, northScale), projectDcs };
+}
+
+function webMercator(lat: number, lon: number): [number, number] {
+  const boundedLat = Math.max(-85.05112878, Math.min(85.05112878, lat));
+  const sin = Math.sin(boundedLat * Math.PI / 180);
+  return [
+    (lon + 180) / 360,
+    0.5 - Math.log((1 + sin) / (1 - sin)) / (4 * Math.PI),
+  ];
+}
+
+async function drawBasemapTiles(
+  context: CanvasRenderingContext2D,
+  projection: MapProjection,
+  left: number,
+  top: number,
+  width: number,
+  height: number,
+): Promise<number> {
+  if (typeof Image === 'undefined') return 0;
+  const minWorldX = projection.centerX - width / 2;
+  const maxWorldX = projection.centerX + width / 2;
+  const minWorldY = projection.centerY - height / 2;
+  const maxWorldY = projection.centerY + height / 2;
+  const minTileX = Math.floor(minWorldX / TILE_SIZE);
+  const maxTileX = Math.floor(maxWorldX / TILE_SIZE);
+  const minTileY = Math.floor(minWorldY / TILE_SIZE);
+  const maxTileY = Math.floor(maxWorldY / TILE_SIZE);
+  const tileLimit = 2 ** projection.zoom;
+  const requests: Promise<{ image: HTMLImageElement | null; x: number; y: number }>[] = [];
+  for (let tileY = minTileY; tileY <= maxTileY; tileY += 1) {
+    if (tileY < 0 || tileY >= tileLimit) continue;
+    for (let tileX = minTileX; tileX <= maxTileX; tileX += 1) {
+      const wrappedX = ((tileX % tileLimit) + tileLimit) % tileLimit;
+      const url = `https://tile.openstreetmap.org/${projection.zoom}/${wrappedX}/${tileY}.png`;
+      requests.push(loadTile(url).then(image => ({ image, x: tileX, y: tileY })));
+    }
+  }
+  const tiles = await Promise.all(requests);
+  let drawn = 0;
+  for (const tile of tiles) {
+    if (!tile.image) continue;
+    const x = left + width / 2 + tile.x * TILE_SIZE - projection.centerX;
+    const y = top + height / 2 + tile.y * TILE_SIZE - projection.centerY;
+    context.drawImage(tile.image, x, y, TILE_SIZE, TILE_SIZE);
+    drawn += 1;
+  }
+  return drawn;
+}
+
+function loadTile(url: string): Promise<HTMLImageElement | null> {
+  const cached = tileCache.get(url);
+  if (cached) return cached;
+  const request = new Promise<HTMLImageElement | null>((resolve) => {
+    const image = new Image();
+    const timeout = globalThis.setTimeout(() => resolve(null), TILE_LOAD_TIMEOUT_MS);
+    image.crossOrigin = 'anonymous';
+    image.onload = () => {
+      globalThis.clearTimeout(timeout);
+      resolve(image);
+    };
+    image.onerror = () => {
+      globalThis.clearTimeout(timeout);
+      resolve(null);
+    };
+    image.src = url;
+  });
+  tileCache.set(url, request);
+  void request.then(image => {
+    if (!image && tileCache.get(url) === request) tileCache.delete(url);
+  });
+  if (tileCache.size > 256) tileCache.delete(tileCache.keys().next().value!);
+  return request;
+}
+
+function drawAttribution(context: CanvasRenderingContext2D, left: number, top: number, width: number, height: number) {
+  const text = '© OpenStreetMap contributors';
+  context.save();
+  context.font = '16px sans-serif';
+  context.textAlign = 'right';
+  const textWidth = context.measureText(text).width;
+  context.fillStyle = 'rgba(255, 255, 255, 0.84)';
+  context.fillRect(left + width - textWidth - 14, top + height - 24, textWidth + 12, 22);
+  context.fillStyle = '#344054';
+  context.fillText(text, left + width - 8, top + height - 7);
+  context.restore();
 }
 
 function calculateExtent(scene: MissionMapScene) {
@@ -143,15 +299,10 @@ function calculateExtent(scene: MissionMapScene) {
   };
 }
 
-function drawGrid(context: CanvasRenderingContext2D, left: number, top: number, width: number, height: number) {
-  context.strokeStyle = '#e4e7ec';
-  context.lineWidth = 1;
-  for (let index = 1; index < 5; index += 1) {
-    const x = left + width * index / 5;
-    const y = top + height * index / 5;
-    context.beginPath(); context.moveTo(x, top); context.lineTo(x, top + height); context.stroke();
-    context.beginPath(); context.moveTo(left, y); context.lineTo(left + width, y); context.stroke();
-  }
+function drawMapMessage(context: CanvasRenderingContext2D, message: string, left: number, top: number) {
+  context.fillStyle = '#475467';
+  context.font = '28px sans-serif';
+  context.fillText(message, left + 32, top + 64);
 }
 
 function drawObject(context: CanvasRenderingContext2D, object: DrawingObject, project: (point: [number, number]) => [number, number]) {

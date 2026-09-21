@@ -7,6 +7,8 @@ import {
   readStoredNotes,
   saveStoredNotes,
   serializeNotesSidecar,
+  MAX_FLIGHT_NOTES,
+  updateFlightNotes,
 } from './notes';
 
 afterEach(() => vi.unstubAllGlobals());
@@ -49,5 +51,32 @@ describe('mission notes identity and sidecar', () => {
     expect(saveStoredNotes(notes)).toBe(true);
     expect(readStoredNotes('v1-mission')).toEqual(notes);
     expect(readStoredNotes('v1-other')).toBeNull();
+  });
+
+  it('round-trips exactly the supported flight-note boundary and rejects overflow before saving', () => {
+    const notes = emptyUserNotes('v1-boundary');
+    for (let index = 0; index < MAX_FLIGHT_NOTES; index += 1) {
+      notes.perFlight[`blue:${index + 1}`] = { ...emptyFlightNotes(), pilotName: `Pilot ${index + 1}` };
+    }
+    expect(parseNotesSidecar(serializeNotesSidecar(notes), notes.missionKey)).toEqual(notes);
+
+    notes.perFlight[`neutral:${MAX_FLIGHT_NOTES + 1}`] = { ...emptyFlightNotes(), customNotes: 'overflow' };
+    expect(() => serializeNotesSidecar(notes)).toThrow('Too many flight notes');
+    const setItem = vi.fn();
+    vi.stubGlobal('localStorage', { getItem: () => null, setItem });
+    expect(saveStoredNotes(notes)).toBe(false);
+    expect(setItem).not.toHaveBeenCalled();
+  });
+
+  it('rejects a new flight-note edit at the boundary but allows freeing and reusing a slot', () => {
+    let notes = emptyUserNotes('v1-edit-boundary');
+    for (let index = 0; index < MAX_FLIGHT_NOTES; index += 1) {
+      notes.perFlight[`blue:${index + 1}`] = { ...emptyFlightNotes(), pilotName: `Pilot ${index + 1}` };
+    }
+    expect(updateFlightNotes(notes, 'red:999', { ...emptyFlightNotes(), customNotes: 'blocked' })).toBeNull();
+    notes = updateFlightNotes(notes, 'blue:1', emptyFlightNotes())!;
+    const reused = updateFlightNotes(notes, 'red:999', { ...emptyFlightNotes(), customNotes: 'accepted' });
+    expect(reused?.perFlight['blue:1']).toBeUndefined();
+    expect(reused?.perFlight['red:999']?.customNotes).toBe('accepted');
   });
 });

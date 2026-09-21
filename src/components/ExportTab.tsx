@@ -46,6 +46,10 @@ export default function ExportTab({ mission, settings, sourceFile, whiteboard }:
     setCopyStatus('');
   }, [settings, viewMission, whiteboard]);
 
+  useEffect(() => {
+    if (aircraftType && !aircraftTypes.includes(aircraftType)) setAircraftType('');
+  }, [aircraftType, aircraftTypes]);
+
   const generateMarkdown = () => {
     setMarkdown(buildBriefingMarkdown(viewMission, settings, whiteboard, outputT));
     setCopyStatus('');

@@ -79,6 +79,7 @@ export default function PrintView({ mission, settings, whiteboard }: PrintViewPr
                   className="print-map-canvas"
                   labels={{
                     empty: printT('mapRaster.empty'),
+                    basemapUnavailable: printT('mapRaster.basemapUnavailable'),
                     routes: printT('mapRaster.routes'),
                     support: printT('mapRaster.support'),
                     threats: printT('mapRaster.threats'),
@@ -131,11 +132,12 @@ function PrintNotes({ mission, t }: { mission: MissionData; t: PrintTranslator }
     const notes = mission.userNotes.perFlight[`${side.toLowerCase()}:${flight.groupId}`];
     return notes && hasFlightNotes(notes) ? [{ flight, side, notes }] : [];
   });
-  if (filled.length === 0 && flightNotes.length === 0) return null;
-
   return (
     <section className="section print-section print-notes">
       <h2>{t('tabs.notes')}</h2>
+      {filled.length === 0 && flightNotes.length === 0 && (
+        <p className="hint">{t('common.notAvailable')}</p>
+      )}
       {filled.length > 0 && (
         <section className="print-subsection">
           <h3>{t('notes.smeacTitle')}</h3>

@@ -8,6 +8,7 @@ function mission(): MissionData {
   const coalition = { bullseye: { xy: [0, 0], latlon: [0, 0] }, navPoints: [], airbases: [], flights: [], support: [], aiGroups: [], zones: sharedZones, drawings: sharedDrawings };
   const flight = (groupId: number, callsign: string) => ({ groupId, callsign, name: callsign, type: 'Jet', task: 'CAP', frequency: 0, modulation: 0, hidden: false, units: [], route: [{ xy: [groupId, groupId + 1] }] });
   return {
+    meta: { theatre: 'Caucasus' },
     coalitions: {
       blue: { ...coalition, flights: [flight(1, 'Blue')] },
       red: { ...coalition, flights: [flight(2, 'Red')], aiGroups: [{ type: 'SAM', category: 'vehicle', count: 1, position: [5, 6], hidden: false, lateActivation: false, startTime: 0 }] },
@@ -19,6 +20,7 @@ function mission(): MissionData {
 describe('mission map raster scene', () => {
   it('includes all route coalitions while counting shared mission geometry once', () => {
     const scene = buildMissionMapScene(mission());
+    expect(scene.theatre).toBe('Caucasus');
     expect(scene.routes.map(route => route.label)).toEqual(['Blue', 'Red', 'Neutral']);
     expect(scene.zones).toHaveLength(1);
     expect(scene.drawings).toHaveLength(1);

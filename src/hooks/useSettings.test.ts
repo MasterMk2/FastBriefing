@@ -187,7 +187,18 @@ describe('useSettings persistence', () => {
     };
 
     expect(loadSettings(throwingStorage)).toEqual(DEFAULT_SETTINGS);
-    expect(() => saveSettings(DEFAULT_SETTINGS, throwingStorage)).not.toThrow();
+    expect(saveSettings(DEFAULT_SETTINGS, throwingStorage)).toBe(false);
     expect(warn).toHaveBeenCalledTimes(2);
+  });
+
+  it('returns true only when a preset-bearing settings record was persisted', () => {
+    const storage = createStorage();
+    expect(saveSettings({
+      ...DEFAULT_SETTINGS,
+      briefingPresets: [{ name: 'Pilot', sections: ['overview', 'map'] }],
+    }, storage)).toBe(true);
+    expect(JSON.parse(storage.getItem(SETTINGS_STORAGE_KEY) ?? '{}').briefingPresets).toEqual([
+      { name: 'Pilot', sections: ['overview', 'map'] },
+    ]);
   });
 });

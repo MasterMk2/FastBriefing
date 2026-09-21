@@ -7,11 +7,25 @@ const BASE_HEIGHT = 2048;
 const MARGIN = 96;
 const CONTENT_BOTTOM = 1870;
 const TEXT_LINE_HEIGHT = 48;
+const ESTIMATED_CHARS_PER_LINE = 40;
+export const MAX_KNEEBOARD_PAGES = 64;
+export const MAX_KNEEBOARD_PIXELS = 128_000_000;
 
 interface CanvasPage {
   canvas: HTMLCanvasElement;
   context: CanvasRenderingContext2D;
 }
+
+interface TextCommand {
+  kind: 'heading' | 'line';
+  text: string;
+  y: number;
+}
+
+type PhysicalPage =
+  | { kind: 'text'; title: string; commands: TextCommand[] }
+  | { kind: 'map'; title: string; page: Extract<KneeboardPage, { kind: 'map' }> }
+  | { kind: 'whiteboard'; title: string; page: Extract<KneeboardPage, { kind: 'whiteboard' }>; noteLines: string[] };
 
 export async function renderKneeboardPages(
   pages: KneeboardPage[],
@@ -19,23 +33,169 @@ export async function renderKneeboardPages(
   t: KneeboardTranslate,
 ): Promise<Uint8Array[]> {
   if (!Number.isInteger(width) || width % 3 !== 0 || width < 768 || width > 3072) {
-    throw new Error('Invalid kneeboard width');
-  }
-  const canvases: CanvasPage[] = [];
-  for (const page of pages) {
-    if (page.kind === 'text') renderTextPage(page, width, t, canvases);
-    else if (page.kind === 'map') renderMapPage(page, width, t, canvases);
-    else renderWhiteboardPage(page, width, t, canvases);
+    throw new Error(t('kneeboard.invalidWidth'));
   }
 
-  return Promise.all(canvases.map(async ({ canvas, context }, index) => {
-    context.fillStyle = '#526176';
-    context.font = '26px sans-serif';
-    context.textAlign = 'right';
-    context.fillText(`${index + 1} / ${canvases.length}`, BASE_WIDTH - MARGIN, BASE_HEIGHT - 64);
-    const blob = await canvasToPng(canvas);
-    return new Uint8Array(await blob.arrayBuffer());
-  }));
+  // Reject obviously excessive work before allocating even a single full-size canvas.
+  assertKneeboardRenderBudget(estimateKneeboardPageCount(pages), width, t);
+  const measurementCanvas = document.createElement('canvas');
+  measurementCanvas.width = 1;
+  measurementCanvas.height = 1;
+  const measurementContext = measurementCanvas.getContext('2d');
+  if (!measurementContext) throw new Error('Canvas 2D context unavailable');
+  measurementContext.font = '32px sans-serif';
+  const physicalPages = paginatePages(pages, t, measurementContext);
+  measurementCanvas.width = 1;
+  measurementCanvas.height = 1;
+  assertKneeboardRenderBudget(physicalPages.length, width, t);
+
+  const output: Uint8Array[] = [];
+  const batchSize = width > 2048 ? 1 : 2;
+  for (let batchStart = 0; batchStart < physicalPages.length; batchStart += batchSize) {
+    const encodings: Promise<Uint8Array>[] = [];
+    for (let index = batchStart; index < Math.min(batchStart + batchSize, physicalPages.length); index += 1) {
+      const spec = physicalPages[index];
+      const current = createPage(spec.title, width);
+      try {
+        if (spec.kind === 'text') renderTextCommands(current.context, spec.commands);
+        else if (spec.kind === 'map') await renderMapPage(spec.page, current.context, t);
+        else renderWhiteboardPage(spec.page, spec.noteLines, current.context);
+
+        current.context.fillStyle = '#526176';
+        current.context.font = '26px sans-serif';
+        current.context.textAlign = 'right';
+        current.context.fillText(`${index + 1} / ${physicalPages.length}`, BASE_WIDTH - MARGIN, BASE_HEIGHT - 64);
+      } catch (error) {
+        current.canvas.width = 1;
+        current.canvas.height = 1;
+        throw error;
+      }
+      encodings.push(canvasToPng(current.canvas)
+        .then(async blob => new Uint8Array(await blob.arrayBuffer()))
+        .finally(() => {
+          // Keep at most two raw RGBA backing stores, and only one at widths above
+          // 2048 px, then release them before the next bounded batch.
+          current.canvas.width = 1;
+          current.canvas.height = 1;
+        }));
+    }
+    output.push(...await Promise.all(encodings));
+  }
+  return output;
+}
+
+export function assertKneeboardRenderBudget(
+  pageCount: number,
+  width: number,
+  t: KneeboardTranslate,
+): void {
+  if (pageCount > MAX_KNEEBOARD_PAGES) {
+    throw new Error(t('kneeboard.tooManyPages', { count: pageCount, limit: MAX_KNEEBOARD_PAGES }));
+  }
+  const height = Math.round(width * 4 / 3);
+  const pixels = pageCount * width * height;
+  if (!Number.isSafeInteger(pixels) || pixels > MAX_KNEEBOARD_PIXELS) {
+    const limit = Math.floor(MAX_KNEEBOARD_PIXELS / (width * height));
+    throw new Error(t('kneeboard.tooManyPixels', { count: pageCount, limit }));
+  }
+}
+
+export function estimateKneeboardPageCount(pages: readonly KneeboardPage[]): number {
+  return pages.reduce((total, page) => {
+    if (page.kind === 'map') return total + 1;
+    if (page.kind === 'whiteboard' && page.data.strokes.length > 0) {
+      const noteLines = estimateWrappedLines(page.data.notes);
+      return total + 1 + Math.ceil(Math.max(0, noteLines - 7) / 31);
+    }
+    const sections = page.kind === 'text'
+      ? page.sections
+      : [{ heading: '', lines: page.data.notes ? page.data.notes.split(/\r?\n/) : [''] }];
+    const height = sections.reduce((sum, section) => sum + 86
+      + section.lines.reduce((lineSum, line) => lineSum + estimateWrappedLines(line) * TEXT_LINE_HEIGHT, 0), 0);
+    return total + Math.max(1, Math.ceil(height / (CONTENT_BOTTOM - 240)));
+  }, 0);
+}
+
+function estimateWrappedLines(value: string): number {
+  return value.split(/\r?\n/).reduce(
+    (sum, line) => sum + Math.max(1, Math.ceil(Array.from(line).length / ESTIMATED_CHARS_PER_LINE)),
+    0,
+  );
+}
+
+function paginatePages(
+  pages: KneeboardPage[],
+  t: KneeboardTranslate,
+  context: CanvasRenderingContext2D,
+): PhysicalPage[] {
+  const result: PhysicalPage[] = [];
+  for (const page of pages) {
+    if (page.kind === 'text') {
+      result.push(...paginateTextPage(page, t, context));
+    } else if (page.kind === 'map') {
+      result.push({ kind: 'map', title: page.title, page });
+    } else if (page.data.strokes.length === 0) {
+      result.push(...paginateTextPage({
+        kind: 'text',
+        section: 'whiteboard',
+        title: page.title,
+        sections: [{
+          heading: t('whiteboard.notes'),
+          lines: page.data.notes ? page.data.notes.split(/\r?\n/) : [t('export.markdown.noWhiteboardNotes')],
+        }],
+      }, t, context));
+    } else {
+      context.font = '32px sans-serif';
+      const wrappedNotes = page.data.notes
+        .split(/\r?\n/)
+        .flatMap(line => wrapLine(context, line, BASE_WIDTH - MARGIN * 2));
+      result.push({ kind: 'whiteboard', title: page.title, page, noteLines: wrappedNotes.slice(0, 7) });
+      const overflow = wrappedNotes.slice(7);
+      if (overflow.length > 0) {
+        result.push(...paginateTextPage({
+          kind: 'text',
+          section: 'whiteboard',
+          title: `${page.title} (${t('kneeboard.continued')})`,
+          sections: [{ heading: t('whiteboard.notes'), lines: overflow }],
+        }, t, context));
+      }
+    }
+  }
+  return result;
+}
+
+function paginateTextPage(
+  page: Extract<KneeboardPage, { kind: 'text' }>,
+  t: KneeboardTranslate,
+  context: CanvasRenderingContext2D,
+): PhysicalPage[] {
+  const pages: PhysicalPage[] = [];
+  let commands: TextCommand[] = [];
+  let title = page.title;
+  let y = 240;
+  const nextPage = () => {
+    pages.push({ kind: 'text', title, commands });
+    title = `${page.title} (${t('kneeboard.continued')})`;
+    commands = [];
+    y = 240;
+  };
+
+  for (const section of page.sections) {
+    if (y + 110 > CONTENT_BOTTOM) nextPage();
+    commands.push({ kind: 'heading', text: section.heading, y });
+    y += 64;
+    context.font = '32px sans-serif';
+    for (const sourceLine of section.lines) {
+      for (const line of wrapLine(context, sourceLine, BASE_WIDTH - MARGIN * 2)) {
+        if (y + TEXT_LINE_HEIGHT > CONTENT_BOTTOM) nextPage();
+        commands.push({ kind: 'line', text: line, y });
+        y += TEXT_LINE_HEIGHT;
+      }
+    }
+    y += 22;
+  }
+  pages.push({ kind: 'text', title, commands });
+  return pages;
 }
 
 function createPage(title: string, width: number): CanvasPage {
@@ -61,40 +221,11 @@ function createPage(title: string, width: number): CanvasPage {
   return { canvas, context };
 }
 
-function renderTextPage(
-  page: Extract<KneeboardPage, { kind: 'text' }>,
-  width: number,
-  t: KneeboardTranslate,
-  canvases: CanvasPage[],
-): void {
-  let current = createPage(page.title, width);
-  canvases.push(current);
-  let y = 240;
-  const nextPage = () => {
-    current = createPage(`${page.title} (${t('kneeboard.continued')})`, width);
-    canvases.push(current);
-    y = 240;
-  };
-
-  for (const section of page.sections) {
-    if (y + 110 > CONTENT_BOTTOM) nextPage();
-    current.context.font = 'bold 38px sans-serif';
-    current.context.fillStyle = '#17324f';
-    current.context.fillText(section.heading, MARGIN, y, BASE_WIDTH - MARGIN * 2);
-    y += 64;
-    current.context.font = '32px sans-serif';
-    current.context.fillStyle = '#1e2936';
-    for (const sourceLine of section.lines) {
-      const wrapped = wrapLine(current.context, sourceLine, BASE_WIDTH - MARGIN * 2);
-      for (const line of wrapped) {
-        if (y + TEXT_LINE_HEIGHT > CONTENT_BOTTOM) nextPage();
-        current.context.font = '32px sans-serif';
-        current.context.fillStyle = '#1e2936';
-        current.context.fillText(line, MARGIN, y);
-        y += TEXT_LINE_HEIGHT;
-      }
-    }
-    y += 22;
+function renderTextCommands(context: CanvasRenderingContext2D, commands: TextCommand[]): void {
+  for (const command of commands) {
+    context.font = command.kind === 'heading' ? 'bold 38px sans-serif' : '32px sans-serif';
+    context.fillStyle = command.kind === 'heading' ? '#17324f' : '#1e2936';
+    context.fillText(command.text, MARGIN, command.y, BASE_WIDTH - MARGIN * 2);
   }
 }
 
@@ -115,58 +246,37 @@ function wrapLine(context: CanvasRenderingContext2D, value: string, maxWidth: nu
   return lines;
 }
 
-function renderMapPage(
+async function renderMapPage(
   page: Extract<KneeboardPage, { kind: 'map' }>,
-  width: number,
+  context: CanvasRenderingContext2D,
   t: KneeboardTranslate,
-  canvases: CanvasPage[],
-): void {
-  const current = createPage(page.title, width);
-  canvases.push(current);
-  const { context } = current;
+): Promise<void> {
   const mapLeft = MARGIN + 40;
   const mapTop = 220;
   const mapWidth = BASE_WIDTH - (MARGIN + 40) * 2;
   const mapHeight = 1580;
-  drawMissionMap(context, page.scene, mapLeft, mapTop, mapWidth, mapHeight, {
+  const rendered = await drawMissionMap(context, page.scene, mapLeft, mapTop, mapWidth, mapHeight, {
     empty: t('kneeboard.noMap'),
+    basemapUnavailable: t('mapRaster.basemapUnavailable'),
     routes: t('mapRaster.routes'),
     support: t('mapRaster.support'),
     threats: t('mapRaster.threats'),
     zones: t('mapRaster.zones'),
   });
+  if (!rendered && page.scene.routes.length + page.scene.zones.length + page.scene.drawings.length > 0) {
+    throw new Error(t('kneeboard.basemapUnavailable'));
+  }
 }
 
 function renderWhiteboardPage(
   page: Extract<KneeboardPage, { kind: 'whiteboard' }>,
-  width: number,
-  t: KneeboardTranslate,
-  canvases: CanvasPage[],
+  noteLines: string[],
+  context: CanvasRenderingContext2D,
 ): void {
-  if (page.data.strokes.length === 0) {
-    renderTextPage({
-      kind: 'text',
-      section: 'whiteboard',
-      title: page.title,
-      sections: [{
-        heading: t('whiteboard.notes'),
-        lines: page.data.notes ? page.data.notes.split(/\r?\n/) : [t('export.markdown.noWhiteboardNotes')],
-      }],
-    }, width, t, canvases);
-    return;
-  }
-
-  const current = createPage(page.title, width);
-  canvases.push(current);
-  const { context } = current;
   context.font = '32px sans-serif';
-  const wrappedNotes = page.data.notes
-    .split(/\r?\n/)
-    .flatMap(line => wrapLine(context, line, BASE_WIDTH - MARGIN * 2));
-  const firstPageLines = wrappedNotes.slice(0, 7);
-  let y = 230;
   context.fillStyle = '#1e2936';
-  for (const line of firstPageLines) {
+  let y = 230;
+  for (const line of noteLines) {
     context.fillText(line, MARGIN, y);
     y += TEXT_LINE_HEIGHT;
   }
@@ -192,16 +302,6 @@ function renderWhiteboardPage(
       context.lineTo(MARGIN + point.x * scale, boardTop + point.y * scale);
     }
     context.stroke();
-  }
-
-  const overflow = wrappedNotes.slice(firstPageLines.length);
-  if (overflow.length > 0) {
-    renderTextPage({
-      kind: 'text',
-      section: 'whiteboard',
-      title: `${page.title} (${t('kneeboard.continued')})`,
-      sections: [{ heading: t('whiteboard.notes'), lines: overflow }],
-    }, width, t, canvases);
   }
 }
 

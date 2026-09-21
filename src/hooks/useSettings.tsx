@@ -152,13 +152,15 @@ export function loadSettings(storage: SettingsStorage | null = getStorage()): Di
   }
 }
 
-export function saveSettings(settings: DisplaySettings, storage: SettingsStorage | null = getStorage()): void {
-  if (!storage) return;
+export function saveSettings(settings: DisplaySettings, storage: SettingsStorage | null = getStorage()): boolean {
+  if (!storage) return false;
 
   try {
     storage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify({ settingsVersion: SETTINGS_VERSION, ...settings }));
+    return true;
   } catch {
     console.warn('FastBriefing settings could not be saved; continuing without persistence.');
+    return false;
   }
 }
 
@@ -176,7 +178,7 @@ interface SettingsContextType {
   setOutputLanguage: (lang: DisplaySettings['outputLanguage']) => void;
   setTheme: (theme: DisplaySettings['theme']) => void;
   setBriefingSections: (sections: BriefingSection[]) => void;
-  setBriefingPresets: (presets: BriefingPreset[]) => void;
+  setBriefingPresets: (presets: BriefingPreset[]) => boolean;
 }
 
 const SettingsContext = createContext<SettingsContextType | null>(null);
@@ -188,12 +190,11 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     void i18n.changeLanguage(settings.language);
   }, [settings.language]);
   
-  useEffect(() => {
-    saveSettings(settings);
-  }, [settings]);
-  
   const updateSetting = <Key extends keyof DisplaySettings>(key: Key, value: DisplaySettings[Key]) => {
-    setSettings(prev => ({ ...prev, [key]: value }));
+    const next = { ...settings, [key]: value };
+    const persisted = saveSettings(next);
+    setSettings(next);
+    return persisted;
   };
   
   const value: SettingsContextType = {

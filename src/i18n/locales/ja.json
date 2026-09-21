@@ -55,6 +55,7 @@
     "presetDuplicate": "同じ名前のプリセットが既にあります。",
     "presetLimit": "保存できるプリセットは{{count}}件までです。",
     "presetSaved": "プリセット「{{name}}」を保存しました。",
+    "presetMemoryOnly": "プリセット「{{name}}」は現在の画面だけに反映されました。ブラウザ保存に失敗したため、再読み込み後は失われます。",
     "presetApplied": "プリセット「{{name}}」を適用しました。",
     "presetDeleted": "プリセット「{{name}}」を削除しました。",
     "presetSectionCount": "{{count}}セクション",
@@ -318,6 +319,8 @@
     "exported": "記入内容を保存しました",
     "imported": "記入内容を読み込みました",
     "importFailed": "読み込みに失敗しました。形式、サイズ、対象ミッションを確認してください。",
+    "exportFailed": "保存用JSONを作成できませんでした。記入数と各項目の長さを確認してください。",
+    "flightLimit": "フライト別の記入は{{count}}件までです。不要な記入を空にしてから追加してください。",
     "storageFailed": "ブラウザへの自動保存に失敗しました。サイドカー JSON を保存してください。"
   },
   "kneeboard": {
@@ -330,14 +333,19 @@
     "waypoint": "ウェイポイント",
     "navlog": "ナビログ",
     "comms": "通信",
-    "map": "経路概略図",
-    "mapNote": "北が上。地形画像ではなく相対位置の概略図です。",
+    "map": "ミッション地図",
+    "mapNote": "OpenStreetMapの地理情報に経路と作戦情報を重ねています。",
     "noMap": "表示できる経路・ゾーンがありません。",
-    "continued": "続き"
+    "continued": "続き",
+    "basemapUnavailable": "地理地図を取得できないため、地図ページを生成できません。ネットワーク接続を確認してください。",
+    "invalidWidth": "PNG幅は768〜3072の範囲で3の倍数にしてください。",
+    "tooManyPages": "ニーボードが{{count}}ページになり、上限{{limit}}ページを超えます。セクションまたは記入内容を減らしてください。",
+    "tooManyPixels": "このPNG幅では最大{{limit}}ページまで生成できます（予定{{count}}ページ）。幅または出力内容を減らしてください。"
   },
   "mapRaster": {
     "label": "画像化したミッション地図",
     "empty": "表示できるミッション図形がありません。",
+    "basemapUnavailable": "地理地図を取得できません。ネットワーク接続を確認してください。",
     "routes": "経路",
     "support": "支援",
     "threats": "脅威",

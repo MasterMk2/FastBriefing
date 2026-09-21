@@ -16,7 +16,7 @@ interface BriefingPlannerProps {
   selected: readonly BriefingSection[];
   presets: readonly BriefingPreset[];
   onChange: (sections: BriefingSection[]) => void;
-  onPresetsChange: (presets: BriefingPreset[]) => void;
+  onPresetsChange: (presets: BriefingPreset[]) => boolean;
 }
 
 export default function BriefingPlanner({ selected, presets, onChange, onPresetsChange }: BriefingPlannerProps) {
@@ -65,9 +65,9 @@ export default function BriefingPlanner({ selected, presets, onChange, onPresets
       setStatus(t('planner.presetLimit', { count: MAX_BRIEFING_PRESETS }));
       return;
     }
-    onPresetsChange([...presets, { name, sections: [...selected] }]);
+    const persisted = onPresetsChange([...presets, { name, sections: [...selected] }]);
     setPresetName('');
-    setStatus(t('planner.presetSaved', { name }));
+    setStatus(t(persisted ? 'planner.presetSaved' : 'planner.presetMemoryOnly', { name }));
   };
 
   return (
@@ -181,8 +181,8 @@ export default function BriefingPlanner({ selected, presets, onChange, onPresets
                     className="planner-order-button"
                     aria-label={t('planner.deletePreset', { name: preset.name })}
                     onClick={() => {
-                      onPresetsChange(presets.filter(candidate => candidate.name !== preset.name));
-                      setStatus(t('planner.presetDeleted', { name: preset.name }));
+                      const persisted = onPresetsChange(presets.filter(candidate => candidate.name !== preset.name));
+                      setStatus(t(persisted ? 'planner.presetDeleted' : 'planner.presetMemoryOnly', { name: preset.name }));
                     }}
                   >×</button>
                 </li>

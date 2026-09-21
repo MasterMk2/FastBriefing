@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import type { ChangeEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { DisplaySettings, FlightNotes, MissionData, SMEACNotes, UserNotes } from '../types/mission';
-import { emptyFlightNotes, parseNotesSidecar, serializeNotesSidecar } from '../utils/notes';
+import { emptyFlightNotes, MAX_FLIGHT_NOTES, parseNotesSidecar, serializeNotesSidecar, updateFlightNotes } from '../utils/notes';
 import { applyViewMode } from '../utils/viewMode';
 
 interface NotesTabProps {
@@ -37,10 +37,13 @@ export default function NotesTab({ mission, settings, onNotesChange, storageFail
       ? value === '' ? null : Number(value)
       : value;
     if (typeof nextValue === 'number' && (!Number.isFinite(nextValue) || nextValue < 0)) return;
-    onNotesChange({
-      ...notes,
-      perFlight: { ...notes.perFlight, [key]: { ...previous, [field]: nextValue } },
-    });
+    const updated = updateFlightNotes(notes, key, { ...previous, [field]: nextValue });
+    if (!updated) {
+      setStatus(t('notes.flightLimit', { count: MAX_FLIGHT_NOTES }));
+      return;
+    }
+    setStatus('');
+    onNotesChange(updated);
   };
 
   const exportSidecar = () => {
@@ -49,14 +52,18 @@ export default function NotesTab({ mission, settings, onNotesChange, storageFail
       ...notes,
       perFlight: Object.fromEntries(Object.entries(notes.perFlight).filter(([key]) => visibleKeys.has(key))),
     };
-    const blob = new Blob([serializeNotesSidecar(sidecarNotes)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = 'fastbriefing-notes.json';
-    link.click();
-    window.setTimeout(() => URL.revokeObjectURL(url), 0);
-    setStatus(t('notes.exported'));
+    try {
+      const blob = new Blob([serializeNotesSidecar(sidecarNotes)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'fastbriefing-notes.json';
+      link.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 0);
+      setStatus(t('notes.exported'));
+    } catch {
+      setStatus(t('notes.exportFailed'));
+    }
   };
 
   const importSidecar = async (event: ChangeEvent<HTMLInputElement>) => {

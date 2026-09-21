@@ -3,7 +3,7 @@ import type { FlightNotes, SMEACNotes, UserNotes } from '../types/mission';
 const STORAGE_PREFIX = 'fastbriefing:notes:';
 const SIDECAR_VERSION = 1;
 const MAX_NOTE_LENGTH = 10000;
-const MAX_FLIGHTS = 200;
+export const MAX_FLIGHT_NOTES = 200;
 
 const smeacFields: (keyof SMEACNotes)[] = [
   'situation', 'mission', 'execution', 'adminLogistics', 'commandSignal',
@@ -40,6 +40,17 @@ export function emptyFlightNotes(): FlightNotes {
   return { jokerFuel: null, bingoFuel: null, tot: '', pilotName: '', customNotes: '' };
 }
 
+export function updateFlightNotes(notes: UserNotes, key: string, value: FlightNotes): UserNotes | null {
+  const perFlight = { ...notes.perFlight };
+  if (!hasFlightNoteContent(value)) {
+    delete perFlight[key];
+  } else {
+    if (!(key in perFlight) && Object.keys(perFlight).length >= MAX_FLIGHT_NOTES) return null;
+    perFlight[key] = value;
+  }
+  return { ...notes, perFlight };
+}
+
 export function readStoredNotes(missionKey: string): UserNotes | null {
   try {
     const json = localStorage.getItem(STORAGE_PREFIX + missionKey);
@@ -59,7 +70,9 @@ export function saveStoredNotes(notes: UserNotes): boolean {
 }
 
 export function serializeNotesSidecar(notes: UserNotes): string {
-  return JSON.stringify({ version: SIDECAR_VERSION, ...notes }, null, 2);
+  const envelope = JSON.stringify({ version: SIDECAR_VERSION, ...notes });
+  const validated = parseNotesSidecar(envelope, notes.missionKey);
+  return JSON.stringify({ version: SIDECAR_VERSION, ...validated }, null, 2);
 }
 
 export function parseNotesSidecar(json: string, expectedMissionKey: string): UserNotes {
@@ -77,7 +90,7 @@ export function parseNotesSidecar(json: string, expectedMissionKey: string): Use
   }
 
   const entries = Object.entries(value.perFlight);
-  if (entries.length > MAX_FLIGHTS) throw new Error('Too many flight notes');
+  if (entries.length > MAX_FLIGHT_NOTES) throw new Error('Too many flight notes');
   const perFlight: Record<string, FlightNotes> = {};
   for (const [key, item] of entries) {
     if (!/^(blue|red|neutral):\d+$/.test(key) || !isRecord(item)) throw new Error('Invalid flight notes');
@@ -106,4 +119,9 @@ function readFuel(value: unknown): number | null {
   if (value === null) return null;
   if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) throw new Error('Invalid fuel value');
   return value;
+}
+
+function hasFlightNoteContent(notes: FlightNotes): boolean {
+  return Boolean(notes.pilotName || notes.tot || notes.customNotes
+    || notes.jokerFuel !== null || notes.bingoFuel !== null);
 }

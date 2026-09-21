@@ -55,6 +55,7 @@
     "presetDuplicate": "A preset with that name already exists.",
     "presetLimit": "Up to {{count}} presets can be saved.",
     "presetSaved": "Saved preset “{{name}}”.",
+    "presetMemoryOnly": "Preset “{{name}}” was applied only to this view. Browser storage failed, so it will be lost after reload.",
     "presetApplied": "Applied preset “{{name}}”.",
     "presetDeleted": "Deleted preset “{{name}}”.",
     "presetSectionCount": "{{count}} sections",
@@ -318,6 +319,8 @@
     "exported": "Notes saved",
     "imported": "Notes imported",
     "importFailed": "Import failed. Check the file format, size, and mission identity.",
+    "exportFailed": "Could not create the notes JSON. Check the number of flight notes and the length of each field.",
+    "flightLimit": "Up to {{count}} flight-note records can be saved. Clear an unused record before adding another.",
     "storageFailed": "Automatic browser storage failed. Save a sidecar JSON copy."
   },
   "kneeboard": {
@@ -330,14 +333,19 @@
     "waypoint": "Waypoint",
     "navlog": "Navigation Log",
     "comms": "Communications",
-    "map": "Route Schematic",
-    "mapNote": "North is up. Relative positions only; no terrain imagery.",
+    "map": "Mission Map",
+    "mapNote": "Routes and mission overlays are drawn over OpenStreetMap geography.",
     "noMap": "No route or zone can be shown.",
-    "continued": "continued"
+    "continued": "continued",
+    "basemapUnavailable": "The map page cannot be generated because the geographic basemap could not be loaded. Check the network connection.",
+    "invalidWidth": "PNG width must be a multiple of 3 from 768 through 3072.",
+    "tooManyPages": "The kneeboard would contain {{count}} pages, above the {{limit}}-page limit. Reduce the selected sections or notes.",
+    "tooManyPixels": "This PNG width allows up to {{limit}} pages ({{count}} planned). Reduce the width or output content."
   },
   "mapRaster": {
     "label": "Rasterized mission map",
     "empty": "No mission geometry can be shown.",
+    "basemapUnavailable": "The geographic basemap could not be loaded. Check the network connection.",
     "routes": "Routes",
     "support": "Support",
     "threats": "Threats",
