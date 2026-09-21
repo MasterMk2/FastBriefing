@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import type { MissionData } from '../types/mission';
 import type { KneeboardPage, KneeboardTranslate } from './kneeboard';
-import type { MissionMapScene } from './missionMapRaster';
+import { buildMissionMapScene, type MissionMapScene } from './missionMapRaster';
 import {
   assertMissionMapRendered,
   assertKneeboardRenderBudget,
@@ -46,6 +47,7 @@ describe('kneeboard map rendering', () => {
     threats: [],
     userPins: [],
     userStrokes: [],
+    unprojectableMapAnnotations: 0,
   });
 
   it('fails closed when an annotation-only map could not be rendered', () => {
@@ -57,5 +59,26 @@ describe('kneeboard map rendering', () => {
 
   it('allows a genuinely empty map page when no map content exists', () => {
     expect(() => assertMissionMapRendered(emptyScene(), false, t)).not.toThrow();
+  });
+
+  it('fails closed when source annotations cannot be projected into the raster scene', () => {
+    const coalition = {
+      flights: [], navPoints: [], airbases: [], support: [], aiGroups: [], zones: [], drawings: [],
+    };
+    const mission = {
+      meta: { theatre: 'Afghanistan' },
+      coalitions: { blue: coalition, red: coalition, neutral: coalition },
+      userNotes: {
+        waypoints: {},
+        mapAnnotations: [
+          { id: 'pin-unsupported', kind: 'pin', position: [34, 69], label: 'IP', notes: '', color: '#ff0000' },
+        ],
+      },
+    } as unknown as MissionData;
+    const scene = buildMissionMapScene(mission);
+
+    expect(scene.userPins).toHaveLength(0);
+    expect(scene.unprojectableMapAnnotations).toBe(1);
+    expect(() => assertMissionMapRendered(scene, false, t)).toThrow('kneeboard.basemapUnavailable');
   });
 });

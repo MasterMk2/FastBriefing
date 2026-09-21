@@ -17,6 +17,7 @@ export interface MissionMapScene {
   threats: AIGroup[];
   userPins: Array<{ id: string; position: [number, number]; label: string; color: string }>;
   userStrokes: Array<{ id: string; points: [number, number][]; color: string; width: number }>;
+  unprojectableMapAnnotations: number;
 }
 
 export interface MissionMapLabels {
@@ -51,17 +52,25 @@ export function buildMissionMapScene(mission: MissionData, flights?: readonly Fl
 
   const userPins: MissionMapScene['userPins'] = [];
   const userStrokes: MissionMapScene['userStrokes'] = [];
+  let unprojectableMapAnnotations = 0;
   for (const annotation of mission.userNotes?.mapAnnotations ?? []) {
     if (annotation.kind === 'pin') {
       const position = latLonToDCS(mission.meta.theatre, annotation.position[0], annotation.position[1]);
       if (position) userPins.push({ id: annotation.id, position, label: annotation.label, color: annotation.color });
+      else unprojectableMapAnnotations += 1;
     } else {
-      const points = annotation.points
-        .map(point => latLonToDCS(mission.meta.theatre, point[0], point[1]))
-        .filter((point): point is [number, number] => point !== null);
-      if (points.length > 1) userStrokes.push({
-        id: annotation.id, points, color: annotation.color, width: annotation.width,
-      });
+      const projected = annotation.points
+        .map(point => latLonToDCS(mission.meta.theatre, point[0], point[1]));
+      if (projected.some(point => point === null) || projected.length < 2) {
+        unprojectableMapAnnotations += 1;
+      } else {
+        userStrokes.push({
+          id: annotation.id,
+          points: projected as [number, number][],
+          color: annotation.color,
+          width: annotation.width,
+        });
+      }
     }
   }
 
@@ -82,13 +91,15 @@ export function buildMissionMapScene(mission: MissionData, flights?: readonly Fl
     threats: mission.coalitions.red.aiGroups.filter(group => isFinitePoint(group.position)),
     userPins,
     userStrokes,
+    unprojectableMapAnnotations,
   };
 }
 
 export function hasMissionMapContent(scene: MissionMapScene): boolean {
   return scene.routes.length + scene.zones.length + scene.drawings.length
     + scene.support.length + scene.threats.length
-    + scene.userPins.length + scene.userStrokes.length > 0;
+    + scene.userPins.length + scene.userStrokes.length
+    + scene.unprojectableMapAnnotations > 0;
 }
 
 export async function drawMissionMap(
@@ -106,6 +117,12 @@ export async function drawMissionMap(
   context.strokeStyle = '#d0d5dd';
   context.lineWidth = 2;
   context.strokeRect(left, top, width, height);
+
+  if (scene.unprojectableMapAnnotations > 0) {
+    drawMapMessage(context, labels.basemapUnavailable, left, top);
+    context.restore();
+    return false;
+  }
 
   const extent = calculateExtent(scene);
   if (!extent) {

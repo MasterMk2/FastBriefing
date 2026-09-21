@@ -34,6 +34,7 @@ describe('mission map raster scene', () => {
     expect(scene.threats).toHaveLength(1);
     expect(scene.userPins).toHaveLength(1);
     expect(scene.userStrokes).toHaveLength(1);
+    expect(scene.unprojectableMapAnnotations).toBe(0);
   });
 
   it('filters routes without dropping mission-level overlays', () => {
