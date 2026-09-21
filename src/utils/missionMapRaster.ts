@@ -103,7 +103,7 @@ export function drawMissionMap(
   for (const object of scene.drawings) drawObject(context, object, project);
   for (const zone of scene.zones) drawZone(context, zone, project, scale);
   for (const threat of scene.threats) drawThreat(context, threat, project, scale);
-  for (const route of scene.routes) drawRoute(context, route, project);
+  for (const route of scene.routes) drawRoute(context, route, project, left, top, width);
   for (const asset of scene.support) drawSupport(context, asset, project);
   context.restore();
 
@@ -219,7 +219,14 @@ function drawThreat(context: CanvasRenderingContext2D, threat: AIGroup, project:
   context.restore();
 }
 
-function drawRoute(context: CanvasRenderingContext2D, route: MissionMapRoute, project: (point: [number, number]) => [number, number]) {
+function drawRoute(
+  context: CanvasRenderingContext2D,
+  route: MissionMapRoute,
+  project: (point: [number, number]) => [number, number],
+  left: number,
+  top: number,
+  width: number,
+) {
   const points = route.points.map(project);
   context.strokeStyle = ROUTE_COLORS[route.side];
   context.fillStyle = ROUTE_COLORS[route.side];
@@ -235,13 +242,13 @@ function drawRoute(context: CanvasRenderingContext2D, route: MissionMapRoute, pr
     context.fill();
     if (index === 0) {
       const labelWidth = context.measureText(route.label).width;
-      const rightEdge = context.canvas.width - 20;
+      const rightEdge = left + width - 20;
       const preferredX = point[0] + 12;
-      const labelX = Math.max(20, Math.min(
+      const labelX = Math.max(left + 20, Math.min(
         preferredX + labelWidth <= rightEdge ? preferredX : point[0] - labelWidth - 12,
         rightEdge - labelWidth,
       ));
-      context.fillText(route.label, labelX, Math.max(30, point[1] - 10));
+      context.fillText(route.label, labelX, Math.max(top + 30, point[1] - 10));
     }
   });
 }
