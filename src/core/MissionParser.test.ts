@@ -140,12 +140,15 @@ describe('MissionParser', () => {
     expect(FakeWorker.latest).toBeUndefined();
   });
 
-  it('Workerが返した破損ZIP分類を呼び出し側へ保持する', async () => {
+  it.each([
+    ['invalid-zip', 'ZIPの構造を読み取れませんでした。'],
+    ['invalid-mission', 'DCSのmissionエントリを解析できませんでした。'],
+  ] as const)('Workerが返した%s分類を呼び出し側へ保持する', async (code, message) => {
     vi.stubGlobal('Worker', FakeWorker);
     FakeWorker.response = {
       type: 'error',
-      code: 'invalid-zip',
-      error: 'ZIPの構造を読み取れませんでした。',
+      code,
+      error: message,
     };
     const file = {
       size: 8,
@@ -154,8 +157,8 @@ describe('MissionParser', () => {
 
     await expect(new MissionParser().parse(file)).rejects.toMatchObject({
       name: 'MissionLoadError',
-      code: 'invalid-zip',
-      message: 'ZIPの構造を読み取れませんでした。',
+      code,
+      message,
     });
   });
 

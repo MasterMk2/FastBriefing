@@ -536,7 +536,14 @@ export async function parseMissionArchive(data: Uint8Array): Promise<ParsedMissi
     const entry = zip[name];
 
     if (name === 'mission') {
-      result.mission = parseLuaTable(decodeUtf8Entry(entry));
+      try {
+        result.mission = parseLuaTable(decodeUtf8Entry(entry));
+      } catch (error) {
+        throw new MissionArchiveError(
+          'invalid-mission',
+          `DCSのmissionエントリを解析できませんでした: ${asError(error).message}`,
+        );
+      }
     } else if (name === 'theatre') {
       result.theatre = decodeUtf8Entry(entry).trim();
     } else if (name === 'warehouses') {
@@ -552,6 +559,13 @@ export async function parseMissionArchive(data: Uint8Array): Promise<ParsedMissi
     } else if (isBriefingImageEntry(name)) {
       result.briefingImages.set(name, entry);
     }
+  }
+
+  if (result.mission === null || typeof result.mission !== 'object') {
+    throw new MissionArchiveError(
+      'invalid-mission',
+      'DCSのmissionエントリが存在しないか、最上位のLuaテーブルとして読み取れませんでした。',
+    );
   }
 
   return result;

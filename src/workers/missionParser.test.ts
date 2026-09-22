@@ -240,4 +240,34 @@ describe('ZIP展開ガード', () => {
       message: expect.stringContaining('展開後サイズ'),
     });
   });
+
+  it('missionエントリがないZIPをinvalid-missionとして拒否する', async () => {
+    const archive = zipSync({ theatre: strToU8('Caucasus') });
+
+    await expect(parseMissionArchive(archive)).rejects.toMatchObject({
+      name: 'MissionArchiveError',
+      code: 'invalid-mission',
+      message: expect.stringContaining('missionエントリ'),
+    });
+  });
+
+  it('壊れたmission Luaをinvalid-missionとして拒否する', async () => {
+    const archive = zipSync({ mission: strToU8('mission = { broken = ') });
+
+    await expect(parseMissionArchive(archive)).rejects.toMatchObject({
+      name: 'MissionArchiveError',
+      code: 'invalid-mission',
+      message: expect.stringContaining('解析できませんでした'),
+    });
+  });
+
+  it('最上位がLuaテーブルではないmissionをinvalid-missionとして拒否する', async () => {
+    const archive = zipSync({ mission: strToU8('mission = 42') });
+
+    await expect(parseMissionArchive(archive)).rejects.toMatchObject({
+      name: 'MissionArchiveError',
+      code: 'invalid-mission',
+      message: expect.stringContaining('最上位のLuaテーブル'),
+    });
+  });
 });

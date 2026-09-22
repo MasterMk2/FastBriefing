@@ -5,10 +5,10 @@ export type MissionLoadErrorTranslationKey =
   | 'app.corruptMiz'
   | 'app.mizSafetyLimit'
   | 'app.invalidMissionData'
-  | 'app.parseErrorDetails';
+  | 'app.parseError';
 
 export function missionLoadErrorTranslationKey(error: unknown): MissionLoadErrorTranslationKey {
-  if (!(error instanceof MissionLoadError)) return 'app.parseErrorDetails';
+  if (!(error instanceof MissionLoadError)) return 'app.parseError';
 
   switch (error.code) {
     case 'empty-file':
@@ -21,6 +21,6 @@ export function missionLoadErrorTranslationKey(error: unknown): MissionLoadError
     case 'invalid-mission':
       return 'app.invalidMissionData';
     case 'parse-failed':
-      return 'app.parseErrorDetails';
+      return 'app.parseError';
   }
 }

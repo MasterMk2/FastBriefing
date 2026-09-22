@@ -23,9 +23,9 @@
     "parseError": "ミッションファイルの解析に失敗しました",
     "parseErrorDetails": "ミッションファイルの解析に失敗しました。詳細: {{message}}",
     "emptyMiz": "このファイルは0バイトで、ミッションデータが入っていません。ダウンロードまたはコピーをやり直してください。",
-    "corruptMiz": "このファイルは有効なDCSミッションZIPではないか、途中で破損しています。DCS Mission Editorで開けるか確認し、元ファイルを再取得してください。詳細: {{message}}",
-    "mizSafetyLimit": "このミッションは安全上限のため読み込めません。ファイル内容と埋め込み画像を確認してください。詳細: {{message}}",
-    "invalidMissionData": "ZIPは開けましたが、DCSのmissionデータを読み取れません。DCS Mission Editorで保存し直してください。詳細: {{message}}",
+    "corruptMiz": "このファイルは有効なDCSミッションZIPではないか、途中で破損しています。DCS Mission Editorで開けるか確認し、元ファイルを再取得してください。",
+    "mizSafetyLimit": "このミッションは安全上限のため読み込めません。ファイル内容と埋め込み画像を確認してください。",
+    "invalidMissionData": "ZIPは開けましたが、DCSのmissionデータを読み取れません。DCS Mission Editorで保存し直してください。",
     "multipleFiles": "複数ファイルが選択されたため、最初の.mizファイル「{{fileName}}」だけを解析します（{{count}}件は無視）。"
   },
   "tabs": {
