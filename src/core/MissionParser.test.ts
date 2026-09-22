@@ -4,12 +4,14 @@ import { fingerprintMissionArchive, MissionParser, ZIP_LIMITS } from './MissionP
 interface WorkerResponse {
   type: string;
   data?: unknown;
+  code?: 'invalid-zip' | 'safety-limit' | 'invalid-mission';
   error?: string;
 }
 
 class FakeWorker {
   static latest: FakeWorker | undefined;
   static autoRespond = true;
+  static response: WorkerResponse | undefined;
 
   onmessage: ((event: MessageEvent<WorkerResponse>) => void) | null = null;
   onerror: ((event: ErrorEvent) => void) | null = null;
@@ -27,7 +29,7 @@ class FakeWorker {
     if (!FakeWorker.autoRespond) return;
     queueMicrotask(() => {
       this.onmessage?.({
-        data: {
+        data: FakeWorker.response ?? {
           type: 'success',
           data: {
             mission: {},
@@ -54,6 +56,7 @@ describe('MissionParser', () => {
     vi.unstubAllGlobals();
     FakeWorker.latest = undefined;
     FakeWorker.autoRespond = true;
+    FakeWorker.response = undefined;
   });
 
   it('FileのArrayBufferを解決してWorkerへ転送する', async () => {
@@ -107,6 +110,21 @@ describe('MissionParser', () => {
     expect(file.arrayBuffer).toHaveBeenCalledOnce();
   });
 
+  it('0バイトはarrayBufferとWorker生成の前に専用コードで拒否する', async () => {
+    vi.stubGlobal('Worker', FakeWorker);
+    const file = {
+      size: 0,
+      arrayBuffer: vi.fn(),
+    } as unknown as File;
+
+    await expect(new MissionParser().parse(file)).rejects.toMatchObject({
+      name: 'MissionLoadError',
+      code: 'empty-file',
+    });
+    expect(file.arrayBuffer).not.toHaveBeenCalled();
+    expect(FakeWorker.latest).toBeUndefined();
+  });
+
   it('圧縮後サイズが上限を1バイト超える場合はarrayBuffer前に拒否する', async () => {
     vi.stubGlobal('Worker', FakeWorker);
     const file = {
@@ -114,9 +132,31 @@ describe('MissionParser', () => {
       arrayBuffer: vi.fn(),
     } as unknown as File;
 
-    await expect(new MissionParser().parse(file)).rejects.toThrow('上限');
+    await expect(new MissionParser().parse(file)).rejects.toMatchObject({
+      code: 'archive-too-large',
+      message: expect.stringContaining('上限'),
+    });
     expect(file.arrayBuffer).not.toHaveBeenCalled();
     expect(FakeWorker.latest).toBeUndefined();
+  });
+
+  it('Workerが返した破損ZIP分類を呼び出し側へ保持する', async () => {
+    vi.stubGlobal('Worker', FakeWorker);
+    FakeWorker.response = {
+      type: 'error',
+      code: 'invalid-zip',
+      error: 'ZIPの構造を読み取れませんでした。',
+    };
+    const file = {
+      size: 8,
+      arrayBuffer: vi.fn().mockResolvedValue(new ArrayBuffer(8)),
+    } as unknown as File;
+
+    await expect(new MissionParser().parse(file)).rejects.toMatchObject({
+      name: 'MissionLoadError',
+      code: 'invalid-zip',
+      message: 'ZIPの構造を読み取れませんでした。',
+    });
   });
 
   it('cancelが解析PromiseをAbortErrorでrejectしWorkerを終了する', async () => {

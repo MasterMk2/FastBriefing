@@ -1,11 +1,24 @@
 import type { ParsedMissionFile } from '../types/mission';
 import { ZIP_LIMITS } from '../workers/missionParser';
+import type { MissionArchiveErrorCode } from '../workers/missionParser';
 
 export { ZIP_LIMITS } from '../workers/missionParser';
 
 export interface MissionParserResult extends ParsedMissionFile {
   briefingImages: Map<string, Uint8Array>;
   sourceFingerprint: string;
+}
+
+export type MissionLoadErrorCode = 'empty-file' | 'archive-too-large' | MissionArchiveErrorCode | 'parse-failed';
+
+export class MissionLoadError extends Error {
+  constructor(
+    public readonly code: MissionLoadErrorCode,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'MissionLoadError';
+  }
 }
 
 export async function fingerprintMissionArchive(buffer: ArrayBuffer): Promise<string> {
@@ -49,9 +62,17 @@ function formatBytes(bytes: number): string {
   return `${bytes.toLocaleString('ja-JP')}バイト`;
 }
 
-function archiveSizeError(size: number): Error {
-  return new Error(
-    `圧縮後のファイルサイズ（${formatBytes(size)}）が上限（${formatBytes(ZIP_LIMITS.MAX_ARCHIVE_SIZE)}）を超えています。`
+function archiveSizeError(size: number): MissionLoadError {
+  return new MissionLoadError(
+    'archive-too-large',
+    `圧縮後のファイルサイズ（${formatBytes(size)}）が上限（${formatBytes(ZIP_LIMITS.MAX_ARCHIVE_SIZE)}）を超えています。`,
+  );
+}
+
+function emptyArchiveError(): MissionLoadError {
+  return new MissionLoadError(
+    'empty-file',
+    'ファイルが0バイトで、ミッションデータが入っていません。',
   );
 }
 
@@ -86,6 +107,9 @@ export class MissionParser {
   ): Promise<void> {
     try {
       // Reject before arrayBuffer() so an oversized archive never enters main-thread memory.
+      if (file.size === 0) {
+        throw emptyArchiveError();
+      }
       if (file.size > ZIP_LIMITS.MAX_ARCHIVE_SIZE) {
         throw archiveSizeError(file.size);
       }
@@ -97,11 +121,18 @@ export class MissionParser {
       const worker = new Worker(new URL('../workers/missionParser.ts', import.meta.url), { type: 'module' });
       request.worker = worker;
 
-      worker.onmessage = (e: MessageEvent<{ type: string; data?: MissionParserResult; error?: string }>) => {
+      worker.onmessage = (e: MessageEvent<{
+        type: string;
+        data?: MissionParserResult;
+        code?: MissionArchiveErrorCode;
+        error?: string;
+      }>) => {
         if (e.data.type === 'success') {
           if (this.settle(request)) resolve({ ...e.data.data!, sourceFingerprint });
         } else if (e.data.type === 'error') {
-          if (this.settle(request)) reject(new Error(e.data.error));
+          if (this.settle(request)) {
+            reject(new MissionLoadError(e.data.code ?? 'parse-failed', e.data.error ?? ''));
+          }
         } else if (this.settle(request)) {
           reject(new Error('ミッション解析から不明な応答を受信しました。'));
         }

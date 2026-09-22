@@ -7,6 +7,7 @@ import MissionView from './components/MissionView';
 import { THEMES, useSettings } from './hooks/useSettings';
 import { useTranslation } from 'react-i18next';
 import { createMissionKey, emptyUserNotes, readStoredNotes, saveStoredNotes } from './utils/notes';
+import { missionLoadErrorTranslationKey } from './utils/missionLoadError';
 
 function App() {
   const [missionData, setMissionData] = useState<MissionData | null>(null);
@@ -62,7 +63,8 @@ function App() {
     } catch (err) {
       if (parserRef.current === parser && parseGenerationRef.current === generation && !isAbortError(err)) {
         const message = err instanceof Error ? err.message : '';
-        setError(message ? t('app.parseErrorDetails', { message }) : t('app.parseError'));
+        const translationKey = missionLoadErrorTranslationKey(err);
+        setError(message ? t(translationKey, { message }) : t('app.parseError'));
       }
     } finally {
       if (parserRef.current === parser) {

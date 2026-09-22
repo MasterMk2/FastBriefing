@@ -141,18 +141,31 @@ describe('Lua table conversion', () => {
 });
 
 describe('ZIP展開ガード', () => {
+  it('空データを破損ZIPとして分類する', async () => {
+    await expect(unzipWithLimits(new Uint8Array())).rejects.toMatchObject({
+      name: 'MissionArchiveError',
+      code: 'invalid-zip',
+    });
+  });
+
   it('展開後サイズが上限を超えるZIPを展開前に拒否する', async () => {
     const oversizedEntry = new Uint8Array(ZIP_LIMITS.MAX_ENTRY_SIZE + 1);
     const archive = zipSync({ oversized: [oversizedEntry, { level: 0 }] });
 
-    await expect(unzipWithLimits(archive)).rejects.toThrow('展開後サイズ');
+    await expect(unzipWithLimits(archive)).rejects.toMatchObject({
+      code: 'safety-limit',
+      message: expect.stringContaining('展開後サイズ'),
+    });
   });
 
   it('展開後サイズと圧縮サイズの比率が高すぎるZIPを拒否する', async () => {
     const repetitiveEntry = new Uint8Array(1024 * 1024);
     const archive = zipSync({ repetitive: [repetitiveEntry, { level: 9 }] });
 
-    await expect(unzipWithLimits(archive)).rejects.toThrow('比率');
+    await expect(unzipWithLimits(archive)).rejects.toMatchObject({
+      code: 'safety-limit',
+      message: expect.stringContaining('比率'),
+    });
   });
 
   it('小さいmiz相当のZIPは展開できる', async () => {
@@ -222,6 +235,9 @@ describe('ZIP展開ガード', () => {
     const oversizedImage = new Uint8Array(ZIP_LIMITS.MAX_IMAGE_SIZE + 1);
     const archive = zipSync({ 'l10n/DEFAULT/brief.png': [oversizedImage, { level: 0 }] });
 
-    await expect(unzipWithLimits(archive, shouldExtractEntry)).rejects.toThrow('展開後サイズ');
+    await expect(unzipWithLimits(archive, shouldExtractEntry)).rejects.toMatchObject({
+      code: 'safety-limit',
+      message: expect.stringContaining('展開後サイズ'),
+    });
   });
 });

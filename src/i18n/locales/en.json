@@ -22,6 +22,10 @@
     "invalidMizOnly": "Please select a .miz file (other formats cannot be loaded)",
     "parseError": "Failed to parse the mission file",
     "parseErrorDetails": "Failed to parse the mission file. Details: {{message}}",
+    "emptyMiz": "This file is empty (0 bytes) and contains no mission data. Download or copy it again.",
+    "corruptMiz": "This file is not a valid DCS mission ZIP or was damaged during transfer. Check whether DCS Mission Editor can open it, then obtain the source file again. Details: {{message}}",
+    "mizSafetyLimit": "This mission cannot be loaded because it exceeds a safety limit. Check the archive contents and embedded images. Details: {{message}}",
+    "invalidMissionData": "The ZIP opened, but its DCS mission data could not be read. Save it again in DCS Mission Editor. Details: {{message}}",
     "multipleFiles": "Multiple files were selected, so only the first .miz file \"{{fileName}}\" will be parsed ({{count}} ignored)."
   },
   "tabs": {
