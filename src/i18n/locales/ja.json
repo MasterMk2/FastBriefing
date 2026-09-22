@@ -259,7 +259,7 @@
     "callsign": "コールサイン",
     "tacan": "TACAN",
     "commonFrequency": "共通周波数",
-    "frequencyUser": "{{source}} {{callsign}} (CH{{channel}}: {{name}})"
+    "frequencyUser": "{{source}} {{callsign}} ({{channel}}: {{name}})"
   },
   "support": {
     "none": "支援機がありません",

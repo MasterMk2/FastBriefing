@@ -139,6 +139,8 @@ export interface Pylon {
 }
 
 export interface RadioPreset {
+  /** One-based radio bank number when the mission stores multiple radios. */
+  radio?: number;
   channel: number;
   frequency: number;
   modulation: number;

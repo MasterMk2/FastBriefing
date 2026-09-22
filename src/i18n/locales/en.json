@@ -259,7 +259,7 @@
     "callsign": "Callsign",
     "tacan": "TACAN",
     "commonFrequency": "Common Frequencies",
-    "frequencyUser": "{{source}} {{callsign}} (CH{{channel}}: {{name}})"
+    "frequencyUser": "{{source}} {{callsign}} ({{channel}}: {{name}})"
   },
   "support": {
     "none": "No support assets",

@@ -50,6 +50,36 @@ describe('Lua table conversion', () => {
     ]);
   });
 
+  it('実DCS形式の複数無線機バンクと並列プリセット情報を保持する', () => {
+    const result = parseLuaTable(`mission = {
+      Radio = {
+        [1] = {
+          channels = { [1] = 127.5, [3] = 305 },
+          modulations = { [1] = 0, [3] = 1 },
+          channelsNames = { [1] = "VHF", [3] = "UHF" },
+        },
+        [2] = {
+          channels = { [1] = 225, [2] = 240 },
+          modulations = { [1] = 0, [2] = 1 },
+          channelsNames = {},
+        },
+      },
+    }`) as { Radio: unknown };
+
+    expect(result.Radio).toEqual([
+      {
+        channels: { '1': 127.5, '3': 305 },
+        modulations: { '1': 0, '3': 1 },
+        channelsNames: { '1': 'VHF', '3': 'UHF' },
+      },
+      {
+        channels: [225, 240],
+        modulations: [0, 1],
+        channelsNames: [],
+      },
+    ]);
+  });
+
   it('mission以外の変数名とlocal宣言でもテーブルを解析する', () => {
     for (const variableName of ['mission', 'warehouses', 'options']) {
       expect(parseLuaTable(`${variableName} = { enabled = true }`)).toEqual({ enabled: true });

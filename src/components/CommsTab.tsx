@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
-import type { MissionData, DisplaySettings, Flight, SupportAsset } from '../types/mission';
+import type { MissionData, DisplaySettings, Flight, RadioPreset, SupportAsset } from '../types/mission';
 import { applyViewMode } from '../utils/viewMode';
 
 /** Frequency comparison tolerance in MHz (1 kHz). */
@@ -25,6 +25,7 @@ export interface CommunicationFrequency {
   flightId?: number;
   unitKey?: string;
   supportKind?: SupportAsset['kind'];
+  radio?: number;
   channel: number;
   frequencyMHz: number;
   modulation: CommunicationModulation;
@@ -202,7 +203,7 @@ export default function CommsTab({ mission, settings }: CommsTabProps) {
           const side = getFlightSide(viewMission, flight);
           const leadUnit = flight.units[0];
           const radioRows = leadUnit
-            ? createStableKeys(leadUnit.radios, `radio-${flightKey}`, radio => `${radio.channel}|${radio.frequency}|${radio.modulation}|${radio.name}`)
+            ? createStableKeys(leadUnit.radios, `radio-${flightKey}`, radio => `${radio.radio ?? ''}|${radio.channel}|${radio.frequency}|${radio.modulation}|${radio.name}`)
             : [];
 
           return (
@@ -229,7 +230,7 @@ export default function CommsTab({ mission, settings }: CommsTabProps) {
                 <tbody>
                   {radioRows.map(({ item: radio, key: radioKey }) => (
                     <tr key={radioKey}>
-                      <td>{radio.channel}</td>
+                      <td>{formatRadioChannel(radio)}</td>
                       <td>{radio.frequency.toFixed(3)}</td>
                       <td>{formatModulation(radio.modulation)}</td>
                       <td>{radio.name}</td>
@@ -291,7 +292,7 @@ function collectFrequencyEntries(mission: MissionData): CommunicationFrequency[]
     const side = getFlightSide(mission, flight);
     return flight.units.flatMap((unit, unitIndex) => {
       const unitKey = `${side}:${flight.groupId}:${unit.unitId}:${unitIndex}`;
-      const radioRows = createStableKeys(unit.radios, `radio-${unitKey}`, radio => `${radio.channel}|${radio.frequency}|${radio.modulation}|${radio.name}`);
+      const radioRows = createStableKeys(unit.radios, `radio-${unitKey}`, radio => `${radio.radio ?? ''}|${radio.channel}|${radio.frequency}|${radio.modulation}|${radio.name}`);
       return radioRows.map(({ item: radio, key }) => ({
         id: `${unitKey}:${key}`,
         source: 'flight' as const,
@@ -300,6 +301,7 @@ function collectFrequencyEntries(mission: MissionData): CommunicationFrequency[]
         flight: flight.name,
         flightId: flight.groupId,
         unitKey,
+        radio: radio.radio,
         channel: radio.channel,
         frequencyMHz: toMHz(radio.frequency),
         modulation: formatModulation(radio.modulation),
@@ -360,12 +362,16 @@ function formatModulation(modulation: number): CommunicationModulation {
   return modulation === 0 ? 'AM' : 'FM';
 }
 
+export function formatRadioChannel(radio: Pick<RadioPreset, 'radio' | 'channel'>): string {
+  return radio.radio === undefined ? `CH${radio.channel}` : `R${radio.radio} / CH${radio.channel}`;
+}
+
 function formatFrequencyUser(user: CommunicationFrequency, t: TFunction): string {
   const source = user.source === 'support' ? user.supportKind?.toUpperCase() ?? t('common.support') : user.side;
   return t('comms.frequencyUser', {
     source,
     callsign: user.callsign,
-    channel: user.channel,
+    channel: formatRadioChannel(user),
     name: user.name,
   });
 }

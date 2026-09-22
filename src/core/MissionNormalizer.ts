@@ -547,8 +547,6 @@ function normalizeUnits(units: unknown[], dictionary: Record<string, string>, _t
   return units.map((u) => {
     const unit = u as Record<string, unknown>;
     const payload = getValue(unit, ['payload']) as Record<string, unknown> || {};
-    const primaryRadios = getArrayEntries(unit, ['Radio', 'channels']);
-    const radios = primaryRadios.length > 0 ? primaryRadios : getArrayEntries(unit, ['radioSet', 'channels']);
     
     return {
       unitId: getNumber(unit, ['unitId']),
@@ -557,7 +555,7 @@ function normalizeUnits(units: unknown[], dictionary: Record<string, string>, _t
       skill: getString(unit, ['skill']),
       livery: getString(unit, ['livery_id']),
       payload: normalizePayload(payload, warnings),
-      radios: normalizeRadios(radios),
+      radios: normalizeUnitRadios(unit),
       props: getValue(unit, ['AddPropAircraft']) as Record<string, unknown> || {},
       datalink: normalizeDatalink(getValue(unit, ['datalinks'])),
     };
@@ -620,15 +618,56 @@ function fallbackWeaponName(clsid: string): string {
   return `${readable || clsid} (未収録)`;
 }
 
-function normalizeRadios(radios: CollectionEntry[]): RadioPreset[] {
-  return radios.map((entry, i) => {
-    const radio = entry.value as Record<string, unknown>;
-    return {
-      channel: collectionIndex(entry.key, i + 1),
-      frequency: getNumber(radio, ['frequency']) / 1000000,
-      modulation: getNumber(radio, ['modulation']),
-      name: getString(radio, ['name']),
+function normalizeUnitRadios(unit: Record<string, unknown>): RadioPreset[] {
+  const primary = normalizeRadioCollection(getValue(unit, ['Radio']));
+  return primary.length > 0 ? primary : normalizeRadioCollection(getValue(unit, ['radioSet']));
+}
+
+function normalizeRadioCollection(value: unknown): RadioPreset[] {
+  const direct = normalizeRadioBank(value);
+  if (direct.length > 0) return direct;
+
+  return getCollectionEntries(value).flatMap((bank, index) => (
+    normalizeRadioBank(bank.value, collectionIndex(bank.key, index + 1))
+  ));
+}
+
+function normalizeRadioBank(value: unknown, radio?: number): RadioPreset[] {
+  if (!isObject(value)) return [];
+
+  const channels = getArrayEntries(value, ['channels']);
+  const modulations = new Map(
+    getArrayEntries(value, ['modulations']).map(entry => [entry.key, entry.value]),
+  );
+  const names = new Map(
+    getArrayEntries(value, ['channelsNames']).map(entry => [entry.key, entry.value]),
+  );
+
+  return channels.flatMap((entry, index) => {
+    const embedded = isObject(entry.value) ? entry.value : undefined;
+    const rawFrequency = embedded ? getValue(embedded, ['frequency']) : entry.value;
+    const sourceFrequency = scalarNumber(rawFrequency);
+    if (sourceFrequency === undefined || sourceFrequency <= 0) return [];
+
+    const frequency = Math.abs(sourceFrequency) >= 1000
+      ? sourceFrequency / 1000000
+      : sourceFrequency;
+    if (!Number.isFinite(frequency) || frequency <= 0) return [];
+
+    const rawModulation = embedded
+      ? getValue(embedded, ['modulation']) ?? modulations.get(entry.key)
+      : modulations.get(entry.key);
+    const rawName = embedded
+      ? getValue(embedded, ['name']) ?? names.get(entry.key)
+      : names.get(entry.key);
+    const preset: RadioPreset = {
+      channel: collectionIndex(entry.key, index + 1),
+      frequency,
+      modulation: scalarNumber(rawModulation) ?? 0,
+      name: scalarString(rawName) ?? '',
     };
+    if (radio !== undefined) preset.radio = radio;
+    return [preset];
   });
 }
 
@@ -844,6 +883,15 @@ function isObject(value: unknown): value is Record<string, unknown> {
 function scalarString(value: unknown): string | undefined {
   if (typeof value === 'string' && value.trim() !== '') return value;
   if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+  return undefined;
+}
+
+function scalarNumber(value: unknown): number | undefined {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string' && value.trim() !== '') {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
   return undefined;
 }
 
