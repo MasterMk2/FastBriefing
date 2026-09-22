@@ -59,5 +59,11 @@ describe.skipIf(!smokeDirectory)('real .miz corpus parsing', () => {
     expect(failures).toEqual([]);
     expect(emptyNames).toEqual(expectedEmptyNames);
     expect(normalizedCount).toBe(names.length - expectedEmptyNames.length);
+    console.log(JSON.stringify({
+      archiveCount: names.length,
+      normalizedCount,
+      emptyFiles: emptyNames,
+      emptyClassification: 'empty-file',
+    }));
   }, 120_000);
 });
