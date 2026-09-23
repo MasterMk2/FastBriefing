@@ -1,10 +1,55 @@
 import type { ParsedMissionFile } from '../types/mission';
 import { ZIP_LIMITS } from '../workers/missionParser';
+import type { MissionArchiveErrorCode } from '../workers/missionParser';
 
 export { ZIP_LIMITS } from '../workers/missionParser';
 
 export interface MissionParserResult extends ParsedMissionFile {
   briefingImages: Map<string, Uint8Array>;
+  sourceFingerprint: string;
+}
+
+export type MissionLoadErrorCode = 'empty-file' | 'archive-too-large' | MissionArchiveErrorCode | 'parse-failed';
+
+export class MissionLoadError extends Error {
+  constructor(
+    public readonly code: MissionLoadErrorCode,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'MissionLoadError';
+  }
+}
+
+export async function fingerprintMissionArchive(buffer: ArrayBuffer): Promise<string> {
+  try {
+    const digest = await globalThis.crypto?.subtle?.digest('SHA-256', buffer);
+    if (digest) {
+      return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
+    }
+  } catch {
+    // Older or restricted browsers may not expose SubtleCrypto. The fallback still
+    // keys the board from archive bytes rather than mutable mission metadata.
+  }
+
+  const bytes = new Uint8Array(buffer);
+  let hashA = 0x811c9dc5;
+  let hashB = 0x9e3779b9;
+  let hashC = 0x85ebca6b;
+  let hashD = 0xc2b2ae35;
+  const yieldInterval = 1 << 20;
+  for (let index = 0; index < bytes.length; index += 1) {
+    const byte = bytes[index];
+    hashA = Math.imul(hashA ^ byte, 0x01000193);
+    hashB = Math.imul(hashB ^ byte, 0x5bd1e995);
+    hashC = Math.imul(hashC ^ byte, 0x27d4eb2d);
+    hashD = Math.imul(hashD ^ byte, 0x165667b1);
+    if (index > 0 && index % yieldInterval === 0) {
+      await new Promise<void>(resolve => globalThis.setTimeout(resolve, 0));
+    }
+  }
+  const hex = (value: number) => (value >>> 0).toString(16).padStart(8, '0');
+  return `hash128-${hex(hashA)}${hex(hashB)}${hex(hashC)}${hex(hashD)}-${bytes.byteLength}`;
 }
 
 interface ParseRequest {
@@ -17,9 +62,17 @@ function formatBytes(bytes: number): string {
   return `${bytes.toLocaleString('ja-JP')}バイト`;
 }
 
-function archiveSizeError(size: number): Error {
-  return new Error(
-    `圧縮後のファイルサイズ（${formatBytes(size)}）が上限（${formatBytes(ZIP_LIMITS.MAX_ARCHIVE_SIZE)}）を超えています。`
+function archiveSizeError(size: number): MissionLoadError {
+  return new MissionLoadError(
+    'archive-too-large',
+    `圧縮後のファイルサイズ（${formatBytes(size)}）が上限（${formatBytes(ZIP_LIMITS.MAX_ARCHIVE_SIZE)}）を超えています。`,
+  );
+}
+
+function emptyArchiveError(): MissionLoadError {
+  return new MissionLoadError(
+    'empty-file',
+    'ファイルが0バイトで、ミッションデータが入っていません。',
   );
 }
 
@@ -54,21 +107,32 @@ export class MissionParser {
   ): Promise<void> {
     try {
       // Reject before arrayBuffer() so an oversized archive never enters main-thread memory.
+      if (file.size === 0) {
+        throw emptyArchiveError();
+      }
       if (file.size > ZIP_LIMITS.MAX_ARCHIVE_SIZE) {
         throw archiveSizeError(file.size);
       }
 
       const buffer = await file.arrayBuffer();
+      const sourceFingerprint = await fingerprintMissionArchive(buffer);
       if (request.settled) return;
 
       const worker = new Worker(new URL('../workers/missionParser.ts', import.meta.url), { type: 'module' });
       request.worker = worker;
 
-      worker.onmessage = (e: MessageEvent<{ type: string; data?: MissionParserResult; error?: string }>) => {
+      worker.onmessage = (e: MessageEvent<{
+        type: string;
+        data?: MissionParserResult;
+        code?: MissionArchiveErrorCode;
+        error?: string;
+      }>) => {
         if (e.data.type === 'success') {
-          if (this.settle(request)) resolve(e.data.data!);
+          if (this.settle(request)) resolve({ ...e.data.data!, sourceFingerprint });
         } else if (e.data.type === 'error') {
-          if (this.settle(request)) reject(new Error(e.data.error));
+          if (this.settle(request)) {
+            reject(new MissionLoadError(e.data.code ?? 'parse-failed', e.data.error ?? ''));
+          }
         } else if (this.settle(request)) {
           reject(new Error('ミッション解析から不明な応答を受信しました。'));
         }

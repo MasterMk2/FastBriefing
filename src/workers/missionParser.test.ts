@@ -50,6 +50,36 @@ describe('Lua table conversion', () => {
     ]);
   });
 
+  it('実DCS形式の複数無線機バンクと並列プリセット情報を保持する', () => {
+    const result = parseLuaTable(`mission = {
+      Radio = {
+        [1] = {
+          channels = { [1] = 127.5, [3] = 305 },
+          modulations = { [1] = 0, [3] = 1 },
+          channelsNames = { [1] = "VHF", [3] = "UHF" },
+        },
+        [2] = {
+          channels = { [1] = 225, [2] = 240 },
+          modulations = { [1] = 0, [2] = 1 },
+          channelsNames = {},
+        },
+      },
+    }`) as { Radio: unknown };
+
+    expect(result.Radio).toEqual([
+      {
+        channels: { '1': 127.5, '3': 305 },
+        modulations: { '1': 0, '3': 1 },
+        channelsNames: { '1': 'VHF', '3': 'UHF' },
+      },
+      {
+        channels: [225, 240],
+        modulations: [0, 1],
+        channelsNames: [],
+      },
+    ]);
+  });
+
   it('mission以外の変数名とlocal宣言でもテーブルを解析する', () => {
     for (const variableName of ['mission', 'warehouses', 'options']) {
       expect(parseLuaTable(`${variableName} = { enabled = true }`)).toEqual({ enabled: true });
@@ -141,18 +171,31 @@ describe('Lua table conversion', () => {
 });
 
 describe('ZIP展開ガード', () => {
+  it('空データを破損ZIPとして分類する', async () => {
+    await expect(unzipWithLimits(new Uint8Array())).rejects.toMatchObject({
+      name: 'MissionArchiveError',
+      code: 'invalid-zip',
+    });
+  });
+
   it('展開後サイズが上限を超えるZIPを展開前に拒否する', async () => {
     const oversizedEntry = new Uint8Array(ZIP_LIMITS.MAX_ENTRY_SIZE + 1);
     const archive = zipSync({ oversized: [oversizedEntry, { level: 0 }] });
 
-    await expect(unzipWithLimits(archive)).rejects.toThrow('展開後サイズ');
+    await expect(unzipWithLimits(archive)).rejects.toMatchObject({
+      code: 'safety-limit',
+      message: expect.stringContaining('展開後サイズ'),
+    });
   });
 
   it('展開後サイズと圧縮サイズの比率が高すぎるZIPを拒否する', async () => {
     const repetitiveEntry = new Uint8Array(1024 * 1024);
     const archive = zipSync({ repetitive: [repetitiveEntry, { level: 9 }] });
 
-    await expect(unzipWithLimits(archive)).rejects.toThrow('比率');
+    await expect(unzipWithLimits(archive)).rejects.toMatchObject({
+      code: 'safety-limit',
+      message: expect.stringContaining('比率'),
+    });
   });
 
   it('小さいmiz相当のZIPは展開できる', async () => {
@@ -222,6 +265,39 @@ describe('ZIP展開ガード', () => {
     const oversizedImage = new Uint8Array(ZIP_LIMITS.MAX_IMAGE_SIZE + 1);
     const archive = zipSync({ 'l10n/DEFAULT/brief.png': [oversizedImage, { level: 0 }] });
 
-    await expect(unzipWithLimits(archive, shouldExtractEntry)).rejects.toThrow('展開後サイズ');
+    await expect(unzipWithLimits(archive, shouldExtractEntry)).rejects.toMatchObject({
+      code: 'safety-limit',
+      message: expect.stringContaining('展開後サイズ'),
+    });
+  });
+
+  it('missionエントリがないZIPをinvalid-missionとして拒否する', async () => {
+    const archive = zipSync({ theatre: strToU8('Caucasus') });
+
+    await expect(parseMissionArchive(archive)).rejects.toMatchObject({
+      name: 'MissionArchiveError',
+      code: 'invalid-mission',
+      message: expect.stringContaining('missionエントリ'),
+    });
+  });
+
+  it('壊れたmission Luaをinvalid-missionとして拒否する', async () => {
+    const archive = zipSync({ mission: strToU8('mission = { broken = ') });
+
+    await expect(parseMissionArchive(archive)).rejects.toMatchObject({
+      name: 'MissionArchiveError',
+      code: 'invalid-mission',
+      message: expect.stringContaining('解析できませんでした'),
+    });
+  });
+
+  it('最上位がLuaテーブルではないmissionをinvalid-missionとして拒否する', async () => {
+    const archive = zipSync({ mission: strToU8('mission = 42') });
+
+    await expect(parseMissionArchive(archive)).rejects.toMatchObject({
+      name: 'MissionArchiveError',
+      code: 'invalid-mission',
+      message: expect.stringContaining('最上位のLuaテーブル'),
+    });
   });
 });

@@ -1,3 +1,5 @@
+import type { BriefingPreset, BriefingSection } from '../utils/briefingSections';
+
 export interface MissionMeta {
   sortie: string;
   description: string;
@@ -137,6 +139,8 @@ export interface Pylon {
 }
 
 export interface RadioPreset {
+  /** One-based radio bank number when the mission stores multiple radios. */
+  radio?: number;
   channel: number;
   frequency: number;
   modulation: number;
@@ -178,10 +182,10 @@ export interface RouteTask {
 export interface LegInfo {
   distance: number;
   trueBearing: number;
-  magneticBearing: number;
-  time: number;
+  magneticBearing?: number;
+  time?: number;
   cumulativeDistance: number;
-  cumulativeTime: number;
+  cumulativeTime?: number;
 }
 
 export interface SupportAsset {
@@ -272,6 +276,8 @@ export interface DrawingObject {
 }
 
 export interface MissionData {
+  /** Stable fingerprint of the source .miz archive bytes. */
+  sourceFingerprint: string;
   meta: MissionMeta;
   weather: Weather;
   coalitions: { blue: Coalition; red: Coalition; neutral: Coalition };
@@ -283,7 +289,34 @@ export interface UserNotes {
   missionKey: string;
   smeac: SMEACNotes;
   perFlight: Record<string, FlightNotes>;
+  waypoints: Record<string, WaypointAnnotation>;
+  mapAnnotations: MapAnnotation[];
 }
+
+export interface WaypointAnnotation {
+  purpose: string;
+  notes: string;
+  syncGroupId?: string;
+}
+
+export interface MapPinAnnotation {
+  id: string;
+  kind: 'pin';
+  position: [number, number];
+  label: string;
+  notes: string;
+  color: string;
+}
+
+export interface MapStrokeAnnotation {
+  id: string;
+  kind: 'stroke';
+  points: [number, number][];
+  color: string;
+  width: number;
+}
+
+export type MapAnnotation = MapPinAnnotation | MapStrokeAnnotation;
 
 export interface SMEACNotes {
   situation: string;
@@ -294,8 +327,8 @@ export interface SMEACNotes {
 }
 
 export interface FlightNotes {
-  jokerFuel: number;
-  bingoFuel: number;
+  jokerFuel: number | null;
+  bingoFuel: number | null;
   tot: string;
   pilotName: string;
   customNotes: string;
@@ -326,4 +359,6 @@ export interface DisplaySettings {
   language: 'ja' | 'en';
   outputLanguage: 'ja' | 'en';
   theme: 'default' | 'ffs';
+  briefingSections: BriefingSection[];
+  briefingPresets: BriefingPreset[];
 }

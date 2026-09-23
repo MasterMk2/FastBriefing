@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   detectFrequencyConflicts,
+  formatRadioChannel,
   type CommunicationFrequency,
 } from './CommsTab';
 
@@ -78,5 +79,12 @@ describe('CommsTab frequency conflict detection', () => {
     expect(conflicts).toHaveLength(1);
     expect(conflicts[0].types).toEqual(['support']);
     expect(conflicts[0].users.map(user => user.id)).toEqual(['flight-am', 'tanker-am']);
+  });
+});
+
+describe('CommsTab radio channel labels', () => {
+  it('distinguishes channels from separate radio banks', () => {
+    expect(formatRadioChannel({ radio: 2, channel: 3 })).toBe('R2 / CH3');
+    expect(formatRadioChannel({ channel: 3 })).toBe('CH3');
   });
 });

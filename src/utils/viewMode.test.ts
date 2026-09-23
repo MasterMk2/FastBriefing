@@ -90,6 +90,7 @@ function makeCoalition(hidden: boolean | undefined): Coalition {
 
 function makeMission(hidden: boolean | undefined): MissionData {
   return {
+    sourceFingerprint: 'view-mode-fixture',
     meta: {
       sortie: 'View mode test',
       description: '',

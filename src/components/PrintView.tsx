@@ -1,24 +1,30 @@
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { AIGroup, DisplaySettings, Flight, MissionData, MissionMeta, SupportAsset } from '../types/mission';
-import { calculateBearing, dcsToLatLon, formatCoordinate, getDefaultCoordinateFormat } from '../utils/coordinates';
-import { getMagneticVariation, trueToMagnetic } from '../utils/magvar';
+import type { AIGroup, DisplaySettings, Flight, FlightNotes, MissionData, MissionMeta, SMEACNotes, SupportAsset, WaypointAnnotation } from '../types/mission';
+import type { WhiteboardData } from '../types/whiteboard';
+import { dcsToLatLon, formatCoordinate, getDefaultCoordinateFormat } from '../utils/coordinates';
 import { formatAltitude, formatDistance, formatPressure, formatSpeed, formatTemperature } from '../utils/units';
 import { getMoonInfo, getSunTimes, type SunTimes } from '../utils/astro';
 import { buildMetar } from '../utils/metar';
 import { addSeconds, formatDateYMD, formatEtaLocal, formatEtaZulu, formatTimeHHMM, formatUtcOffset, missionLocalDate, missionZuluDate } from '../utils/time';
 import { applyViewMode } from '../utils/viewMode';
+import WhiteboardDrawing from './WhiteboardDrawing';
+import MissionMapCanvas, { type MissionMapRenderState } from './MissionMapCanvas';
+import { formatLegDuration, formatRouteCoordinate } from '../utils/routeLegs';
+import { waypointAnnotationKey } from '../utils/waypointAnnotations';
 
 interface PrintViewProps {
   mission: MissionData;
   settings: DisplaySettings;
+  whiteboard: WhiteboardData;
+  onMapRenderStateChange?: (state: MissionMapRenderState) => void;
 }
 
 type PrintTranslator = (key: string, options?: Record<string, string | number>) => string;
 
 interface FlightEntry {
   flight: Flight;
-  side: 'Blue' | 'Red';
+  side: 'Blue' | 'Red' | 'Neutral';
 }
 
 const GUARD_FREQUENCIES_MHZ = {
@@ -26,7 +32,7 @@ const GUARD_FREQUENCIES_MHZ = {
   VHF: 121.500,
 } as const;
 
-export default function PrintView({ mission, settings }: PrintViewProps) {
+export default function PrintView({ mission, settings, whiteboard, onMapRenderStateChange }: PrintViewProps) {
   const { t } = useTranslation();
   const viewMission = useMemo(() => applyViewMode(mission, settings.viewMode), [mission, settings.viewMode]);
   const printT: PrintTranslator = (key, options) => t(key, {
@@ -34,6 +40,14 @@ export default function PrintView({ mission, settings }: PrintViewProps) {
     lng: settings.outputLanguage,
   });
   const flights = getAllFlights(viewMission);
+  const mapLabels = useMemo(() => ({
+    empty: t('mapRaster.empty', { lng: settings.outputLanguage }),
+    basemapUnavailable: t('mapRaster.basemapUnavailable', { lng: settings.outputLanguage }),
+    routes: t('mapRaster.routes', { lng: settings.outputLanguage }),
+    support: t('mapRaster.support', { lng: settings.outputLanguage }),
+    threats: t('mapRaster.threats', { lng: settings.outputLanguage }),
+    zones: t('mapRaster.zones', { lng: settings.outputLanguage }),
+  }), [settings.outputLanguage, t]);
 
   return (
     <div className="print-view">
@@ -41,26 +55,123 @@ export default function PrintView({ mission, settings }: PrintViewProps) {
         <h1>{viewMission.meta.sortie || printT('export.canvas.briefing')}</h1>
       </header>
 
-      <PrintOverview mission={viewMission} settings={settings} t={printT} />
-
-      <p className="print-map-note hint">{printT('export.mapPrintNote')}</p>
-
-      <section className="section print-flight-list">
-        <h2>{printT('export.printFlights')}</h2>
-        {flights.length === 0 ? (
-          <p>{printT('flights.empty')}</p>
-        ) : (
-          flights.map(({ flight, side }) => (
-            <PrintFlight key={`${side}:${flight.groupId}`} flight={flight} side={side} meta={viewMission.meta} settings={settings} t={printT} />
-          ))
-        )}
-      </section>
-
-      <PrintComms mission={viewMission} t={printT} />
-      <PrintSupport mission={viewMission} settings={settings} t={printT} />
-      <PrintThreats mission={viewMission} settings={settings} t={printT} />
+      {settings.briefingSections.map(section => {
+        switch (section) {
+          case 'overview':
+            return <PrintOverview key={section} mission={viewMission} settings={settings} t={printT} />;
+          case 'notes':
+            return <PrintNotes key={section} mission={viewMission} t={printT} />;
+          case 'flights':
+            return (
+              <section key={section} className="section print-flight-list">
+                <h2>{printT('export.printFlights')}</h2>
+                {flights.length === 0 ? (
+                  <p>{printT('flights.empty')}</p>
+                ) : flights.map(({ flight, side }) => (
+                  <PrintFlight
+                    key={`${side}:${flight.groupId}`}
+                    flight={flight}
+                    side={side}
+                    meta={viewMission.meta}
+                    settings={settings}
+                    t={printT}
+                    notes={viewMission.userNotes.perFlight[`${side.toLowerCase()}:${flight.groupId}`]}
+                    waypointNotes={viewMission.userNotes.waypoints}
+                  />
+                ))}
+              </section>
+            );
+          case 'map':
+            return (
+              <section key={section} className="section print-section print-map">
+                <h2>{printT('tabs.map')}</h2>
+                <MissionMapCanvas
+                  mission={viewMission}
+                  className="print-map-canvas"
+                  labels={mapLabels}
+                  onRenderStateChange={onMapRenderStateChange}
+                />
+              </section>
+            );
+          case 'comms':
+            return <PrintComms key={section} mission={viewMission} t={printT} />;
+          case 'support':
+            return <PrintSupport key={section} mission={viewMission} settings={settings} t={printT} />;
+          case 'threats':
+            return <PrintThreats key={section} mission={viewMission} settings={settings} t={printT} />;
+          case 'whiteboard':
+            return <PrintWhiteboard key={section} whiteboard={whiteboard} t={printT} />;
+        }
+      })}
     </div>
   );
+}
+
+function PrintWhiteboard({ whiteboard, t }: { whiteboard: WhiteboardData; t: PrintTranslator }) {
+  return (
+    <section className="section print-section print-whiteboard">
+      <h2>{t('whiteboard.title')}</h2>
+      {whiteboard.notes.trim() ? (
+        <div className="whiteboard-print-notes">
+          <h3>{t('whiteboard.notes')}</h3>
+          <p>{whiteboard.notes}</p>
+        </div>
+      ) : (
+        <p className="hint">{t('export.markdown.noWhiteboardNotes')}</p>
+      )}
+      {whiteboard.strokes.length > 0 && (
+        <div className="whiteboard-board print-whiteboard-board">
+          <WhiteboardDrawing strokes={whiteboard.strokes} label={t('whiteboard.canvasLabel')} />
+        </div>
+      )}
+    </section>
+  );
+}
+
+function PrintNotes({ mission, t }: { mission: MissionData; t: PrintTranslator }) {
+  const sections: (keyof SMEACNotes)[] = [
+    'situation', 'mission', 'execution', 'adminLogistics', 'commandSignal',
+  ];
+  const filled = sections.filter(section => mission.userNotes.smeac[section].trim());
+  const flightNotes = getAllFlights(mission).flatMap(({ flight, side }) => {
+    const notes = mission.userNotes.perFlight[`${side.toLowerCase()}:${flight.groupId}`];
+    return notes && hasFlightNotes(notes) ? [{ flight, side, notes }] : [];
+  });
+  return (
+    <section className="section print-section print-notes">
+      <h2>{t('tabs.notes')}</h2>
+      {filled.length === 0 && flightNotes.length === 0 && (
+        <p className="hint">{t('common.notAvailable')}</p>
+      )}
+      {filled.length > 0 && (
+        <section className="print-subsection">
+          <h3>{t('notes.smeacTitle')}</h3>
+          {filled.map(section => (
+            <section className="print-subsection" key={section}>
+              <h4>{t(`notes.smeac.${section}`)}</h4>
+              <p className="notes-print-text">{mission.userNotes.smeac[section]}</p>
+            </section>
+          ))}
+        </section>
+      )}
+      {flightNotes.map(({ flight, side, notes }) => (
+        <section className="print-subsection" key={`${side}:${flight.groupId}`}>
+          <h3>{flight.callsign || flight.name}</h3>
+          <dl className="info-grid">
+            {notes.pilotName && <><dt>{t('notes.pilotName')}</dt><dd>{notes.pilotName}</dd></>}
+            {notes.tot && <><dt>{t('notes.tot')}</dt><dd>{notes.tot}</dd></>}
+            {notes.jokerFuel !== null && <><dt>{t('notes.jokerFuel')}</dt><dd>{notes.jokerFuel}</dd></>}
+            {notes.bingoFuel !== null && <><dt>{t('notes.bingoFuel')}</dt><dd>{notes.bingoFuel}</dd></>}
+          </dl>
+          {notes.customNotes && <p className="notes-print-text">{notes.customNotes}</p>}
+        </section>
+      ))}
+    </section>
+  );
+}
+
+function hasFlightNotes(notes: FlightNotes): boolean {
+  return Boolean(notes.pilotName || notes.tot || notes.jokerFuel !== null || notes.bingoFuel !== null || notes.customNotes);
 }
 
 function PrintOverview({ mission, settings, t }: { mission: MissionData; settings: DisplaySettings; t: PrintTranslator }) {
@@ -230,10 +341,9 @@ function PrintOverview({ mission, settings, t }: { mission: MissionData; setting
   );
 }
 
-function PrintFlight({ flight, side, meta, settings, t }: { flight: Flight; side: 'Blue' | 'Red'; meta: MissionMeta; settings: DisplaySettings; t: PrintTranslator }) {
+function PrintFlight({ flight, side, meta, settings, t, notes, waypointNotes }: { flight: Flight; side: 'Blue' | 'Red' | 'Neutral'; meta: MissionMeta; settings: DisplaySettings; t: PrintTranslator; notes?: FlightNotes; waypointNotes: Record<string, WaypointAnnotation> }) {
   const leadUnit = flight.units[0];
   const aircraftDefaultCoordinateFormat = getDefaultCoordinateFormat(flight.type);
-  const missionDate = missionZuluDate(meta);
   const props = leadUnit ? Object.entries(leadUnit.props) : [];
   const link16 = leadUnit?.datalink?.link16;
 
@@ -252,6 +362,19 @@ function PrintFlight({ flight, side, meta, settings, t }: { flight: Flight; side
           {flight.hidden && <span className="badge hidden">{t('flights.hidden')}</span>}
         </div>
       </header>
+
+      {notes && (notes.pilotName || notes.tot || notes.jokerFuel !== null || notes.bingoFuel !== null || notes.customNotes) && (
+        <section className="section print-subsection">
+          <h4>{t('notes.flightTitle')}</h4>
+          <dl className="info-grid">
+            {notes.pilotName && <><dt>{t('notes.pilotName')}</dt><dd>{notes.pilotName}</dd></>}
+            {notes.tot && <><dt>{t('notes.tot')}</dt><dd>{notes.tot}</dd></>}
+            {notes.jokerFuel !== null && <><dt>{t('notes.jokerFuel')}</dt><dd>{notes.jokerFuel}</dd></>}
+            {notes.bingoFuel !== null && <><dt>{t('notes.bingoFuel')}</dt><dd>{notes.bingoFuel}</dd></>}
+          </dl>
+          {notes.customNotes && <p className="notes-print-text">{notes.customNotes}</p>}
+        </section>
+      )}
 
       <section className="section print-subsection">
         <h4>{t('flights.aircraftRoster')}</h4>
@@ -348,31 +471,59 @@ function PrintFlight({ flight, side, meta, settings, t }: { flight: Flight; side
               <th>{t('flights.altitude')}</th>
               <th>{t('flights.speed')}</th>
               <th>{t('flights.eta')}</th>
-              <th>{t('flights.distance')}</th>
-              <th>{t('flights.bearing')}</th>
+              <th>{t('waypoints.purpose')}</th>
+              <th>{t('waypoints.notes')}</th>
             </tr>
           </thead>
           <tbody>
             {flight.route.length === 0 ? (
               <tr><td colSpan={9}>{t('common.notAvailable')}</td></tr>
-            ) : flight.route.map((waypoint, routeIndex) => {
-              const bearing = getDisplayedBearing(flight.route, routeIndex, meta, missionDate);
-              return (
+            ) : flight.route.map((waypoint, routeIndex) => (
                 <tr key={`${waypoint.index}:${routeIndex}`}>
                   <td>{waypoint.index}</td>
                   <td>{waypoint.name}</td>
                   <td>{waypoint.action}</td>
-                  <td>{formatCoordinate(waypoint.latlon[0], waypoint.latlon[1], settings.coordinateFormat)}</td>
+                  <td>{formatRouteCoordinate(waypoint, settings.coordinateFormat)}</td>
                   <td>{formatAltitude(waypoint.alt, settings.altitudeUnit)}</td>
                   <td>{formatSpeed(waypoint.speed, settings.speedUnit)}</td>
                   <td>{formatFlightEta(waypoint.eta, meta, t)}</td>
-                  <td>{waypoint.leg ? formatDistance(waypoint.leg.distance, settings.distanceUnit) : '-'}</td>
-                  <td>{bearing ? t('flights.bearingValue', { trueBearing: bearing.trueBearing.toFixed(0), magneticBearing: bearing.magneticBearing.toFixed(0) }) : '-'}</td>
+                  <td>{waypointNotes[waypointAnnotationKey(side.toLowerCase() as 'blue' | 'red' | 'neutral', flight.groupId, routeIndex)]?.purpose || '-'}</td>
+                  <td>{waypointNotes[waypointAnnotationKey(side.toLowerCase() as 'blue' | 'red' | 'neutral', flight.groupId, routeIndex)]?.notes || '-'}</td>
                 </tr>
-              );
-            })}
+              ))}
           </tbody>
         </table>
+        {flight.route.length > 1 && (
+          <>
+            <h5>{t('flights.legSummary')}</h5>
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>{t('flights.distance')}</th>
+                  <th>{t('flights.bearing')}</th>
+                  <th>{t('flights.legTime')}</th>
+                  <th>{t('flights.cumulativeDistance')}</th>
+                  <th>{t('flights.cumulativeTime')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {flight.route.slice(1).map((waypoint, routeIndex) => (
+                  <tr key={`${waypoint.index}:${routeIndex}`}>
+                    <td>{waypoint.index}</td>
+                    <td>{waypoint.leg ? formatDistance(waypoint.leg.distance, settings.distanceUnit) : '-'}</td>
+                    <td>{waypoint.leg ? waypoint.leg.magneticBearing === undefined
+                      ? t('flights.trueBearingOnly', { trueBearing: waypoint.leg.trueBearing.toFixed(0) })
+                      : t('flights.bearingValue', { trueBearing: waypoint.leg.trueBearing.toFixed(0), magneticBearing: waypoint.leg.magneticBearing.toFixed(0) }) : '-'}</td>
+                    <td>{formatLegDuration(waypoint.leg?.time)}</td>
+                    <td>{waypoint.leg ? formatDistance(waypoint.leg.cumulativeDistance, settings.distanceUnit) : '-'}</td>
+                    <td>{formatLegDuration(waypoint.leg?.cumulativeTime)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </>
+        )}
       </section>
 
       {props.length > 0 && (
@@ -406,7 +557,7 @@ function PrintFlight({ flight, side, meta, settings, t }: { flight: Flight; side
 
 function PrintComms({ mission, t }: { mission: MissionData; t: PrintTranslator }) {
   const flights = getAllFlights(mission);
-  const support = [...mission.coalitions.blue.support, ...mission.coalitions.red.support];
+  const support = uniqueSupport(mission);
 
   return (
     <section className="section print-section print-comms">
@@ -495,7 +646,7 @@ function PrintComms({ mission, t }: { mission: MissionData; t: PrintTranslator }
 }
 
 function PrintSupport({ mission, settings, t }: { mission: MissionData; settings: DisplaySettings; t: PrintTranslator }) {
-  const support = [...mission.coalitions.blue.support, ...mission.coalitions.red.support];
+  const support = uniqueSupport(mission);
 
   return (
     <section className="section print-section print-support">
@@ -707,7 +858,22 @@ function getAllFlights(mission: MissionData): FlightEntry[] {
   return [
     ...mission.coalitions.blue.flights.map(flight => ({ flight, side: 'Blue' as const })),
     ...mission.coalitions.red.flights.map(flight => ({ flight, side: 'Red' as const })),
+    ...mission.coalitions.neutral.flights.map(flight => ({ flight, side: 'Neutral' as const })),
   ];
+}
+
+function uniqueSupport(mission: MissionData): SupportAsset[] {
+  const seen = new Set<string>();
+  return [
+    ...mission.coalitions.blue.support,
+    ...mission.coalitions.red.support,
+    ...mission.coalitions.neutral.support,
+  ].filter(asset => {
+    const key = `${asset.kind}:${asset.callsign}:${asset.position.join(',')}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function formatFlightEta(eta: number, meta: MissionMeta, t: PrintTranslator): string {
@@ -715,30 +881,6 @@ function formatFlightEta(eta: number, meta: MissionMeta, t: PrintTranslator): st
     localTime: formatEtaLocal(meta, eta),
     zuluTime: formatEtaZulu(meta, eta),
   });
-}
-
-interface DisplayBearing {
-  trueBearing: number;
-  magneticBearing: number;
-}
-
-function getDisplayedBearing(route: Flight['route'], routeIndex: number, meta: MissionMeta, missionDate: Date): DisplayBearing | null {
-  const waypoint = route[routeIndex];
-  const previousWaypoint = route[routeIndex - 1];
-  if (!waypoint || !previousWaypoint) return null;
-
-  const [fromLat, fromLon] = previousWaypoint.latlon;
-  const [toLat, toLon] = waypoint.latlon;
-  if (![fromLat, fromLon, toLat, toLon].every(Number.isFinite)) return null;
-
-  const trueBearing = calculateBearing(fromLat, fromLon, toLat, toLon);
-  if (!Number.isFinite(trueBearing)) return null;
-
-  const variation = getMagneticVariation(meta.theatre, toLat, toLon, missionDate);
-  return {
-    trueBearing,
-    magneticBearing: trueToMagnetic(trueBearing, variation),
-  };
 }
 
 function formatSupportPosition(support: SupportAsset, theatre: string, coordinateFormat: DisplaySettings['coordinateFormat']): string {

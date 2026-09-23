@@ -11,6 +11,18 @@ export const ZIP_LIMITS = {
   MAX_COMPRESSION_RATIO: 100,
 } as const;
 
+export type MissionArchiveErrorCode = 'invalid-zip' | 'safety-limit' | 'invalid-mission';
+
+export class MissionArchiveError extends Error {
+  constructor(
+    public readonly code: MissionArchiveErrorCode,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'MissionArchiveError';
+  }
+}
+
 const ZIP_STREAM_CHUNK_SIZE = 64 * 1024;
 
 export interface ParsedMissionFile {
@@ -30,8 +42,11 @@ function asError(error: unknown): Error {
   return error instanceof Error ? error : new Error(String(error));
 }
 
-function zipError(message: string): Error {
-  return new Error(`ZIPファイルを安全に展開できませんでした。${message}`);
+function zipError(
+  message: string,
+  code: Extract<MissionArchiveErrorCode, 'invalid-zip' | 'safety-limit'> = 'invalid-zip',
+): MissionArchiveError {
+  return new MissionArchiveError(code, `ZIPファイルを安全に展開できませんでした。${message}`);
 }
 
 function displayEntryName(name: string): string {
@@ -70,7 +85,8 @@ function validateZipEntryMetadata(entry: {
   }
   if (originalSize !== undefined && originalSize > maxEntrySize) {
     return zipError(
-      `エントリ${shownName}の展開後サイズ（${formatBytes(originalSize)}）が上限（${formatBytes(maxEntrySize)}）を超えています。`
+      `エントリ${shownName}の展開後サイズ（${formatBytes(originalSize)}）が上限（${formatBytes(maxEntrySize)}）を超えています。`,
+      'safety-limit',
     );
   }
 
@@ -80,7 +96,8 @@ function validateZipEntryMetadata(entry: {
       : originalSize / compressedSize;
     if (compressionRatio > ZIP_LIMITS.MAX_COMPRESSION_RATIO) {
       return zipError(
-        `エントリ${shownName}の展開後サイズと圧縮サイズの比率（${compressionRatio.toFixed(1)}倍）が上限（${ZIP_LIMITS.MAX_COMPRESSION_RATIO}倍）を超えています。`
+        `エントリ${shownName}の展開後サイズと圧縮サイズの比率（${compressionRatio.toFixed(1)}倍）が上限（${ZIP_LIMITS.MAX_COMPRESSION_RATIO}倍）を超えています。`,
+        'safety-limit',
       );
     }
   }
@@ -101,7 +118,8 @@ function inspectZip(data: Uint8Array): Promise<ZipEntryMetadata[]> {
           entryCount += 1;
           if (entryCount > ZIP_LIMITS.MAX_ENTRIES && !validationError) {
             validationError = zipError(
-              `ZIP内のファイル数（${entryCount}件）が上限（${ZIP_LIMITS.MAX_ENTRIES}件）を超えています。`
+              `ZIP内のファイル数（${entryCount}件）が上限（${ZIP_LIMITS.MAX_ENTRIES}件）を超えています。`,
+              'safety-limit',
             );
           }
 
@@ -114,7 +132,8 @@ function inspectZip(data: Uint8Array): Promise<ZipEntryMetadata[]> {
             totalSize += entry.originalSize;
             if (totalSize > ZIP_LIMITS.MAX_TOTAL_SIZE && !validationError) {
               validationError = zipError(
-                `ZIP全体の展開後サイズ（${formatBytes(totalSize)}）が上限（${formatBytes(ZIP_LIMITS.MAX_TOTAL_SIZE)}）を超えています。`
+                `ZIP全体の展開後サイズ（${formatBytes(totalSize)}）が上限（${formatBytes(ZIP_LIMITS.MAX_TOTAL_SIZE)}）を超えています。`,
+                'safety-limit',
               );
             }
           }
@@ -174,7 +193,10 @@ function extractZipEntries(
     const stream = new Unzip((file) => {
       extractedEntryCount += 1;
       if (extractedEntryCount > ZIP_LIMITS.MAX_ENTRIES) {
-        throw zipError(`ZIP内のファイル数が上限（${ZIP_LIMITS.MAX_ENTRIES}件）を超えています。`);
+        throw zipError(
+          `ZIP内のファイル数が上限（${ZIP_LIMITS.MAX_ENTRIES}件）を超えています。`,
+          'safety-limit',
+        );
       }
 
       const entriesForName = metadataByName.get(file.name);
@@ -197,12 +219,14 @@ function extractZipEntries(
           extractedSize += chunk.length;
           if (entrySize > maxEntrySize) {
             throw zipError(
-              `エントリ「${displayEntryName(file.name)}」の展開後サイズが上限（${formatBytes(maxEntrySize)}）を超えたため、展開を中断しました。`
+              `エントリ「${displayEntryName(file.name)}」の展開後サイズが上限（${formatBytes(maxEntrySize)}）を超えたため、展開を中断しました。`,
+              'safety-limit',
             );
           }
           if (extractedSize > ZIP_LIMITS.MAX_TOTAL_SIZE) {
             throw zipError(
-              `ZIP全体の展開後サイズが上限（${formatBytes(ZIP_LIMITS.MAX_TOTAL_SIZE)}）を超えたため、展開を中断しました。`
+              `ZIP全体の展開後サイズが上限（${formatBytes(ZIP_LIMITS.MAX_TOTAL_SIZE)}）を超えたため、展開を中断しました。`,
+              'safety-limit',
             );
           }
           chunks.push(chunk);
@@ -220,7 +244,8 @@ function extractZipEntries(
             const compressionRatio = data.length === 0 ? 0 : entrySize / data.length;
             if (compressionRatio > ZIP_LIMITS.MAX_COMPRESSION_RATIO) {
               throw zipError(
-                `エントリ「${displayEntryName(file.name)}」の圧縮率が上限（${ZIP_LIMITS.MAX_COMPRESSION_RATIO}倍）を超えています。`
+                `エントリ「${displayEntryName(file.name)}」の圧縮率が上限（${ZIP_LIMITS.MAX_COMPRESSION_RATIO}倍）を超えています。`,
+                'safety-limit',
               );
             }
           }
@@ -236,7 +261,7 @@ function extractZipEntries(
       settled = true;
       if (timer !== undefined) clearTimeout(timer);
       const normalized = asError(error);
-      reject(normalized.message.startsWith('ZIPファイルを安全に') ? normalized : zipError(normalized.message));
+      reject(normalized instanceof MissionArchiveError ? normalized : zipError(normalized.message));
     };
 
     const feed = () => {
@@ -269,7 +294,8 @@ export async function unzipWithLimits(
 ): Promise<Record<string, Uint8Array>> {
   if (data.length > ZIP_LIMITS.MAX_ARCHIVE_SIZE) {
     throw zipError(
-      `圧縮後のファイルサイズ（${formatBytes(data.length)}）が上限（${formatBytes(ZIP_LIMITS.MAX_ARCHIVE_SIZE)}）を超えています。`
+      `圧縮後のファイルサイズ（${formatBytes(data.length)}）が上限（${formatBytes(ZIP_LIMITS.MAX_ARCHIVE_SIZE)}）を超えています。`,
+      'safety-limit',
     );
   }
 
@@ -510,7 +536,14 @@ export async function parseMissionArchive(data: Uint8Array): Promise<ParsedMissi
     const entry = zip[name];
 
     if (name === 'mission') {
-      result.mission = parseLuaTable(decodeUtf8Entry(entry));
+      try {
+        result.mission = parseLuaTable(decodeUtf8Entry(entry));
+      } catch (error) {
+        throw new MissionArchiveError(
+          'invalid-mission',
+          `DCSのmissionエントリを解析できませんでした: ${asError(error).message}`,
+        );
+      }
     } else if (name === 'theatre') {
       result.theatre = decodeUtf8Entry(entry).trim();
     } else if (name === 'warehouses') {
@@ -528,6 +561,13 @@ export async function parseMissionArchive(data: Uint8Array): Promise<ParsedMissi
     }
   }
 
+  if (result.mission === null || typeof result.mission !== 'object') {
+    throw new MissionArchiveError(
+      'invalid-mission',
+      'DCSのmissionエントリが存在しないか、最上位のLuaテーブルとして読み取れませんでした。',
+    );
+  }
+
   return result;
 }
 
@@ -539,7 +579,12 @@ if (typeof self !== 'undefined' && typeof document === 'undefined') {
       const result = await parseMissionArchive(new Uint8Array(e.data.file));
       self.postMessage({ type: 'success', data: result });
     } catch (error) {
-      self.postMessage({ type: 'error', error: asError(error).message });
+      const normalized = asError(error);
+      self.postMessage({
+        type: 'error',
+        code: normalized instanceof MissionArchiveError ? normalized.code : 'invalid-mission',
+        error: normalized.message,
+      });
     }
   };
 }

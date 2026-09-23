@@ -1,19 +1,21 @@
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
-import type { MissionData, DisplaySettings, Flight, MissionMeta } from '../types/mission';
-import { calculateBearing, formatCoordinate, getDefaultCoordinateFormat } from '../utils/coordinates';
-import { getMagneticVariation, trueToMagnetic } from '../utils/magvar';
-import { formatEtaLocal, formatEtaZulu, missionZuluDate } from '../utils/time';
+import type { MissionData, DisplaySettings, Flight, MissionMeta, UserNotes } from '../types/mission';
+import { getDefaultCoordinateFormat } from '../utils/coordinates';
+import { formatEtaLocal, formatEtaZulu } from '../utils/time';
 import { formatAltitude, formatSpeed, formatDistance } from '../utils/units';
 import { applyViewMode } from '../utils/viewMode';
+import { formatLegDuration, formatRouteCoordinate } from '../utils/routeLegs';
+import WaypointAnnotationEditor from './WaypointAnnotationEditor';
 
 interface FlightsTabProps {
   mission: MissionData;
   settings: DisplaySettings;
+  onNotesChange?: (notes: UserNotes) => void;
 }
 
-export default function FlightsTab({ mission, settings }: FlightsTabProps) {
+export default function FlightsTab({ mission, settings, onNotesChange }: FlightsTabProps) {
   const { t } = useTranslation();
   const [selectedFlight, setSelectedFlight] = useState<Flight | null>(null);
   const [side, setSide] = useState<'blue' | 'red'>('blue');
@@ -50,7 +52,14 @@ export default function FlightsTab({ mission, settings }: FlightsTabProps) {
         
         {visibleSelectedFlight && (
           <main className="flight-detail">
-            <FlightDetail flight={visibleSelectedFlight} settings={settings} meta={viewMission.meta} />
+            <FlightDetail
+              flight={visibleSelectedFlight}
+              side={side}
+              mission={viewMission}
+              settings={settings}
+              meta={viewMission.meta}
+              onNotesChange={onNotesChange}
+            />
           </main>
         )}
         
@@ -70,11 +79,17 @@ export default function FlightsTab({ mission, settings }: FlightsTabProps) {
   );
 }
 
-function FlightDetail({ flight, settings, meta }: { flight: Flight; settings: DisplaySettings; meta: MissionMeta }) {
+function FlightDetail({ flight, side, mission, settings, meta, onNotesChange }: {
+  flight: Flight;
+  side: 'blue' | 'red';
+  mission: MissionData;
+  settings: DisplaySettings;
+  meta: MissionMeta;
+  onNotesChange?: (notes: UserNotes) => void;
+}) {
   const { t } = useTranslation();
   const leadUnit = flight.units[0];
   const aircraftDefaultCoordinateFormat = getDefaultCoordinateFormat(flight.type);
-  const missionDate = missionZuluDate(meta);
   
   return (
     <div className="flight-detail-content">
@@ -170,6 +185,7 @@ function FlightDetail({ flight, settings, meta }: { flight: Flight; settings: Di
         <p className="coordinate-note" title={t('flights.coordinateNoteTitle')}>
           {t('flights.coordinateFormat', { format: settings.coordinateFormat, defaultFormat: aircraftDefaultCoordinateFormat })}
         </p>
+        <div className="flight-route-scroll">
         <table className="data-table">
           <thead>
             <tr>
@@ -182,27 +198,46 @@ function FlightDetail({ flight, settings, meta }: { flight: Flight; settings: Di
               <th>{t('flights.eta')}</th>
               <th>{t('flights.distance')}</th>
               <th title={t('flights.bearingTitle')}>{t('flights.bearing')}</th>
+              <th>{t('flights.legTime')}</th>
+              <th>{t('flights.cumulativeDistance')}</th>
+              <th>{t('flights.cumulativeTime')}</th>
+              {onNotesChange && <th>{t('waypoints.annotation')}</th>}
             </tr>
           </thead>
           <tbody>
-            {flight.route.map((wp, routeIndex) => {
-              const bearing = getDisplayedBearing(flight.route, routeIndex, meta, missionDate);
-              return (
-              <tr key={wp.index}>
+            {flight.route.map((wp, routeIndex) => (
+              <tr key={`${wp.index}:${routeIndex}`}>
                 <td>{wp.index}</td>
                 <td>{wp.name}</td>
                 <td>{wp.action}</td>
-                <td>{formatCoordinate(wp.latlon[0], wp.latlon[1], settings.coordinateFormat)}</td>
+                <td>{formatRouteCoordinate(wp, settings.coordinateFormat)}</td>
                 <td>{formatAltitude(wp.alt, settings.altitudeUnit)}</td>
                 <td>{formatSpeed(wp.speed, settings.speedUnit)}</td>
                 <td>{formatETA(wp.eta, meta, t)}</td>
                 <td>{wp.leg ? formatDistance(wp.leg.distance, settings.distanceUnit) : '-'}</td>
-                <td>{bearing ? t('flights.bearingValue', { trueBearing: bearing.trueBearing.toFixed(0), magneticBearing: bearing.magneticBearing.toFixed(0) }) : '-'}</td>
+                <td>{wp.leg ? wp.leg.magneticBearing === undefined
+                  ? t('flights.trueBearingOnly', { trueBearing: wp.leg.trueBearing.toFixed(0) })
+                  : t('flights.bearingValue', { trueBearing: wp.leg.trueBearing.toFixed(0), magneticBearing: wp.leg.magneticBearing.toFixed(0) }) : '-'}</td>
+                <td>{formatLegDuration(wp.leg?.time)}</td>
+                <td>{wp.leg ? formatDistance(wp.leg.cumulativeDistance, settings.distanceUnit) : '-'}</td>
+                <td>{formatLegDuration(wp.leg?.cumulativeTime)}</td>
+                {onNotesChange && (
+                  <td className="waypoint-editor-cell">
+                    <WaypointAnnotationEditor
+                      mission={mission}
+                      side={side}
+                      flight={flight}
+                      routeIndex={routeIndex}
+                      onNotesChange={onNotesChange}
+                      compact
+                    />
+                  </td>
+                )}
               </tr>
-              );
-            })}
+            ))}
           </tbody>
         </table>
+        </div>
       </section>
       
       {leadUnit.props && Object.keys(leadUnit.props).length > 0 && (
@@ -239,39 +274,4 @@ function formatETA(eta: number, meta: MissionMeta, t: TFunction): string {
     localTime: formatEtaLocal(meta, eta),
     zuluTime: formatEtaZulu(meta, eta),
   });
-}
-
-interface DisplayBearing {
-  trueBearing: number;
-  magneticBearing: number;
-}
-
-function getDisplayedBearing(
-  route: Flight['route'],
-  routeIndex: number,
-  meta: MissionMeta,
-  missionDate: Date,
-): DisplayBearing | null {
-  const waypoint = route[routeIndex];
-  const previousWaypoint = route[routeIndex - 1];
-  if (!waypoint || !previousWaypoint) {
-    return null;
-  }
-
-  const [fromLat, fromLon] = previousWaypoint.latlon;
-  const [toLat, toLon] = waypoint.latlon;
-  if (![fromLat, fromLon, toLat, toLon].every(Number.isFinite)) {
-    return null;
-  }
-
-  const trueBearing = calculateBearing(fromLat, fromLon, toLat, toLon);
-  if (!Number.isFinite(trueBearing)) {
-    return null;
-  }
-
-  const variation = getMagneticVariation(meta.theatre, toLat, toLon, missionDate);
-  return {
-    trueBearing,
-    magneticBearing: trueToMagnetic(trueBearing, variation),
-  };
 }

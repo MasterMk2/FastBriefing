@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { normalizeMission } from './MissionNormalizer';
 import utcOffsetData from '../data/utcOffsets.json';
 import { formatTimeHHMM, missionLocalDate, missionZuluDate } from '../utils/time';
+import { calculateBearing, calculateDistance } from '../utils/coordinates';
 
 const settings = { coordinateFormat: 'DDM', unitSystem: 'metric', viewMode: 'creator' };
 
@@ -222,11 +223,102 @@ describe('MissionNormalizer reference-backed layers', () => {
     const flight = normalized.coalitions.blue.flights[0];
     expect(flight.units).toHaveLength(2);
     expect(flight.route.map(point => point.index)).toEqual([1, 3]);
-    expect(flight.units[0].radios.map(radio => radio.channel)).toEqual([1, 3]);
+    expect(flight.route[1].leg?.distance).toBeCloseTo(calculateDistance(...flight.route[0].latlon, ...flight.route[1].latlon));
+    expect(flight.route[1].leg?.trueBearing).toBeCloseTo(calculateBearing(...flight.route[0].latlon, ...flight.route[1].latlon));
+    expect(flight.units[0].radios).toEqual([
+      { channel: 1, frequency: 251, modulation: 0, name: '' },
+      { channel: 3, frequency: 305, modulation: 1, name: '' },
+    ]);
     expect(flight.units[0].payload.pylons.map(pylon => pylon.station)).toEqual(['1', '3']);
     expect(flight.units[0].payload.pylons[0].name).toContain('AIM-9L');
     expect(flight.units[0].payload.pylons[1].name).toContain('AIM-120C');
     expect(normalized.coalitions.blue.navPoints.map(point => point.index)).toEqual([2]);
+  });
+
+  it('normalizes current DCS multi-radio banks with scalar channels and parallel metadata', () => {
+    const bankedRadioFlight = {
+      groupId: 901,
+      name: 'Banked radio flight',
+      callsign: { name: 'Banked' },
+      frequency: 251000000,
+      units: [unit('AH-64D_BLK_II', 'Client', {
+        Radio: {
+          '1': {
+            channels: {
+              '1': 127.5,
+              '3': 305000000,
+              '5': 0,
+            },
+            modulations: {
+              '1': 0,
+              '3': 1,
+            },
+            channelsNames: {
+              '1': 'VHF preset',
+              '3': 'UHF preset',
+            },
+          },
+          '2': {
+            channels: [225, 240],
+            modulations: [0, 1],
+            channelsNames: ['Radio two primary', 'Radio two alternate'],
+          },
+        },
+      })],
+      route: { points: [] },
+    };
+    const normalized = normalizeMission(makeMission({
+      coalition: {
+        blue: {
+          country: [{ plane: [{ category: 'plane', group: [bankedRadioFlight] }] }],
+        },
+        red: {},
+        neutrals: {},
+      },
+    }), settings);
+
+    expect(normalized.coalitions.blue.flights[0].units[0].radios).toEqual([
+      { radio: 1, channel: 1, frequency: 127.5, modulation: 0, name: 'VHF preset' },
+      { radio: 1, channel: 3, frequency: 305, modulation: 1, name: 'UHF preset' },
+      { radio: 2, channel: 1, frequency: 225, modulation: 0, name: 'Radio two primary' },
+      { radio: 2, channel: 2, frequency: 240, modulation: 1, name: 'Radio two alternate' },
+    ]);
+  });
+
+  it('keeps radioSet channels as a fallback and accepts MHz scalar values', () => {
+    const fallbackRadioFlight = {
+      groupId: 902,
+      name: 'Fallback radio flight',
+      callsign: { name: 'Fallback' },
+      frequency: 251000000,
+      units: [unit('Legacy module', 'Client', {
+        radioSet: {
+          channels: {
+            '2': 251,
+          },
+          modulations: {
+            '2': 1,
+          },
+          channelsNames: {
+            '2': 'Fallback preset',
+          },
+        },
+      })],
+      route: { points: [] },
+    };
+    const normalized = normalizeMission(makeMission({
+      coalition: {
+        blue: {
+          country: [{ plane: [{ category: 'plane', group: [fallbackRadioFlight] }] }],
+        },
+        red: {},
+        neutrals: {},
+      },
+    }), settings);
+
+    expect(normalized.coalitions.blue.flights[0].units[0].radios).toEqual([
+      { channel: 2, frequency: 251, modulation: 1, name: 'Fallback preset' },
+    ]);
   });
 
   it('extracts TACAN and does not duplicate a carrier classified as Tanker', () => {

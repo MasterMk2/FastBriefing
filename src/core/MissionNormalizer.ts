@@ -5,6 +5,7 @@ import threatRangeData from '../data/threatRanges.json';
 import utcOffsetData from '../data/utcOffsets.json';
 import weaponData from '../data/weapons.json';
 import cloudPresetData from '../data/cloudPresets.json';
+import { calculateRouteLegs } from '../utils/routeLegs';
 
 interface ThreatRangeReference {
   threatRange: number;
@@ -141,7 +142,7 @@ function resolveResKey(key: string, mapResource: Record<string, string>): string
 }
 
 export function normalizeMission(
-  parsed: { mission: unknown; theatre: string; warehouses: unknown; dictionary: Record<string, string>; mapResource: Record<string, string> },
+  parsed: { mission: unknown; theatre: string; warehouses: unknown; dictionary: Record<string, string>; mapResource: Record<string, string>; sourceFingerprint?: string },
   _settings: { coordinateFormat: string; unitSystem: string; viewMode: string }
 ): MissionData {
   const mission = parsed.mission as Record<string, unknown>;
@@ -160,15 +161,39 @@ export function normalizeMission(
   const zones = normalizeZones(mission);
   const drawings = normalizeDrawings(mission);
   const coalitions = normalizeCoalitions(mission, warehouses, dictionary, mapResource, theatre, warnings, zones, drawings);
+  for (const coalition of Object.values(coalitions)) {
+    for (const flight of coalition.flights) {
+      flight.route = calculateRouteLegs(flight.route, meta);
+    }
+  }
   const userNotes = createEmptyUserNotes();
   
   return {
+    sourceFingerprint: parsed.sourceFingerprint ?? legacyMissionFingerprint(meta),
     meta,
     weather,
     coalitions,
     userNotes,
     warnings,
   };
+}
+
+function legacyMissionFingerprint(meta: MissionMeta): string {
+  const identity = [
+    meta.sortie,
+    meta.theatre,
+    meta.date.Year,
+    meta.date.Month,
+    meta.date.Day,
+    meta.startTime,
+    meta.meVersion,
+  ].join('|');
+  let hash = 0x811c9dc5;
+  for (const character of identity) {
+    hash ^= character.charCodeAt(0);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return `legacy-${(hash >>> 0).toString(36)}`;
 }
 
 function normalizeMeta(mission: Record<string, unknown>, dictionary: Record<string, string>, mapResource: Record<string, string>, theatre: string, warnings: string[]): MissionMeta {
@@ -522,8 +547,6 @@ function normalizeUnits(units: unknown[], dictionary: Record<string, string>, _t
   return units.map((u) => {
     const unit = u as Record<string, unknown>;
     const payload = getValue(unit, ['payload']) as Record<string, unknown> || {};
-    const primaryRadios = getArrayEntries(unit, ['Radio', 'channels']);
-    const radios = primaryRadios.length > 0 ? primaryRadios : getArrayEntries(unit, ['radioSet', 'channels']);
     
     return {
       unitId: getNumber(unit, ['unitId']),
@@ -532,7 +555,7 @@ function normalizeUnits(units: unknown[], dictionary: Record<string, string>, _t
       skill: getString(unit, ['skill']),
       livery: getString(unit, ['livery_id']),
       payload: normalizePayload(payload, warnings),
-      radios: normalizeRadios(radios),
+      radios: normalizeUnitRadios(unit),
       props: getValue(unit, ['AddPropAircraft']) as Record<string, unknown> || {},
       datalink: normalizeDatalink(getValue(unit, ['datalinks'])),
     };
@@ -595,15 +618,56 @@ function fallbackWeaponName(clsid: string): string {
   return `${readable || clsid} (未収録)`;
 }
 
-function normalizeRadios(radios: CollectionEntry[]): RadioPreset[] {
-  return radios.map((entry, i) => {
-    const radio = entry.value as Record<string, unknown>;
-    return {
-      channel: collectionIndex(entry.key, i + 1),
-      frequency: getNumber(radio, ['frequency']) / 1000000,
-      modulation: getNumber(radio, ['modulation']),
-      name: getString(radio, ['name']),
+function normalizeUnitRadios(unit: Record<string, unknown>): RadioPreset[] {
+  const primary = normalizeRadioCollection(getValue(unit, ['Radio']));
+  return primary.length > 0 ? primary : normalizeRadioCollection(getValue(unit, ['radioSet']));
+}
+
+function normalizeRadioCollection(value: unknown): RadioPreset[] {
+  const direct = normalizeRadioBank(value);
+  if (direct.length > 0) return direct;
+
+  return getCollectionEntries(value).flatMap((bank, index) => (
+    normalizeRadioBank(bank.value, collectionIndex(bank.key, index + 1))
+  ));
+}
+
+function normalizeRadioBank(value: unknown, radio?: number): RadioPreset[] {
+  if (!isObject(value)) return [];
+
+  const channels = getArrayEntries(value, ['channels']);
+  const modulations = new Map(
+    getArrayEntries(value, ['modulations']).map(entry => [entry.key, entry.value]),
+  );
+  const names = new Map(
+    getArrayEntries(value, ['channelsNames']).map(entry => [entry.key, entry.value]),
+  );
+
+  return channels.flatMap((entry, index) => {
+    const embedded = isObject(entry.value) ? entry.value : undefined;
+    const rawFrequency = embedded ? getValue(embedded, ['frequency']) : entry.value;
+    const sourceFrequency = scalarNumber(rawFrequency);
+    if (sourceFrequency === undefined || sourceFrequency <= 0) return [];
+
+    const frequency = Math.abs(sourceFrequency) >= 1000
+      ? sourceFrequency / 1000000
+      : sourceFrequency;
+    if (!Number.isFinite(frequency) || frequency <= 0) return [];
+
+    const rawModulation = embedded
+      ? getValue(embedded, ['modulation']) ?? modulations.get(entry.key)
+      : modulations.get(entry.key);
+    const rawName = embedded
+      ? getValue(embedded, ['name']) ?? names.get(entry.key)
+      : names.get(entry.key);
+    const preset: RadioPreset = {
+      channel: collectionIndex(entry.key, index + 1),
+      frequency,
+      modulation: scalarNumber(rawModulation) ?? 0,
+      name: scalarString(rawName) ?? '',
     };
+    if (radio !== undefined) preset.radio = radio;
+    return [preset];
   });
 }
 
@@ -819,6 +883,15 @@ function isObject(value: unknown): value is Record<string, unknown> {
 function scalarString(value: unknown): string | undefined {
   if (typeof value === 'string' && value.trim() !== '') return value;
   if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+  return undefined;
+}
+
+function scalarNumber(value: unknown): number | undefined {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string' && value.trim() !== '') {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
   return undefined;
 }
 
@@ -1098,5 +1171,7 @@ function createEmptyUserNotes(): UserNotes {
       commandSignal: '',
     },
     perFlight: {},
+    waypoints: {},
+    mapAnnotations: [],
   };
 }

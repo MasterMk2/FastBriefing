@@ -7,7 +7,7 @@ import { relative, resolve, sep } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import en from './locales/en.json';
 import ja from './locales/ja.json';
-import i18n, { i18nReady } from './index';
+import i18n, { i18nReady, loadInitialLanguage, SETTINGS_VERSION } from './index';
 
 function flattenTranslations(value: unknown, prefix = ''): Record<string, string> {
   if (typeof value === 'string') return { [prefix]: value };
@@ -87,5 +87,14 @@ describe('i18n resources', () => {
 
     expect(i18n.t('overview.sortie', { lng: 'en' })).toBe(en.overview.sortie);
     expect(i18n.t('overview.sortie')).toBe(ja.overview.sortie);
+  });
+
+  it('keeps a valid language while v1 and v2 settings migrate to the current schema', () => {
+    for (const settingsVersion of [1, 2, SETTINGS_VERSION]) {
+      const storage = {
+        getItem: () => JSON.stringify({ settingsVersion, language: 'en' }),
+      };
+      expect(loadInitialLanguage(storage)).toBe('en');
+    }
   });
 });

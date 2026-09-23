@@ -1,23 +1,35 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import L from 'leaflet';
-import { MapContainer, TileLayer, Marker, Popup, Polyline, Circle, LayerGroup, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Polyline, Circle, LayerGroup, useMap, useMapEvents } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import markerIcon from 'leaflet/dist/images/marker-icon.png';
 import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png';
 import markerShadow from 'leaflet/dist/images/marker-shadow.png';
-import type { DisplaySettings, Drawing, Flight, MissionData, SupportAsset, TriggerZone } from '../types/mission';
+import type { DisplaySettings, Drawing, Flight, MapAnnotation, MapPinAnnotation, MapStrokeAnnotation, MissionData, SupportAsset, TriggerZone, UserNotes } from '../types/mission';
 import { dcsToLatLon } from '../utils/coordinates';
 import { applyViewMode } from '../utils/viewMode';
+import {
+  MAX_MAP_ANNOTATIONS,
+  MAX_MAP_LABEL_LENGTH,
+  MAX_MAP_NOTE_LENGTH,
+  MAX_MAP_POINTS_TOTAL,
+  MAX_MAP_STROKE_POINTS,
+  removeMapAnnotation,
+  replaceMapAnnotation,
+} from '../utils/notes';
+import WaypointAnnotationEditor from './WaypointAnnotationEditor';
 
 interface MapTabProps {
   mission: MissionData;
   settings: DisplaySettings;
+  onNotesChange?: (notes: UserNotes) => void;
 }
 
 type MapSide = 'blue' | 'red' | 'neutral';
 type LatLon = [number, number];
+type AnnotationMode = 'navigate' | 'pin' | 'draw';
 
 const DEFAULT_CENTER: LatLon = [42.0, 43.0];
 const DEFAULT_ZOOM = 7;
@@ -46,7 +58,7 @@ function getThemeColor(token: string): string {
   return value || `var(${token})`;
 }
 
-export default function MapTab({ mission, settings }: MapTabProps) {
+export default function MapTab({ mission, settings, onNotesChange }: MapTabProps) {
   const { t } = useTranslation();
   const viewMission = useMemo(() => applyViewMode(mission, settings.viewMode), [mission, settings.viewMode]);
   const [layers, setLayers] = useState({
@@ -60,7 +72,11 @@ export default function MapTab({ mission, settings }: MapTabProps) {
     bullseye: true,
     navpoints: true,
     airbases: true,
+    annotations: true,
   });
+  const [annotationMode, setAnnotationMode] = useState<AnnotationMode>('navigate');
+  const [annotationColor, setAnnotationColor] = useState('#e53935');
+  const annotations = mission.userNotes.mapAnnotations;
 
   const missionZones = viewMission.coalitions.blue.zones;
   const missionDrawings = viewMission.coalitions.blue.drawings;
@@ -69,10 +85,64 @@ export default function MapTab({ mission, settings }: MapTabProps) {
     ...viewMission.coalitions.red.flights.map((flight, index) => ({ flight, side: 'red' as const, index })),
     ...viewMission.coalitions.neutral.flights.map((flight, index) => ({ flight, side: 'neutral' as const, index })),
   ];
+  const updateAnnotations = (next: MapAnnotation[]) => {
+    if (!onNotesChange || next.length > MAX_MAP_ANNOTATIONS) return;
+    onNotesChange({ ...mission.userNotes, mapAnnotations: next });
+  };
+  const addPin = (position: LatLon) => {
+    const pins = annotations.filter(item => item.kind === 'pin').length;
+    updateAnnotations([...annotations, {
+      id: createAnnotationId('pin'),
+      kind: 'pin',
+      position,
+      label: t('map.annotations.defaultPin', { count: pins + 1 }),
+      notes: '',
+      color: annotationColor,
+    }]);
+    setAnnotationMode('navigate');
+  };
+  const addStroke = (points: LatLon[]) => {
+    const totalPoints = annotations.reduce((sum, item) => sum + (item.kind === 'stroke' ? item.points.length : 0), 0);
+    if (points.length < 2 || points.length > MAX_MAP_STROKE_POINTS || totalPoints + points.length > MAX_MAP_POINTS_TOTAL) return;
+    updateAnnotations([...annotations, {
+      id: createAnnotationId('stroke'), kind: 'stroke', points, color: annotationColor, width: 4,
+    }]);
+  };
 
   return (
     <div className="tab-panel map-tab">
       <div className="map-controls">
+        {onNotesChange && (
+          <div className="map-annotation-toolbar" aria-label={t('map.annotations.toolbar')}>
+            {(['navigate', 'pin', 'draw'] as const).map(mode => (
+              <button
+                key={mode}
+                type="button"
+                className={annotationMode === mode ? 'active' : ''}
+                aria-pressed={annotationMode === mode}
+                onClick={() => setAnnotationMode(mode)}
+              >
+                {t(`map.annotations.modes.${mode}`)}
+              </button>
+            ))}
+            <label>
+              <span>{t('map.annotations.color')}</span>
+              <input type="color" value={annotationColor} onChange={event => setAnnotationColor(event.target.value)} />
+            </label>
+            <button type="button" disabled={annotations.length === 0} onClick={() => updateAnnotations(annotations.slice(0, -1))}>
+              {t('map.annotations.undo')}
+            </button>
+            <button
+              type="button"
+              className="button-danger-text"
+              disabled={annotations.length === 0}
+              onClick={() => { if (window.confirm(t('map.annotations.clearConfirm'))) updateAnnotations([]); }}
+            >
+              {t('map.annotations.clear')}
+            </button>
+            <span className="map-annotation-help" role="status">{t(`map.annotations.help.${annotationMode}`)}</span>
+          </div>
+        )}
         <div className="layer-controls">
           {Object.entries(layers).map(([key, value]) => (
             <label key={key} htmlFor={`map-layer-${key}`} className="layer-toggle">
@@ -122,6 +192,14 @@ export default function MapTab({ mission, settings }: MapTabProps) {
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
           <MapViewport mission={viewMission} includeDetectionRange={layers.detection} />
+          {onNotesChange && (
+            <MapAnnotationInput
+              mode={annotationMode}
+              color={annotationColor}
+              onAddPin={addPin}
+              onAddStroke={addStroke}
+            />
+          )}
 
           {layers.bullseye && (
             <>
@@ -227,6 +305,8 @@ export default function MapTab({ mission, settings }: MapTabProps) {
               flight={flight}
               side={side}
               color={getFlightColor(side)}
+              mission={viewMission}
+              onNotesChange={onNotesChange}
             />
           ))}
 
@@ -406,7 +486,165 @@ export default function MapTab({ mission, settings }: MapTabProps) {
               })}
             </LayerGroup>
           )}
+
+          {layers.annotations && (
+            <LayerGroup>
+              {annotations.map(annotation => annotation.kind === 'stroke' ? (
+                <Polyline
+                  key={`${annotation.id}:${annotation.color}:${annotation.width}`}
+                  positions={annotation.points}
+                  color={annotation.color}
+                  weight={annotation.width}
+                  opacity={0.9}
+                >
+                  <Popup>
+                    <MapStrokeEditor
+                      stroke={annotation}
+                      onUpdate={next => updateAnnotations(replaceMapAnnotation(annotations, next))}
+                      onDelete={() => updateAnnotations(removeMapAnnotation(annotations, annotation.id))}
+                    />
+                  </Popup>
+                </Polyline>
+              ) : (
+                <Marker
+                  key={annotation.id}
+                  position={annotation.position}
+                  icon={createUserPinIcon(annotation.color)}
+                  alt={annotation.label}
+                  title={annotation.label}
+                >
+                  <Popup>
+                    <MapPinEditor
+                      pin={annotation}
+                      onUpdate={next => updateAnnotations(replaceMapAnnotation(annotations, next))}
+                      onDelete={() => updateAnnotations(removeMapAnnotation(annotations, annotation.id))}
+                    />
+                  </Popup>
+                </Marker>
+              ))}
+            </LayerGroup>
+          )}
         </MapContainer>
+      </div>
+    </div>
+  );
+}
+
+function MapAnnotationInput({ mode, color, onAddPin, onAddStroke }: {
+  mode: AnnotationMode;
+  color: string;
+  onAddPin: (position: LatLon) => void;
+  onAddStroke: (points: LatLon[]) => void;
+}) {
+  const drawing = useRef<LatLon[] | null>(null);
+  const [preview, setPreview] = useState<LatLon[]>([]);
+  const map = useMapEvents({
+    click(event) {
+      if (mode === 'pin') onAddPin([event.latlng.lat, event.latlng.lng]);
+    },
+    mousedown(event) {
+      if (mode !== 'draw') return;
+      drawing.current = [[event.latlng.lat, event.latlng.lng]];
+      setPreview(drawing.current);
+    },
+    mousemove(event) {
+      if (mode !== 'draw' || !drawing.current) return;
+      const point: LatLon = [event.latlng.lat, event.latlng.lng];
+      const previous = drawing.current[drawing.current.length - 1];
+      if (map.distance(previous, point) < 10 || drawing.current.length >= MAX_MAP_STROKE_POINTS) return;
+      drawing.current = [...drawing.current, point];
+      setPreview(drawing.current);
+    },
+    mouseup() {
+      if (mode !== 'draw' || !drawing.current) return;
+      const points = drawing.current;
+      drawing.current = null;
+      setPreview([]);
+      if (points.length > 1) onAddStroke(points);
+    },
+  });
+
+  useEffect(() => {
+    const container = map.getContainer();
+    container.style.cursor = mode === 'pin' ? 'crosshair' : mode === 'draw' ? 'cell' : '';
+    if (mode === 'draw') map.dragging.disable(); else map.dragging.enable();
+    if (mode !== 'draw') {
+      drawing.current = null;
+      setPreview([]);
+    }
+    return () => {
+      container.style.cursor = '';
+      map.dragging.enable();
+    };
+  }, [map, mode]);
+
+  return preview.length > 1 ? <Polyline positions={preview} color={color} weight={4} opacity={0.75} /> : null;
+}
+
+function MapPinEditor({ pin, onUpdate, onDelete }: {
+  pin: MapPinAnnotation;
+  onUpdate: (pin: MapPinAnnotation) => void;
+  onDelete: () => void;
+}) {
+  const { t } = useTranslation();
+  const [label, setLabel] = useState(pin.label);
+  const [notes, setNotes] = useState(pin.notes);
+  const [color, setColor] = useState(pin.color);
+  return (
+    <div className="map-pin-editor">
+      <label>
+        <span>{t('map.annotations.label')}</span>
+        <input value={label} maxLength={MAX_MAP_LABEL_LENGTH} onChange={event => setLabel(event.target.value)} />
+      </label>
+      <label>
+        <span>{t('map.annotations.notes')}</span>
+        <textarea value={notes} maxLength={MAX_MAP_NOTE_LENGTH} rows={3} onChange={event => setNotes(event.target.value)} />
+      </label>
+      <label>
+        <span>{t('map.annotations.color')}</span>
+        <input type="color" value={color} onChange={event => setColor(event.target.value)} />
+      </label>
+      <div className="waypoint-editor-actions">
+        <button type="button" onClick={() => onUpdate({ ...pin, label, notes, color })}>{t('waypoints.save')}</button>
+        <button type="button" className="button-danger-text" onClick={onDelete}>{t('map.annotations.delete')}</button>
+      </div>
+    </div>
+  );
+}
+
+function MapStrokeEditor({ stroke, onUpdate, onDelete }: {
+  stroke: MapStrokeAnnotation;
+  onUpdate: (stroke: MapStrokeAnnotation) => void;
+  onDelete: () => void;
+}) {
+  const { t } = useTranslation();
+  const [color, setColor] = useState(stroke.color);
+  const [width, setWidth] = useState(stroke.width);
+  const save = () => onUpdate({
+    ...stroke,
+    color,
+    width: Math.max(1, Math.min(12, Math.round(width))),
+  });
+  return (
+    <div className="map-pin-editor">
+      <label>
+        <span>{t('map.annotations.color')}</span>
+        <input type="color" value={color} onChange={event => setColor(event.target.value)} />
+      </label>
+      <label>
+        <span>{t('map.annotations.width')}</span>
+        <input
+          type="number"
+          min={1}
+          max={12}
+          step={1}
+          value={width}
+          onChange={event => setWidth(Number(event.target.value) || 1)}
+        />
+      </label>
+      <div className="waypoint-editor-actions">
+        <button type="button" onClick={save}>{t('waypoints.save')}</button>
+        <button type="button" className="button-danger-text" onClick={onDelete}>{t('map.annotations.delete')}</button>
       </div>
     </div>
   );
@@ -478,6 +716,10 @@ function collectMissionBounds(mission: MissionData, includeDetectionRange = fals
       for (const point of object.points) addDcs(point);
     }
   }
+  for (const annotation of mission.userNotes.mapAnnotations) {
+    if (annotation.kind === 'pin') add(annotation.position, true);
+    else for (const point of annotation.points) add(point, true);
+  }
 
   return bounds;
 }
@@ -535,12 +777,20 @@ function getSideLabel(side: MapSide, t: TFunction): string {
   return t('common.neutral');
 }
 
-function FlightPath({ flight, side, color }: { flight: Flight; side: MapSide; color: string }) {
+function FlightPath({ flight, side, color, mission, onNotesChange }: {
+  flight: Flight;
+  side: MapSide;
+  color: string;
+  mission: MissionData;
+  onNotesChange?: (notes: UserNotes) => void;
+}) {
   const { t } = useTranslation();
   const sideLabel = getSideLabel(side, t);
   const flightLabel = flight.callsign || flight.name || `${sideLabel} flight`;
-  const validWaypoints = flight.route.filter(waypoint => isResolvedLatLon(waypoint.latlon, waypoint.latlonResolved));
-  const positions = validWaypoints.map(waypoint => waypoint.latlon);
+  const validWaypoints = flight.route
+    .map((waypoint, routeIndex) => ({ waypoint, routeIndex }))
+    .filter(({ waypoint }) => isResolvedLatLon(waypoint.latlon, waypoint.latlonResolved));
+  const positions = validWaypoints.map(({ waypoint }) => waypoint.latlon);
   const dashArray = getFlightDashArray(side);
 
   return (
@@ -548,7 +798,7 @@ function FlightPath({ flight, side, color }: { flight: Flight; side: MapSide; co
       {positions.length > 1 && (
         <Polyline positions={positions} color={color} weight={2} opacity={0.8} dashArray={dashArray} />
       )}
-      {validWaypoints.map((waypoint, index) => {
+      {validWaypoints.map(({ waypoint, routeIndex }, index) => {
         const markerLabel = `${sideLabel} ${flightLabel} waypoint ${waypoint.index}: ${waypoint.name}`;
         return (
           <Marker
@@ -558,7 +808,19 @@ function FlightPath({ flight, side, color }: { flight: Flight; side: MapSide; co
             alt={markerLabel}
             title={markerLabel}
           >
-            <Popup>{`${sideLabel} ${flightLabel}: ${t('map.waypoint', { name: waypoint.name, action: waypoint.action })}`}</Popup>
+            <Popup>
+              <strong>{`${sideLabel} ${flightLabel}: ${t('map.waypoint', { name: waypoint.name, action: waypoint.action })}`}</strong>
+              {onNotesChange && (
+                <WaypointAnnotationEditor
+                  mission={mission}
+                  side={side}
+                  flight={flight}
+                  routeIndex={routeIndex}
+                  onNotesChange={onNotesChange}
+                  compact
+                />
+              )}
+            </Popup>
           </Marker>
         );
       })}
@@ -673,6 +935,24 @@ function createWaypointIcon(number: number) {
   });
 }
 
+function createUserPinIcon(color: string) {
+  const foreground = getThemeColor('--color-map-marker-foreground');
+  const shadow = getThemeColor('--shadow-map-marker');
+  return L.divIcon({
+    className: 'user-map-pin',
+    html: `<div style="background:${color};color:${foreground};width:26px;height:26px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);border:2px solid ${foreground};box-shadow:0 1px 4px ${shadow}"><span style="display:block;transform:rotate(45deg);text-align:center;line-height:22px;font-weight:bold">✎</span></div>`,
+    iconSize: [26, 26],
+    iconAnchor: [13, 26],
+  });
+}
+
+function createAnnotationId(prefix: string): string {
+  const random = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+    ? crypto.randomUUID()
+    : Math.random().toString(36).slice(2);
+  return `${prefix}_${Date.now().toString(36)}_${random}`.slice(0, 64);
+}
+
 function createAirbaseIcon() {
   const background = getThemeColor('--color-map-airbase');
   const foreground = getThemeColor('--color-map-marker-foreground');
@@ -726,6 +1006,7 @@ function getLayerLabel(key: string, t: TFunction): string {
     bullseye: 'map.layers.bullseye',
     navpoints: 'map.layers.navpoints',
     airbases: 'map.layers.airbases',
+    annotations: 'map.layers.annotations',
   };
   return labelKeys[key] ? t(labelKeys[key]) : key;
 }

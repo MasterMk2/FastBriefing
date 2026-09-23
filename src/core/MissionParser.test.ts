@@ -1,15 +1,17 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { MissionParser, ZIP_LIMITS } from './MissionParser';
+import { fingerprintMissionArchive, MissionParser, ZIP_LIMITS } from './MissionParser';
 
 interface WorkerResponse {
   type: string;
   data?: unknown;
+  code?: 'invalid-zip' | 'safety-limit' | 'invalid-mission';
   error?: string;
 }
 
 class FakeWorker {
   static latest: FakeWorker | undefined;
   static autoRespond = true;
+  static response: WorkerResponse | undefined;
 
   onmessage: ((event: MessageEvent<WorkerResponse>) => void) | null = null;
   onerror: ((event: ErrorEvent) => void) | null = null;
@@ -27,7 +29,7 @@ class FakeWorker {
     if (!FakeWorker.autoRespond) return;
     queueMicrotask(() => {
       this.onmessage?.({
-        data: {
+        data: FakeWorker.response ?? {
           type: 'success',
           data: {
             mission: {},
@@ -54,6 +56,7 @@ describe('MissionParser', () => {
     vi.unstubAllGlobals();
     FakeWorker.latest = undefined;
     FakeWorker.autoRespond = true;
+    FakeWorker.response = undefined;
   });
 
   it('FileのArrayBufferを解決してWorkerへ転送する', async () => {
@@ -70,7 +73,29 @@ describe('MissionParser', () => {
     expect(worker?.postedMessage).toEqual({ file: buffer });
     expect(worker?.transferList).toEqual([buffer]);
     expect(result.theatre).toBe('Caucasus');
+    expect(result.sourceFingerprint).toMatch(/^(?:[a-f0-9]{64}|hash128-)/);
     expect(worker?.terminated).toBe(true);
+  });
+
+  it('同じメタデータでも異なるアーカイブ内容には異なる指紋を付ける', async () => {
+    const first = await fingerprintMissionArchive(Uint8Array.from([1, 2, 3]).buffer);
+    const second = await fingerprintMissionArchive(Uint8Array.from([1, 2, 4]).buffer);
+
+    expect(first).not.toBe(second);
+    expect(await fingerprintMissionArchive(Uint8Array.from([1, 2, 3]).buffer)).toBe(first);
+  });
+
+  it('SubtleCryptoが失敗しても幅広い内容指紋へ安定してフォールバックする', async () => {
+    vi.stubGlobal('crypto', {
+      subtle: { digest: vi.fn().mockRejectedValue(new Error('unavailable')) },
+    });
+    const input = Uint8Array.from([10, 20, 30, 40]).buffer;
+    const first = await fingerprintMissionArchive(input);
+    const second = await fingerprintMissionArchive(Uint8Array.from([10, 20, 30, 41]).buffer);
+
+    expect(first).toMatch(/^hash128-[a-f0-9]{32}-4$/);
+    expect(await fingerprintMissionArchive(input)).toBe(first);
+    expect(second).not.toBe(first);
   });
 
   it('圧縮後サイズが上限ちょうどならarrayBufferを呼び出す', async () => {
@@ -85,6 +110,21 @@ describe('MissionParser', () => {
     expect(file.arrayBuffer).toHaveBeenCalledOnce();
   });
 
+  it('0バイトはarrayBufferとWorker生成の前に専用コードで拒否する', async () => {
+    vi.stubGlobal('Worker', FakeWorker);
+    const file = {
+      size: 0,
+      arrayBuffer: vi.fn(),
+    } as unknown as File;
+
+    await expect(new MissionParser().parse(file)).rejects.toMatchObject({
+      name: 'MissionLoadError',
+      code: 'empty-file',
+    });
+    expect(file.arrayBuffer).not.toHaveBeenCalled();
+    expect(FakeWorker.latest).toBeUndefined();
+  });
+
   it('圧縮後サイズが上限を1バイト超える場合はarrayBuffer前に拒否する', async () => {
     vi.stubGlobal('Worker', FakeWorker);
     const file = {
@@ -92,9 +132,34 @@ describe('MissionParser', () => {
       arrayBuffer: vi.fn(),
     } as unknown as File;
 
-    await expect(new MissionParser().parse(file)).rejects.toThrow('上限');
+    await expect(new MissionParser().parse(file)).rejects.toMatchObject({
+      code: 'archive-too-large',
+      message: expect.stringContaining('上限'),
+    });
     expect(file.arrayBuffer).not.toHaveBeenCalled();
     expect(FakeWorker.latest).toBeUndefined();
+  });
+
+  it.each([
+    ['invalid-zip', 'ZIPの構造を読み取れませんでした。'],
+    ['invalid-mission', 'DCSのmissionエントリを解析できませんでした。'],
+  ] as const)('Workerが返した%s分類を呼び出し側へ保持する', async (code, message) => {
+    vi.stubGlobal('Worker', FakeWorker);
+    FakeWorker.response = {
+      type: 'error',
+      code,
+      error: message,
+    };
+    const file = {
+      size: 8,
+      arrayBuffer: vi.fn().mockResolvedValue(new ArrayBuffer(8)),
+    } as unknown as File;
+
+    await expect(new MissionParser().parse(file)).rejects.toMatchObject({
+      name: 'MissionLoadError',
+      code,
+      message,
+    });
   });
 
   it('cancelが解析PromiseをAbortErrorでrejectしWorkerを終了する', async () => {
@@ -108,7 +173,7 @@ describe('MissionParser', () => {
     const parser = new MissionParser();
     const promise = parser.parse(file);
 
-    await Promise.resolve();
+    await vi.waitFor(() => expect(FakeWorker.latest).toBeDefined());
     parser.cancel();
 
     await expect(promise).rejects.toMatchObject({ name: 'AbortError' });

@@ -7,6 +7,13 @@ import i18n, {
   SETTINGS_VERSION as I18N_SETTINGS_VERSION,
   SUPPORTED_LANGUAGES,
 } from '../i18n';
+import {
+  DEFAULT_BRIEFING_SECTIONS,
+  normalizeBriefingPresets,
+  normalizeBriefingSections,
+  type BriefingPreset,
+  type BriefingSection,
+} from '../utils/briefingSections';
 
 export const SETTINGS_STORAGE_KEY = I18N_SETTINGS_STORAGE_KEY;
 export const SETTINGS_VERSION = I18N_SETTINGS_VERSION;
@@ -24,6 +31,8 @@ export const DEFAULT_SETTINGS: Readonly<DisplaySettings> = {
   language: DEFAULT_LANGUAGE,
   outputLanguage: DEFAULT_LANGUAGE,
   theme: 'ffs',
+  briefingSections: [...DEFAULT_BRIEFING_SECTIONS],
+  briefingPresets: [],
 };
 
 export type SettingsStorage = Pick<Storage, 'getItem' | 'setItem'>;
@@ -49,7 +58,11 @@ function getStorage(): SettingsStorage | null {
 }
 
 function cloneDefaultSettings(): DisplaySettings {
-  return { ...DEFAULT_SETTINGS };
+  return {
+    ...DEFAULT_SETTINGS,
+    briefingSections: [...DEFAULT_BRIEFING_SECTIONS],
+    briefingPresets: [],
+  };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -74,7 +87,18 @@ function validateSettings(value: Record<string, unknown>): DisplaySettings {
     outputLanguage: enumOrDefault(value.outputLanguage, LANGUAGES, DEFAULT_SETTINGS.outputLanguage),
     // Unknown or missing theme values fall back to the default theme (FFS).
     theme: enumOrDefault(value.theme, THEMES, DEFAULT_SETTINGS.theme),
+    briefingSections: normalizeBriefingSections(value.briefingSections),
+    briefingPresets: normalizeBriefingPresets(value.briefingPresets),
   };
+}
+
+function migrateV3Sections(value: unknown): BriefingSection[] {
+  const sections: BriefingSection[] = normalizeBriefingSections(value).filter(section => section !== 'notes');
+  if (sections.length === 0) return [];
+  const overviewIndex = sections.indexOf('overview');
+  const insertionIndex = overviewIndex < 0 ? 0 : overviewIndex + 1;
+  sections.splice(insertionIndex, 0, 'notes');
+  return sections;
 }
 
 /**
@@ -90,6 +114,10 @@ export function migrateSettings(value: unknown): DisplaySettings {
 
   switch (value.settingsVersion) {
     case SETTINGS_VERSION:
+      return validateSettings(value);
+    case 3:
+      return { ...validateSettings(value), briefingSections: migrateV3Sections(value.briefingSections) };
+    case 2:
       return validateSettings(value);
     case 1:
       // v1 records predate the FFS default: a stored 'default' cannot be told
@@ -124,13 +152,15 @@ export function loadSettings(storage: SettingsStorage | null = getStorage()): Di
   }
 }
 
-export function saveSettings(settings: DisplaySettings, storage: SettingsStorage | null = getStorage()): void {
-  if (!storage) return;
+export function saveSettings(settings: DisplaySettings, storage: SettingsStorage | null = getStorage()): boolean {
+  if (!storage) return false;
 
   try {
     storage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify({ settingsVersion: SETTINGS_VERSION, ...settings }));
+    return true;
   } catch {
     console.warn('FastBriefing settings could not be saved; continuing without persistence.');
+    return false;
   }
 }
 
@@ -147,6 +177,8 @@ interface SettingsContextType {
   setLanguage: (lang: DisplaySettings['language']) => void;
   setOutputLanguage: (lang: DisplaySettings['outputLanguage']) => void;
   setTheme: (theme: DisplaySettings['theme']) => void;
+  setBriefingSections: (sections: BriefingSection[]) => void;
+  setBriefingPresets: (presets: BriefingPreset[]) => boolean;
 }
 
 const SettingsContext = createContext<SettingsContextType | null>(null);
@@ -158,12 +190,11 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     void i18n.changeLanguage(settings.language);
   }, [settings.language]);
   
-  useEffect(() => {
-    saveSettings(settings);
-  }, [settings]);
-  
   const updateSetting = <Key extends keyof DisplaySettings>(key: Key, value: DisplaySettings[Key]) => {
-    setSettings(prev => ({ ...prev, [key]: value }));
+    const next = { ...settings, [key]: value };
+    const persisted = saveSettings(next);
+    setSettings(next);
+    return persisted;
   };
   
   const value: SettingsContextType = {
@@ -179,6 +210,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     setLanguage: (v) => updateSetting('language', v),
     setOutputLanguage: (v) => updateSetting('outputLanguage', v),
     setTheme: (v) => updateSetting('theme', v),
+    setBriefingSections: (v) => updateSetting('briefingSections', normalizeBriefingSections(v)),
+    setBriefingPresets: (v) => updateSetting('briefingPresets', normalizeBriefingPresets(v)),
   };
   
   return (

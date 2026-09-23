@@ -9,6 +9,10 @@
   --color-heading: #1a1a1a;
   --color-border: #e0e0e0;
   --color-control-border: #ddd;
+  --color-control-background: #fff;
+  --color-control-text: #1a1a1a;
+  --color-control-option-background: #fff;
+  --color-control-option-text: #1a1a1a;
   --color-border-dashed: #ccc;
   --color-border-light: #eee;
   --color-text-secondary: #666;
@@ -74,13 +78,18 @@
 
 /* FFS 公式サイト freedomflight.jp の配色に準拠 */
 :root[data-theme="ffs"] {
+  color-scheme: dark;
   /* Graphite surfaces and foregrounds. */
   --color-page-background: #101113;
   --color-text: #e8e6e1;
   --color-surface: #17191d;
   --color-heading: #e8e6e1;
   --color-border: #272a2f;
-  --color-control-border: #272a2f;
+  --color-control-border: #8b8a86;
+  --color-control-background: #202329;
+  --color-control-text: #f4f1e9;
+  --color-control-option-background: #202329;
+  --color-control-option-text: #f4f1e9;
   --color-border-dashed: #8b8a86;
   --color-border-light: #1f2226;
   --color-text-secondary: #8b8a86;
@@ -240,6 +249,10 @@ body {
   display: none;
 }
 
+.print-map-blocked-message {
+  display: none;
+}
+
 @media print {
   @page {
     size: A4 portrait;
@@ -290,6 +303,24 @@ body {
 
   .print-briefing .print-view {
     display: block !important;
+  }
+
+  .print-map-blocked .print-briefing .print-view {
+    display: none !important;
+  }
+
+  .mission-view > :not(.print-briefing) {
+    display: none !important;
+  }
+
+  .print-map-blocked .print-map-blocked-message {
+    display: block !important;
+    margin: 24mm auto;
+    max-width: 42rem;
+    padding: 1rem;
+    border: 2px solid var(--color-warning-border);
+    background: var(--color-surface-warning);
+    color: var(--color-warning-text);
   }
 
   .section,
@@ -375,8 +406,19 @@ body {
   padding: 0.375rem 0.75rem;
   border: 1px solid var(--color-control-border);
   border-radius: 4px;
-  background: var(--color-surface);
+  background: var(--color-control-background);
+  color: var(--color-control-text);
   font-size: 0.875rem;
+}
+
+.header-controls select option {
+  background: var(--color-control-option-background);
+  color: var(--color-control-option-text);
+}
+
+.header-controls select:focus-visible {
+  outline: 3px solid var(--color-accent-ring);
+  outline-offset: 2px;
 }
 
 .main {
@@ -653,6 +695,112 @@ body {
 
 .flight-detail {
   min-height: 400px;
+  min-width: 0;
+}
+
+.flight-route-scroll {
+  overflow-x: auto;
+}
+
+.flight-route-scroll .data-table {
+  min-width: 112rem;
+}
+
+.waypoint-editor-cell {
+  min-width: 20rem;
+  vertical-align: top;
+}
+
+.waypoint-editor,
+.map-pin-editor {
+  display: grid;
+  gap: 0.55rem;
+  min-width: 18rem;
+  color: var(--color-text);
+}
+
+.waypoint-editor label,
+.map-pin-editor label {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.waypoint-editor input,
+.waypoint-editor textarea,
+.map-pin-editor input,
+.map-pin-editor textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid var(--color-control-border);
+  border-radius: 4px;
+  background: var(--color-control-background);
+  color: var(--color-control-text);
+}
+
+.waypoint-editor textarea,
+.map-pin-editor textarea {
+  resize: vertical;
+}
+
+.waypoint-editor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.waypoint-editor-actions button,
+.waypoint-sync > button,
+.button-danger-text {
+  padding: 0.4rem 0.65rem;
+  border: 1px solid var(--color-control-border);
+  border-radius: 4px;
+  background: var(--color-control-background);
+  color: var(--color-control-text);
+  cursor: pointer;
+}
+
+.button-danger-text {
+  color: var(--color-error-text);
+}
+
+.waypoint-sync {
+  border-top: 1px solid var(--color-border);
+  padding-top: 0.4rem;
+}
+
+.waypoint-sync summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.waypoint-radius {
+  grid-template-columns: auto 5rem auto;
+  align-items: center;
+}
+
+.waypoint-candidates {
+  display: grid;
+  gap: 0.35rem;
+  max-height: 10rem;
+  overflow: auto;
+  margin: 0.5rem 0;
+}
+
+.waypoint-candidates label {
+  grid-template-columns: auto 1fr;
+  align-items: start;
+}
+
+.waypoint-group-members ul {
+  margin: 0.4rem 0;
+  padding-left: 1.2rem;
+}
+
+.waypoint-editor-status {
+  margin: 0;
+  color: var(--color-info-text);
+  font-size: 0.75rem;
 }
 
 .flight-detail.empty {
@@ -769,6 +917,10 @@ body {
   border-color: var(--color-warning-border);
 }
 
+.warning-text {
+  color: var(--color-warning-text);
+}
+
 .warnings ul {
   margin: 0;
   padding-left: 1.5rem;
@@ -788,6 +940,60 @@ body {
   padding: 1rem;
   background: var(--color-surface);
   border-bottom: 1px solid var(--color-border);
+}
+
+.map-annotation-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  padding-bottom: 0.75rem;
+  margin-bottom: 0.75rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.map-annotation-toolbar button {
+  padding: 0.45rem 0.7rem;
+  border: 1px solid var(--color-control-border);
+  border-radius: 4px;
+  background: var(--color-control-background);
+  color: var(--color-control-text);
+  cursor: pointer;
+}
+
+.map-annotation-toolbar button.active {
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+  border-color: var(--color-accent);
+}
+
+.map-annotation-toolbar button:disabled,
+.waypoint-editor button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.map-annotation-toolbar label {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.map-annotation-toolbar input[type="color"] {
+  width: 2.5rem;
+  height: 2rem;
+  border: 1px solid var(--color-control-border);
+  background: var(--color-control-background);
+}
+
+.map-annotation-help {
+  color: var(--color-text-secondary);
+  font-size: 0.8125rem;
+}
+
+.leaflet-popup-content .waypoint-editor,
+.leaflet-popup-content .map-pin-editor {
+  margin-top: 0.75rem;
 }
 
 .layer-controls {
@@ -1056,4 +1262,356 @@ body {
 
 .map-legend-detection-swatch {
   border-style: dashed;
+}
+
+/* Briefing planner and mission-scoped whiteboard. */
+.briefing-planner {
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface-subtle);
+}
+
+.briefing-planner > summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.85rem 1.25rem;
+  color: var(--color-heading);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.briefing-planner > summary:hover {
+  background: var(--color-surface-hover);
+}
+
+.planner-count {
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+  font-weight: 500;
+}
+
+.planner-content {
+  padding: 0 1.25rem 1.25rem;
+}
+
+.planner-content > p {
+  margin-top: 0;
+  color: var(--color-text-secondary);
+}
+
+.planner-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.planner-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  padding: 0.75rem;
+  border: 1px solid var(--color-control-border);
+  border-radius: 6px;
+  background: var(--color-surface);
+  cursor: pointer;
+}
+
+.planner-option:has(input:checked) {
+  border-color: var(--color-accent);
+  background: var(--color-surface-info);
+}
+
+.planner-option input {
+  margin-top: 0.25rem;
+}
+
+.planner-option span {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.planner-option small {
+  color: var(--color-text-secondary);
+  line-height: 1.35;
+}
+
+.planner-actions,
+.whiteboard-toolbar,
+.whiteboard-tool-group,
+.whiteboard-heading {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.planner-actions {
+  margin-top: 1rem;
+}
+
+.whiteboard-heading {
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.whiteboard-heading h2,
+.whiteboard-heading p {
+  margin-top: 0;
+}
+
+.whiteboard-toolbar {
+  margin-bottom: 0.85rem;
+  padding: 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-surface-subtle);
+}
+
+.whiteboard-toolbar label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.whiteboard-color {
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border: 3px solid var(--color-surface);
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px var(--color-control-border);
+  cursor: pointer;
+}
+
+.whiteboard-color.active {
+  box-shadow: 0 0 0 3px var(--color-accent);
+}
+
+.whiteboard-board {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border: 1px solid var(--color-control-border);
+  border-radius: 6px;
+  background: #ffffff;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.03);
+}
+
+.whiteboard-canvas,
+.whiteboard-input-layer {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.whiteboard-input-layer {
+  position: absolute;
+  inset: 0;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.whiteboard-notes label {
+  display: block;
+  margin-bottom: 0.25rem;
+}
+
+.whiteboard-notes .hint {
+  margin-top: 0;
+}
+
+.whiteboard-notes textarea {
+  display: block;
+  width: 100%;
+  min-height: 9rem;
+  padding: 0.75rem;
+  border: 1px solid var(--color-control-border);
+  border-radius: 6px;
+  resize: vertical;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  line-height: 1.5;
+}
+
+.whiteboard-print-notes p {
+  white-space: pre-wrap;
+}
+
+.whiteboard-color:focus-visible,
+.briefing-planner > summary:focus-visible,
+.planner-option:focus-within,
+.whiteboard-notes textarea:focus-visible {
+  outline: 3px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+@media (max-width: 768px) {
+  .briefing-planner > summary,
+  .whiteboard-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .planner-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .whiteboard-toolbar {
+    align-items: flex-start;
+  }
+}
+
+@media print {
+  .print-whiteboard {
+    break-before: page;
+    page-break-before: always;
+  }
+
+  .print-whiteboard-board {
+    max-width: 100%;
+    border-color: #999;
+    box-shadow: none;
+  }
+}
+
+.notes-fields,
+.notes-flight-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
+  gap: 1rem;
+}
+
+.notes-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.notes-field-wide {
+  grid-column: 1 / -1;
+}
+
+.notes-field input,
+.notes-field textarea {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 0.6rem;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+}
+
+.notes-flight {
+  margin: 0.75rem 0;
+  padding: 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+}
+
+.notes-flight summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.notes-flight-fields {
+  margin-top: 1rem;
+}
+
+.notes-print-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.planner-option.selected {
+  cursor: grab;
+}
+
+.planner-option.dragging {
+  opacity: 0.55;
+}
+
+.planner-drag-handle {
+  color: var(--color-text-tertiary);
+  font-size: 1.1rem;
+  letter-spacing: -0.2rem;
+  user-select: none;
+}
+
+.planner-option-copy {
+  min-width: 0;
+  flex: 1;
+}
+
+.planner-order-controls {
+  display: inline-flex;
+  gap: 0.25rem;
+}
+
+.planner-order-button {
+  min-width: 2rem;
+  min-height: 2rem;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.planner-order-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.planner-presets {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--color-border);
+}
+
+.planner-preset-save,
+.planner-preset-list li {
+  display: flex;
+  align-items: end;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.planner-preset-save label {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.planner-preset-list {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0;
+  list-style: none;
+}
+
+.planner-preset-count {
+  color: var(--color-text-tertiary);
+  font-size: 0.9rem;
+}
+
+.planner-status {
+  margin-bottom: 0;
+}
+
+.whiteboard-share {
+  margin-top: 1rem;
+}
+
+.print-map-canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--color-border);
 }
