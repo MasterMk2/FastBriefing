@@ -15,7 +15,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
-    "check": "npm run lint && npm test && npm run build"
+    "check": "npm run lint && npm test && npm run build",
+    "update:threat-ranges": "node tools/update-threat-ranges.mjs"
   },
   "dependencies": {
     "fflate": "^0.8.2",

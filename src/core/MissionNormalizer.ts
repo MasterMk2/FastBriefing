@@ -1024,7 +1024,6 @@ function isThreatCandidateCategory(category: string): boolean {
 // explicit allow-list in addition to zero-valued reference entries so a
 // missing alias cannot turn a confirmed non-threat into a threat warning.
 const KNOWN_NON_THREAT_UNIT_TYPES = new Set([
-  'house1arm',
   'gaz-3307',
   'gaz-3308',
   'gaz-66',
@@ -1041,7 +1040,6 @@ const KNOWN_NON_THREAT_UNIT_TYPES = new Set([
   'atz-10',
   'ural atsp-6',
   'ship_tilde_supply',
-  'speedboat',
   'elyna',
   'dry-cargo ship-1',
   'dry-cargo ship-2',
@@ -1067,9 +1065,9 @@ function resolveGroupThreat(units: unknown[], isThreatCandidate: boolean, warnin
     const type = getString(unit, ['type']);
     const threat = threatRanges[type];
     if (!threat) {
-      if (type) {
+      if (type && isThreatCandidate) {
         addWarning(warnings, `参照データに未収録のユニット: ${type}`);
-        if (isThreatCandidate && !isKnownNonThreatUnitType(type)) {
+        if (!isKnownNonThreatUnitType(type)) {
           hasUnknownThreatCandidate = true;
           addWarning(warnings, `脅威半径が未収録のため地図に描画できません: ${type}`);
         }

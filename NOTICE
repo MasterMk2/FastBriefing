@@ -1,0 +1,16 @@
+Third-party notices
+===================
+
+pydcs
+-----
+
+`src/data/threatRanges.json` contains unit identifiers and numeric threat and
+detection range reference data generated from pydcs `dcs/vehicles.py` and
+`dcs/ships.py`. The exact source revision is recorded in that JSON file.
+
+Project: https://github.com/pydcs/dcs
+License: GNU Lesser General Public License, version 3.0 (LGPL-3.0)
+License text: https://github.com/pydcs/dcs/blob/master/LICENSE.txt
+
+The FastBriefing application code remains licensed under the repository's MIT
+license. This notice does not alter the license of third-party material.
