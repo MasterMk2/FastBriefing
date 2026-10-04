@@ -20,6 +20,8 @@ export interface ProjectionParams {
 
 // These values mirror pydcs master dcs/terrain/*/projection.py.  Keep the
 // false-northing sign exactly as published; Falklands is intentionally positive.
+// Afghanistan/Iraq additionally cross-checked against independently calibrated
+// VEAF/dcs-maps data; pinned sources and fixture provenance: docs/projection-sources.md.
 export const PROJECTIONS: Record<string, ProjectionParams> = {
   Caucasus: {
     central_meridian: 33,
@@ -79,6 +81,18 @@ export const PROJECTIONS: Record<string, ProjectionParams> = {
     central_meridian: 21,
     false_easting: -62702.00000000087,
     false_northing: -7543624.999999979,
+    scale_factor: 0.9996,
+  },
+  Afghanistan: {
+    central_meridian: 63,
+    false_easting: -300149.9999999864,
+    false_northing: -3759657.000000049,
+    scale_factor: 0.9996,
+  },
+  Iraq: {
+    central_meridian: 45,
+    false_easting: 72290.00000004497,
+    false_northing: -3680057.0,
     scale_factor: 0.9996,
   },
   GermanyCW: {

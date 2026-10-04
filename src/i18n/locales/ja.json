@@ -11,10 +11,10 @@
     },
     "japanese": "日本語",
     "english": "English",
-    "selectMiz": ".mizミッションファイルを選択",
+    "selectMiz": ".mizを1つ開く／2つ比較する",
     "dropZone": ".mizミッションファイルのドロップ領域",
     "dropFile": ".mizファイルをここにドロップ",
-    "dropHint": "またはクリック、Enter、Spaceで選択",
+    "dropHint": "1ファイルで開く、2ファイルで改版比較（1番目：変更前、2番目：変更後）",
     "retry": "別のファイルを選ぶ",
     "reset": "やり直す",
     "loading": "ミッションを解析中...",
@@ -26,7 +26,8 @@
     "corruptMiz": "このファイルは有効なDCSミッションZIPではないか、途中で破損しています。DCS Mission Editorで開けるか確認し、元ファイルを再取得してください。",
     "mizSafetyLimit": "このミッションは安全上限のため読み込めません。ファイル内容と埋め込み画像を確認してください。",
     "invalidMissionData": "ZIPは開けましたが、DCSのmissionデータを読み取れません。DCS Mission Editorで保存し直してください。",
-    "multipleFiles": "複数ファイルが選択されたため、最初の.mizファイル「{{fileName}}」だけを解析します（{{count}}件は無視）。"
+    "multipleFiles": "複数ファイルが選択されたため、最初の.mizファイル「{{fileName}}」だけを解析します（{{count}}件は無視）。",
+    "tooManyFiles": "1つの.miz、または改版比較する2つの.mizを選択してください。"
   },
   "tabs": {
     "overview": "概要",
@@ -507,6 +508,41 @@
       "mapDetails": "経路点 {{routeCount}} | ゾーン {{zoneCount}} | 描画 {{drawingCount}}",
       "noSupport": "支援アセットはありません",
       "threat": "{{type}} ×{{count}} | 交戦圏 {{engagement}} | 探知圏 {{detection}}"
+    }
+  },
+  "revision": {
+    "title": "ミッション改版差分",
+    "before": "変更前",
+    "after": "変更後",
+    "scope": "経路・航空機グループの無線・機体のプリセットと搭載・天候・日付・開始時刻を比較します。数値はDCS元データの単位（m、m/s、秒、mmHg、無線はMHz）です。未指定と0は区別します。下のブリーフィングは2番目に選択したファイルです。入替は比較方向だけを変更します。",
+    "swap": "変更前／変更後を入れ替え",
+    "close": "差分を閉じる",
+    "open": "1ミッションを開く／2改版を比較",
+    "filter": "表示",
+    "all": "すべての変更",
+    "count": "変更 {{count}} 件",
+    "unchanged": "比較対象の項目に変更はありません",
+    "differentTheatre": "マップが異なるため座標を直接比較できません。地図の重ね合わせは無効です。",
+    "kind": "変更",
+    "entity": "グループ／機体",
+    "field": "項目",
+    "missing": "未指定",
+    "more": "次の100件を表示",
+    "mapTitle": "変更された経路",
+    "mapLegend": "変更前：オレンジの破線・大きい点。変更後：緑の実線・小さい点。変更のある経路全体を表示します。点を選ぶと改版と経路点を確認できます。",
+    "mapUnavailable": "変更経路の緯度経度を解決できません。元のDCS座標は一覧で確認できます。",
+    "cancel": "読込をキャンセル",
+    "categories": {
+      "mission": "ミッション",
+      "route": "経路",
+      "loadout": "搭載",
+      "radio": "無線",
+      "weather": "天候"
+    },
+    "kinds": {
+      "added": "追加",
+      "removed": "削除",
+      "changed": "変更"
     }
   }
 }

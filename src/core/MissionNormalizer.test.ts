@@ -899,7 +899,7 @@ describe('MissionNormalizer reference-backed layers', () => {
       group: [{ units: [unit('S-300PS 54K6 cp')] }],
     };
     const normalized = normalizeMission(makeMission({
-      theatre: 'Afghanistan',
+      theatre: 'UnsupportedTestTheatre',
       coalition: {
         blue: {
           nav_points: [{ name: 'Unknown map point', x: 100, y: 200 }],
@@ -919,7 +919,22 @@ describe('MissionNormalizer reference-backed layers', () => {
     expect(normalized.coalitions.blue.support[0].latlonResolved).toBe(false);
     expect(normalized.coalitions.blue.aiGroups[0].latlon).toEqual([0, 0]);
     expect(normalized.coalitions.blue.aiGroups[0].latlonResolved).toBe(false);
-    expect(normalized.warnings.filter(warning => warning === '未対応のマップ: Afghanistan（座標を解決できません）')).toHaveLength(1);
-    expect(normalized.warnings.filter(warning => warning === 'UTC オフセット未収録: Afghanistan')).toHaveLength(1);
+    expect(normalized.warnings.filter(warning => warning === '未対応のマップ: UnsupportedTestTheatre（座標を解決できません）')).toHaveLength(1);
+    expect(normalized.warnings.filter(warning => warning === 'UTC オフセット未収録: UnsupportedTestTheatre')).toHaveLength(1);
+  });
+});
+
+describe('new theatre projection integration', () => {
+  it.each(['Afghanistan', 'Iraq'])('resolves %s flight and bullseye coordinates without unsupported-map warnings', theatre => {
+    const normalized = normalizeMission(makeMission({ theatre, coalition: {
+      blue: { bullseye: { x: 0, y: 0 }, country: [{ plane: { group: [{
+        name: 'Projection fixture', groupId: 1, units: [unit('F-16C_50', 'Client')],
+        route: { points: [{ x: 100000, y: 50000, alt: 1000, speed: 150 }] },
+      }] } }] },
+    } }), settings);
+    expect(normalized.coalitions.blue.bullseye.latlonResolved).toBe(true);
+    expect(normalized.coalitions.blue.bullseye.latlon[0]).toBeGreaterThan(30);
+    expect(normalized.coalitions.blue.flights[0].route[0].latlonResolved).toBe(true);
+    expect(normalized.warnings.some(warning => warning.startsWith('未対応のマップ:'))).toBe(false);
   });
 });

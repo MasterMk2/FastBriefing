@@ -61,7 +61,7 @@ FastBriefing は DCS World のミッションファイル（`.miz` = ZIP + Lua�
 | ブラウザ | Chrome / Edge / Firefox 最新 |
 | Node.js | 22 LTS（開発・ビルド） |
 | OS | Windows 11 / Ubuntu 22.04+ で同一コマンド（NFR-01, G4） |
-| マップ | Caucasus, Marianas, Syria, Nevada, Normandy, PersianGulf, TheChannel, Falklands, Sinai, Kola, GermanyCW（`src/utils/coordinates.ts:10`）。Afghanistan/Iraq は retribution fork 由来で追加予定（FR-11） |
+| マップ | Caucasus, Marianas, Syria, Nevada, Normandy, PersianGulf, TheChannel, Falklands, Sinai, Kola, GermanyCW（`src/utils/coordinates.ts:10`）。Afghanistan/Iraq にも対応（FR-11）。投影値・検証範囲は [出典](docs/projection-sources.md) を参照 |
 | 機種（手元 19本で確認） | F-15E/SE, F/A-18C, F-16C, F-14A/B, F-4E, A-10C II, AV-8B, AH-64D, Ka-50 III, JF-17, M-2000C, UH-1H, Mi-24P, F-5E, C-130J, F-15C（付録A） |
 
 ---
@@ -81,6 +81,12 @@ npm ci
 npm run dev
 # → http://localhost:5173 が開く
 ```
+
+### 改版比較（FR-90）
+
+航空機グループの経路点、グループ周波数・機体の無線プリセット、搭載、天候、日付・開始時刻を比較します。値はDCS元データの単位です（m、m/s、秒、mmHg、無線はMHz）。安定したID、次に一意な名前で対応付け、経路点の挿入で後続をすべて移動扱いにしません。対応が曖昧な点は追加・削除として表示します。パイロット表示ではいずれかの改版で非表示のグループを差分・地図から除外します。
+
+変更経路は変更前／後を色と破線・実線で重ねます。異なるマップ間は重ね合わせず、未対応マップはDCS座標の一覧に留めます。比較を閉じると2番目に読み込んだミッションのブリーフィングが残ります。無線比較は航空機グループ・機体プリセットが対象で、地上支援／ビーコン設定全体の比較やメモの自動統合は含みません。
 
 ### 2. ビルド & プレビュー
 
@@ -118,7 +124,7 @@ COPY --from=build /app/dist /usr/share/nginx/html
 
 ## 使い方
 
-1. **`.miz` をドロップ** — 画面中央のドロップゾーンにドラッグ＆ドロップ、またはクリックして選択（FR-01）。複数ファイルの差分は FR-90 で対応予定。
+1. **`.miz` をドロップ** — 画面中央のドロップゾーンにドラッグ＆ドロップ、またはクリックして選択（FR-01）。2つの `.miz` を選ぶと改版差分を表示します（FR-90）。選択順は変更前→変更後、比較方向は入れ替え可能です。3つ以上や別形式を含む選択は全体を拒否し、途中失敗では表示中のミッションを保持します。
 2. **概要を確認** — ソーティ名 / マップ / 日付 / 開始時刻（Local/Zulu併記）/ 天候 / タスク文（青・赤・中立）。
 3. **フライトを選ぶ** — 青/赤タブでフライト一覧 → 機体構成・搭載・無線・経路（ナビログ）を確認。ナビログには区間距離・真/磁方位・区間時間と累積値を表示します。時間は各経路点の設定速度からの推定値です。未対応マップでは DCS 座標と真方位を表示し、磁方位は出しません。`viewMode` で作成者/パイロットを切替（FR-41、FR-70）。
 4. **地図で俯瞰** — レイヤ切替（フライト経路 / ゾーン / 描画 / 脅威 / 支援機 / 敵 / Bullseye / NavPoints / 飛行場）で必要な情報だけを表示（FR-62）。
@@ -239,11 +245,11 @@ npm run dev      # 開発サーバ
 
 ```bash
 npm run build    # tsc --noEmit + vite build（型エラーで失敗）
-npm run lint     # eslint（設定ファイル整備中 → Issue #15）
-npm test         # vitest run（テスト0本 → Issue #16 で拡充予定）
+npm run lint     # eslint（警告も失敗扱い）
+npm test         # vitest run（単体・回帰テスト）
 ```
 
-> **Note:** 現行 `npm run lint` は設定ファイル欠落で失敗します（[#15](https://github.com/MasterMk2/FastBriefing/issues/15)）。`npm test` はテストファイル未作成で 0本成功扱いです（[#16](https://github.com/MasterMk2/FastBriefing/issues/16)）。Phase 0 で修正予定。
+> 実 `.miz` コーパスのスモークテストは `SMOKE_MIZ_DIR` を指定した環境だけで動作します。未指定時はスキップされます。
 
 ### コーディング規約
 
@@ -304,7 +310,7 @@ Issue / PR を歓迎します。
 
 1. [Issues](https://github.com/MasterMk2/FastBriefing/issues) で既存の 24件を確認し、重複がなければ新規作成
 2. `git checkout -b feat/xxx` でブランチを切る
-3. `npm run build` が通ることを確認（`npm run lint` / `npm test` は Phase 0 で整備中）
+3. `npm run build`、`npm run lint`、`npm test` が通ることを確認
 4. PR では `file_path:line_number` 形式で該当箇所を明記
 
 ---

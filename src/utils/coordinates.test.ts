@@ -89,3 +89,32 @@ describe('DCS theatre projections', () => {
     }
   });
 });
+
+// Fixed controls independently calculated with WGS84 inverse-TM (Snyder series)
+// using VEAF's calibrated parameters, not this module's proj4 converter.
+// See docs/projection-sources.md for pinned sources and accuracy limitations.
+const NEW_THEATRE_CONTROLS = [
+  ['Afghanistan', 0, 0, 33.93461301, 66.24706539],
+  ['Afghanistan', 100000, 50000, 34.81901381, 66.82778100],
+  ['Afghanistan', -200000, -150000, 32.16338664, 64.59238096],
+  ['Afghanistan', 250000, 200000, 36.10277180, 68.55389649],
+  ['Iraq', 0, 0, 33.25708945, 44.22389918],
+  ['Iraq', 100000, 50000, 34.16120755, 44.75817244],
+  ['Iraq', -200000, -150000, 31.43389561, 42.66116880],
+  ['Iraq', 250000, 200000, 35.50587830, 46.40821171],
+] as const;
+
+describe('Afghanistan and Iraq verified projections', () => {
+  it.each(NEW_THEATRE_CONTROLS)('%s converts DCS x=%s, y=%s to the independent control', (theatre, x, y, lat, lon) => {
+    const result = dcsToLatLon(theatre, x, y)!;
+    // Truncated inverse-TM series has sub-metre error over these control points.
+    expect(Math.abs(result[0] - lat)).toBeLessThan(0.000003);
+    expect(Math.abs(result[1] - lon)).toBeLessThan(0.000003);
+    const inverse = latLonToDCS(theatre, lat, lon)!;
+    expect(Math.abs(inverse[0] - x)).toBeLessThan(0.5);
+    expect(Math.abs(inverse[1] - y)).toBeLessThan(0.5);
+    const back = latLonToDCS(theatre, result[0], result[1])!;
+    expect(Math.abs(back[0] - x)).toBeLessThan(0.001);
+    expect(Math.abs(back[1] - y)).toBeLessThan(0.001);
+  });
+});
