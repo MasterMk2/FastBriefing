@@ -3,12 +3,19 @@
   "version": "0.1.0",
   "description": "Fast briefing generator for DCS World missions",
   "type": "module",
+  "engines": {
+    "node": ">=22.19.0 <23 || >=24 <25",
+    "npm": "11.9.0"
+  },
+  "packageManager": "npm@11.9.0",
   "scripts": {
+    "doctor": "node tools/doctor.mjs && npm --version",
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0"
+    "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
+    "check": "npm run lint && npm test && npm run build"
   },
   "dependencies": {
     "fflate": "^0.8.2",
