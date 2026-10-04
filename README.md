@@ -71,8 +71,9 @@ FastBriefing は DCS World のミッションファイル（`.miz` = ZIP + Lua�
 ### 1. ローカル起動（推奨）
 
 ```bash
-# Node 22 を用意（nvm / volta 推奨）
-node -v  # v22.x
+# .nvmrc の Node 22.23.3 と npm 11.9.0 を用意（詳細は開発基盤ガイド）
+node -v
+npm -v
 
 git clone https://github.com/MasterMk2/FastBriefing.git
 cd FastBriefing
@@ -229,14 +230,18 @@ FastBriefing/
 
 ## 開発ガイド
 
+共通の環境確認・依存復元・検査・更新手順は [開発基盤 0.1](docs/development-foundation.md) を参照。
+
 ### 前提
 
-- Node 22 LTS
+- Node 22.23.3（`.nvmrc`）または Node 24 系。CI の互換確認は 24.19.0
+- npm 11.9.0
 - Chrome / Edge / Firefox 最新
 
 ### セットアップ
 
 ```bash
+npm run doctor
 npm ci
 npm run dev      # 開発サーバ
 ```
@@ -244,6 +249,7 @@ npm run dev      # 開発サーバ
 ### 品質チェック
 
 ```bash
+npm run check    # lint → test → build（CI と共通）
 npm run build    # tsc --noEmit + vite build（型エラーで失敗）
 npm run lint     # eslint（警告も失敗扱い）
 npm test         # vitest run（単体・回帰テスト）
@@ -263,6 +269,8 @@ npm test         # vitest run（単体・回帰テスト）
 
 | コマンド | 内容 |
 |---|---|
+| `npm run doctor` | Node / npm / OS / CPU と期待する版を表示 |
+| `npm run check` | lint → test → build を順番に実行 |
 | `npm run dev` | Vite 開発サーバ（HMR） |
 | `npm run build` | `tsc && vite build` → `dist/` |
 | `npm run preview` | `dist/` のプレビュー |
