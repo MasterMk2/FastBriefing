@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ChangeEvent, DragEvent as ReactDragEvent, KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { MissionParser } from './core/MissionParser';
+import { MissionBatchLoader, validateMissionFiles } from './core/MissionBatchLoader';
+import { createMissionRevision } from './utils/missionRevision';
+import RevisionComparison from './components/RevisionComparison';
+import type { LoadedRevision } from './components/RevisionComparison';
 import { normalizeMission } from './core/MissionNormalizer';
 import type { DisplaySettings, MissionData, UserNotes } from './types/mission';
 import MissionView from './components/MissionView';
@@ -14,14 +18,14 @@ function App() {
   const [sourceFile, setSourceFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [revisions, setRevisions] = useState<[LoadedRevision, LoadedRevision] | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [storageFailed, setStorageFailed] = useState(false);
   const { settings, setViewMode, setLanguage, setTheme } = useSettings();
   const { t } = useTranslation();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dragCounterRef = useRef(0);
-  const parserRef = useRef<MissionParser | null>(null);
+  const loaderRef = useRef(new MissionBatchLoader(() => new MissionParser()));
   const parseGenerationRef = useRef(0);
 
   useEffect(() => {
@@ -32,46 +36,42 @@ function App() {
     };
   }, [settings.theme]);
 
-  const handleFileDrop = useCallback(async (file: File) => {
-    if (!file.name.toLowerCase().endsWith('.miz')) {
-      parserRef.current?.cancel();
-      parserRef.current = null;
-      parseGenerationRef.current += 1;
+  const handleFiles = useCallback((fileList: FileList | readonly File[]) => {
+    const files = Array.from(fileList);
+    const generation = ++parseGenerationRef.current;
+    loaderRef.current.cancel();
+    const validationError = validateMissionFiles(files);
+    if (validationError) {
       setLoading(false);
-      setError(t('app.invalidMiz'));
+      setError(t(`app.${validationError}`));
       return;
     }
-
-    parserRef.current?.cancel();
-    const parser = new MissionParser();
-    parserRef.current = parser;
-    const generation = ++parseGenerationRef.current;
     setLoading(true);
     setError(null);
-
-    try {
-      const parsed = await parser.parse(file);
-      if (parserRef.current !== parser || parseGenerationRef.current !== generation) return;
-      const missionKey = await createMissionKey(file);
-      if (parserRef.current !== parser || parseGenerationRef.current !== generation) return;
-
-      const normalized = normalizeMission(parsed, settings);
-      normalized.userNotes = readStoredNotes(missionKey) ?? emptyUserNotes(missionKey);
-      setStorageFailed(false);
-      setMissionData(normalized);
-      setSourceFile(file);
-    } catch (err) {
-      if (parserRef.current === parser && parseGenerationRef.current === generation && !isAbortError(err)) {
-        const message = err instanceof Error ? err.message : '';
-        const translationKey = missionLoadErrorTranslationKey(err);
-        setError(message ? t(translationKey, { message }) : t('app.parseError'));
+    void (async () => {
+      try {
+        const parsed = await loaderRef.current.load(files);
+        if (!parsed || parseGenerationRef.current !== generation) return;
+        const latestFile = files[files.length - 1];
+        const missionKey = await createMissionKey(latestFile);
+        if (parseGenerationRef.current !== generation) return;
+        const normalized = normalizeMission(parsed[parsed.length - 1], settings);
+        normalized.userNotes = readStoredNotes(missionKey) ?? emptyUserNotes(missionKey);
+        const snapshots = parsed.map((mission, index) => ({ name: files[index].name, fingerprint: mission.sourceFingerprint, revision: createMissionRevision(mission) }));
+        setStorageFailed(false);
+        setMissionData(normalized);
+        setSourceFile(latestFile);
+        setRevisions(snapshots.length === 2 ? [snapshots[0], snapshots[1]] : null);
+      } catch (err) {
+        if (parseGenerationRef.current === generation && !isAbortError(err)) {
+          const message = err instanceof Error ? err.message : '';
+          const translationKey = missionLoadErrorTranslationKey(err);
+          setError(message ? t(translationKey, { message }) : t('app.parseError'));
+        }
+      } finally {
+        if (parseGenerationRef.current === generation) setLoading(false);
       }
-    } finally {
-      if (parserRef.current === parser) {
-        parserRef.current = null;
-        setLoading(false);
-      }
-    }
+    })();
   }, [settings, t]);
 
   const handleNotesChange = useCallback((notes: UserNotes) => {
@@ -84,30 +84,6 @@ function App() {
     if (!missionData?.userNotes.missionKey) return;
     setStorageFailed(!saveStoredNotes(missionData.userNotes));
   }, [missionData?.userNotes]);
-
-  const handleFiles = useCallback((fileList: FileList | readonly File[]) => {
-    const files = Array.from(fileList);
-    if (files.length === 0) {
-      setError(t('app.invalidMiz'));
-      return;
-    }
-
-    const mizFiles = files.filter(file => file.name.toLowerCase().endsWith('.miz'));
-    if (mizFiles.length === 0) {
-      setError(t('app.invalidMizOnly'));
-      setNotice(null);
-      return;
-    }
-
-    if (files.length > 1) {
-      const ignoredCount = files.length - 1;
-      setNotice(t('app.multipleFiles', { fileName: mizFiles[0].name, count: ignoredCount }));
-    } else {
-      setNotice(null);
-    }
-
-    void handleFileDrop(mizFiles[0]);
-  }, [handleFileDrop, t]);
 
   const handleWindowDragEnter = useCallback((event: globalThis.DragEvent) => {
     event.preventDefault();
@@ -150,8 +126,12 @@ function App() {
     };
   }, [handleWindowDragEnter, handleWindowDragLeave, handleWindowDragOver, handleWindowDrop]);
 
-  useEffect(() => () => {
-    parserRef.current?.cancel();
+  useEffect(() => {
+    const loader = loaderRef.current;
+    return () => {
+      loader.cancel();
+      parseGenerationRef.current += 1;
+    };
   }, []);
 
   const handleDropZoneDragOver = useCallback((event: ReactDragEvent<HTMLDivElement>) => {
@@ -160,14 +140,11 @@ function App() {
   }, []);
 
   const handleFileSelect = useCallback((event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    // Allow selecting the same file again after a parse error.
+    const files = Array.from(event.target.files ?? []);
+    // Snapshot before clearing, so the same selection can be retried.
     event.target.value = '';
-    if (file) {
-      setNotice(null);
-      void handleFileDrop(file);
-    }
-  }, [handleFileDrop]);
+    if (files.length) handleFiles(files);
+  }, [handleFiles]);
 
   const openFilePicker = useCallback(() => {
     fileInputRef.current?.click();
@@ -182,19 +159,17 @@ function App() {
 
   const handleRetrySelection = useCallback(() => {
     setError(null);
-    setNotice(null);
     openFilePicker();
   }, [openFilePicker]);
 
   const resetMission = useCallback(() => {
-    parserRef.current?.cancel();
-    parserRef.current = null;
+    loaderRef.current.cancel();
     parseGenerationRef.current += 1;
     setLoading(false);
     setError(null);
-    setNotice(null);
     setMissionData(null);
     setSourceFile(null);
+    setRevisions(null);
   }, []);
 
   return (
@@ -223,12 +198,21 @@ function App() {
           ref={fileInputRef}
           type="file"
           accept=".miz"
+          multiple
           onChange={handleFileSelect}
           id="file-input"
           className="visually-hidden"
           aria-label={t('app.selectMiz')}
         />
 
+        {missionData && <div className="revision-actions">
+          <button type="button" className="btn btn-secondary" onClick={openFilePicker}>{t('revision.open')}</button>
+          <span>{sourceFile?.name}</span>
+        </div>}
+        {revisions && <RevisionComparison
+          key={`${revisions[0].fingerprint}:${revisions[1].fingerprint}`}
+          revisions={revisions} settings={settings} onClose={() => setRevisions(null)}
+        />}
         {!missionData ? (
           <div
             className={`drop-zone${isDragging ? ' dragging' : ''}`}
@@ -259,7 +243,6 @@ function App() {
           </div>
         )}
 
-        {notice && <div className="drop-notice" role="status">{notice}</div>}
 
         {error && (
           <div className="error app-error" role="alert">
@@ -275,6 +258,11 @@ function App() {
           <div className="loading-overlay" role="status" aria-live="polite">
             <div className="spinner" aria-hidden="true"></div>
             <p>{t('app.loading')}</p>
+            <button type="button" className="btn btn-secondary" onClick={() => {
+              loaderRef.current.cancel();
+              parseGenerationRef.current += 1;
+              setLoading(false);
+            }}>{t('revision.cancel')}</button>
           </div>
         )}
       </main>

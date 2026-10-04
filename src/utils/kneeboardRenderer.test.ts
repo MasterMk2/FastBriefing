@@ -66,7 +66,7 @@ describe('kneeboard map rendering', () => {
       flights: [], navPoints: [], airbases: [], support: [], aiGroups: [], zones: [], drawings: [],
     };
     const mission = {
-      meta: { theatre: 'Afghanistan' },
+      meta: { theatre: 'UnsupportedTestTheatre' },
       coalitions: { blue: coalition, red: coalition, neutral: coalition },
       userNotes: {
         waypoints: {},

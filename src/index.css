@@ -1615,3 +1615,11 @@ body {
   height: auto;
   border: 1px solid var(--color-border);
 }
+
+.revision-comparison { margin: 1rem 0; padding: 1rem; border: 1px solid var(--border-color, #777); border-radius: 8px; }
+.revision-actions { display: flex; align-items: center; flex-wrap: wrap; gap: .75rem; margin: .75rem 0; }
+.revision-table-scroll { max-height: 32rem; overflow: auto; }
+.revision-table { width: 100%; border-collapse: collapse; }
+.revision-table th, .revision-table td { text-align: left; vertical-align: top; padding: .5rem; border-bottom: 1px solid var(--border-color, #777); overflow-wrap: anywhere; min-width: 6rem; max-width: 28rem; }
+.revision-map { height: 360px; width: 100%; margin-top: .5rem; }
+@media print { .revision-comparison, .revision-actions { display: none; } }

@@ -11,10 +11,10 @@
     },
     "japanese": "Japanese",
     "english": "English",
-    "selectMiz": "Select a .miz mission file",
+    "selectMiz": "Open 1 .miz or compare 2 .miz files",
     "dropZone": ".miz mission file drop area",
     "dropFile": "Drop a .miz file here",
-    "dropHint": "Or click, press Enter, or press Space to select",
+    "dropHint": "Select 1 file to open, or 2 files to compare (first: before, second: after).",
     "retry": "Choose another file",
     "reset": "Start over",
     "loading": "Parsing mission...",
@@ -26,7 +26,8 @@
     "corruptMiz": "This file is not a valid DCS mission ZIP or was damaged during transfer. Check whether DCS Mission Editor can open it, then obtain the source file again.",
     "mizSafetyLimit": "This mission cannot be loaded because it exceeds a safety limit. Check the archive contents and embedded images.",
     "invalidMissionData": "The ZIP opened, but its DCS mission data could not be read. Save it again in DCS Mission Editor.",
-    "multipleFiles": "Multiple files were selected, so only the first .miz file \"{{fileName}}\" will be parsed ({{count}} ignored)."
+    "multipleFiles": "Multiple files were selected, so only the first .miz file \"{{fileName}}\" will be parsed ({{count}} ignored).",
+    "tooManyFiles": "Select one .miz, or exactly two .miz files to compare revisions."
   },
   "tabs": {
     "overview": "Overview",
@@ -507,6 +508,41 @@
       "mapDetails": "{{routeCount}} route point(s) | {{zoneCount}} zone(s) | {{drawingCount}} drawing(s)",
       "noSupport": "No support assets",
       "threat": "{{type}} ×{{count}} | engagement {{engagement}} | detection {{detection}}"
+    }
+  },
+  "revision": {
+    "title": "Mission revision comparison",
+    "before": "Before",
+    "after": "After",
+    "scope": "Routes, aircraft-group radios, unit presets and payloads, weather, date and start time. Values use DCS source units (metres, m/s, seconds, mmHg; radios in MHz). Missing values are not treated as zero. The briefing below shows the second selected file; swapping changes only the comparison direction.",
+    "swap": "Swap before / after",
+    "close": "Close comparison",
+    "open": "Open 1 mission / compare 2 revisions",
+    "filter": "Show",
+    "all": "All changes",
+    "count": "{{count}} changes",
+    "unchanged": "No changes in the compared fields",
+    "differentTheatre": "These missions use different theatres. Coordinates are not comparable; the overlay is disabled.",
+    "kind": "Change",
+    "entity": "Group / unit",
+    "field": "Field",
+    "missing": "Not specified",
+    "more": "Show 100 more changes",
+    "mapTitle": "Changed routes",
+    "mapLegend": "Before: orange dashed line / large markers. After: green solid line / small markers. All points in a changed route are shown. Select a marker for its revision and waypoint.",
+    "mapUnavailable": "No resolved coordinates are available for the changed routes. Source coordinates remain in the list.",
+    "cancel": "Cancel loading",
+    "categories": {
+      "mission": "Mission",
+      "route": "Route",
+      "loadout": "Loadout",
+      "radio": "Radio",
+      "weather": "Weather"
+    },
+    "kinds": {
+      "added": "Added",
+      "removed": "Removed",
+      "changed": "Changed"
     }
   }
 }
