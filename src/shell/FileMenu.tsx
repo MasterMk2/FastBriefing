@@ -12,13 +12,11 @@ export interface FileMenuProps {
   onClose: () => void;
 }
 
-/** The hidden single-file input App.tsx renders for the old version of a comparison. */
-export const COMPARE_INPUT_ID = 'compare-file-input';
-
 const ENABLED_ITEM = '[role="menuitem"]:not(:disabled)';
 
-// onCompare is part of the frozen props but is not used: an ordinary file pick would replace the open mission.
-export default function FileMenu({ hasMission, onOpen, onClose }: FileMenuProps) {
+// onCompare opens the comparison input of App.tsx (the old version, F10). It never opens the plain file pick,
+// which would replace the open mission.
+export default function FileMenu({ hasMission, onOpen, onCompare, onClose }: FileMenuProps) {
   const { t } = useTranslation('shell');
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -48,13 +46,6 @@ export default function FileMenu({ hasMission, onOpen, onClose }: FileMenuProps)
     setOpen(false);
     triggerRef.current?.focus();
     action();
-  };
-
-  // App.tsx owns the comparison flow: its input picks the old version and always renders it. If the input is
-  // missing, nothing opens, so the open mission is never replaced by a plain pick.
-  const compare = () => {
-    const input = document.getElementById(COMPARE_INPUT_ID);
-    if (input instanceof HTMLInputElement) input.click();
   };
 
   const handleMenuKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
@@ -88,7 +79,7 @@ export default function FileMenu({ hasMission, onOpen, onClose }: FileMenuProps)
           <button type="button" role="menuitem" className="file-menu-item" onClick={() => choose(onOpen)}>
             {t('shell:file.open')}
           </button>
-          <button type="button" role="menuitem" className="file-menu-item" disabled={!hasMission} onClick={() => choose(compare)}>
+          <button type="button" role="menuitem" className="file-menu-item" disabled={!hasMission} onClick={() => choose(onCompare)}>
             {t('shell:file.compare')}
           </button>
           <button type="button" role="menuitem" className="file-menu-item" disabled={!hasMission} onClick={() => choose(onClose)}>

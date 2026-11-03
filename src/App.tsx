@@ -251,6 +251,7 @@ function App() {
         isDragging={isDragging}
         onNotesChange={handleNotesChange}
         onPickFiles={openFilePicker}
+        onCompare={openComparePicker}
         onCloseRevisions={() => setRevisions(null)}
         onCloseMission={resetMission}
       />

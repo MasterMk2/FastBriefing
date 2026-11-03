@@ -40,6 +40,19 @@
   --danger-bg: #2e1514;
   --danger-border: #6e2b28;
 
+  /* Coalition colours (Lead decision 5). Shapes and words carry the side too; colour is never the only cue. */
+  --side-blue: #6aa6e8;
+  --side-blue-text: #9cc3ea;
+  --side-red: #ef7f73;
+  --side-red-text: #ff9d94;
+  --side-neutral: #b8b5ad;
+  --side-neutral-text: #b8b5ad;
+  /* Annotation ink on the map (four distinct hues). */
+  --ink-1: #ffd166;
+  --ink-2: #7fe0c4;
+  --ink-3: #f49ac1;
+  --ink-4: #e8e6e1;
+
   /* Legacy names used by src/index.css for the old tabs (FFS values). */
   --color-page-background: var(--surface-0);
   --color-surface: var(--surface-1);
@@ -76,6 +89,17 @@
   --danger-text: #b42318;
   --danger-bg: #fdecea;
   --danger-border: #e8a39d;
+
+  --side-blue: #1f5fbf;
+  --side-blue-text: #1f5fbf;
+  --side-red: #b42318;
+  --side-red-text: #b42318;
+  --side-neutral: #5b6270;
+  --side-neutral-text: #5b6270;
+  --ink-1: #1f5fbf;
+  --ink-2: #137a3a;
+  --ink-3: #a85d00;
+  --ink-4: #7a3e9d;
 
   --color-page-background: var(--surface-0);
   --color-surface: var(--surface-1);
@@ -119,6 +143,19 @@
   --danger-text: #ff5a4e;
   --danger-bg: #1f0000;
   --danger-border: #5a1410;
+
+  /* Night red: one hue, so the sides are told apart by shape, words and lightness. */
+  --side-blue: #ff5a4e;
+  --side-blue-text: #ff5a4e;
+  --side-red: #ff8a80;
+  --side-red-text: #ff8a80;
+  --side-neutral: #d4574b;
+  --side-neutral-text: #d4574b;
+  /* Inks step in lightness (adjacent contrast about 1.5 to 2.2) so the four stay apart on black. */
+  --ink-1: #ffb3ab;
+  --ink-2: #ff7a70;
+  --ink-3: #e0463b;
+  --ink-4: #a8281f;
 
   --color-page-background: var(--surface-0);
   --color-surface: var(--surface-1);

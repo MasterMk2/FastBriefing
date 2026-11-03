@@ -4,7 +4,7 @@ import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { i18nReady } from '../../i18n';
 import shellJa from '../../i18n/locales/ja/shell.json';
-import FileMenu, { COMPARE_INPUT_ID, type FileMenuProps } from '../FileMenu';
+import FileMenu, { type FileMenuProps } from '../FileMenu';
 
 let container: HTMLDivElement;
 let root: ReturnType<typeof createRoot>;
@@ -20,7 +20,6 @@ beforeEach(async () => {
 afterEach(async () => {
   await act(async () => root.unmount());
   container.remove();
-  document.getElementById(COMPARE_INPUT_ID)?.remove();
   vi.unstubAllGlobals();
 });
 
@@ -73,7 +72,7 @@ describe('file menu', () => {
     expect(container.querySelector('[role="menu"]')).toBeNull();
   });
 
-  it('never replaces the open mission when the comparison input is not rendered', async () => {
+  it('calls onCompare, and never onOpen, when compare revisions is chosen', async () => {
     const onCompare = vi.fn();
     const onOpen = vi.fn();
     await renderMenu({ onCompare, onOpen });
@@ -81,32 +80,31 @@ describe('file menu', () => {
 
     await act(async () => { item(shellJa.file.compare).click(); });
 
-    expect(onCompare).not.toHaveBeenCalled();
+    expect(onCompare).toHaveBeenCalledTimes(1);
     expect(onOpen).not.toHaveBeenCalled();
   });
 
-  it('opens the comparison input rendered by the app instead of replacing the open mission', async () => {
+  it('calls onOpen, and never onCompare, when open is chosen', async () => {
     const onCompare = vi.fn();
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.id = COMPARE_INPUT_ID;
-    document.body.append(input);
-    const clicked = vi.spyOn(input, 'click').mockImplementation(() => {});
-    await renderMenu({ onCompare });
+    const onOpen = vi.fn();
+    await renderMenu({ onCompare, onOpen });
     await open();
 
-    await act(async () => { item(shellJa.file.compare).click(); });
+    await act(async () => { item(shellJa.file.open).click(); });
 
-    expect(clicked).toHaveBeenCalledTimes(1);
+    expect(onOpen).toHaveBeenCalledTimes(1);
     expect(onCompare).not.toHaveBeenCalled();
   });
 
   it('disables compare and close when no mission is open', async () => {
-    await renderMenu({ hasMission: false });
+    const onCompare = vi.fn();
+    await renderMenu({ hasMission: false, onCompare });
     await open();
 
     expect(item(shellJa.file.open).disabled).toBe(false);
     expect(item(shellJa.file.compare).disabled).toBe(true);
     expect(item(shellJa.file.close).disabled).toBe(true);
+    await act(async () => { item(shellJa.file.compare).click(); });
+    expect(onCompare).not.toHaveBeenCalled();
   });
 });

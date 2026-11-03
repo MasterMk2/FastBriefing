@@ -52,22 +52,6 @@
     "compare": "改版を比べる",
     "close": "ミッションを閉じる"
   },
-  "settings": {
-    "title": "表示設定",
-    "reset": "既定に戻す",
-    "close": "閉じる",
-    "language": "UI 言語",
-    "theme": "テーマ",
-    "fontScale": "文字の大きさ",
-    "fontStandard": "標準",
-    "fontLarge": "大",
-    "themeFfs": "FFS 暗色",
-    "themeStandard": "標準",
-    "themeNight": "夜間赤",
-    "languageJa": "日本語",
-    "languageEn": "English",
-    "partial": "表示設定の全項目は準備中です。今は言語・テーマ・文字の大きさを変えられます。"
-  },
   "stub": {
     "preparing": "準備中",
     "body": "この画面は刷新の途中です。"

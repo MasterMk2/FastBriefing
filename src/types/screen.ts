@@ -30,4 +30,9 @@ export interface MapPanelProps {
   readOnly?: boolean;
   /** CSS height of the panel, for example "100%" or "360px". */
   height?: string;
+  /**
+   * Flight to show on the map (flightKey() value, including neutral:<groupId>). null or omitted shows every
+   * flight. The verbal briefing map follows the selected flight this way (Lead decision 4).
+   */
+  focusFlightKey?: string | null;
 }

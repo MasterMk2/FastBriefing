@@ -6,6 +6,7 @@ import { normalizeMission } from '../../core/MissionNormalizer';
 import { SettingsProvider } from '../../hooks/useSettings';
 import { i18nReady } from '../../i18n';
 import shellJa from '../../i18n/locales/ja/shell.json';
+import briefingJa from '../../i18n/locales/ja/briefing.json';
 import type { MissionData } from '../../types/mission';
 import { NAV_SCREENS } from '../../types/screen';
 import AppShell from '../AppShell';
@@ -27,6 +28,8 @@ let root: ReturnType<typeof createRoot>;
 
 beforeEach(async () => {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
+  // jsdom does not implement canvas. The map canvas then gets no context (no drawing) and jsdom prints nothing.
+  vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(() => null);
   localStorage.clear();
   await i18nReady;
   container = document.createElement('div');
@@ -37,11 +40,17 @@ beforeEach(async () => {
 afterEach(async () => {
   await act(async () => root.unmount());
   container.remove();
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
   localStorage.clear();
 });
 
-async function renderShell() {
+interface RenderOptions {
+  onCompare?: () => void;
+  onPickFiles?: () => void;
+}
+
+async function renderShell({ onCompare = () => {}, onPickFiles = () => {} }: RenderOptions = {}) {
   await act(async () => {
     root.render(
       <SettingsProvider>
@@ -53,7 +62,8 @@ async function renderShell() {
           loading={false}
           isDragging={false}
           onNotesChange={() => {}}
-          onPickFiles={() => {}}
+          onPickFiles={onPickFiles}
+          onCompare={onCompare}
           onCloseRevisions={() => {}}
           onCloseMission={() => {}}
         />
@@ -70,6 +80,13 @@ function viewButton(label: string): HTMLButtonElement {
   const button = Array.from(container.querySelectorAll<HTMLButtonElement>('.shell-view button'))
     .find(item => item.textContent === label);
   if (!button) throw new Error(`view button not found: ${label}`);
+  return button;
+}
+
+function buttonByText(selector: string, text: string): HTMLButtonElement {
+  const button = Array.from(container.querySelectorAll<HTMLButtonElement>(selector))
+    .find(item => item.textContent === text);
+  if (!button) throw new Error(`button not found: ${text}`);
   return button;
 }
 
@@ -119,14 +136,62 @@ describe('AppShell screens render without error (creator view)', () => {
       expect(container.querySelector('main')?.childElementCount ?? 0).toBeGreaterThan(0);
     },
   );
+});
 
-  it('renders the briefing screen from the header button', async () => {
+describe('AppShell verbal briefing layer', () => {
+  it('draws the briefing outside the shell chrome and makes the chrome inert while it is open', async () => {
     await renderShell();
-    const start = Array.from(container.querySelectorAll<HTMLButtonElement>('.shell-header-actions button'))
-      .find(button => button.textContent === shellJa.header.start);
-    if (!start) throw new Error('briefing button not found');
-    await click(start);
+    expect(container.querySelector('.shell-briefing-layer')).toBeNull();
+
+    await click(buttonByText('.shell-header-actions button', shellJa.header.start));
     await settle();
-    expect(container.querySelector('main')?.childElementCount ?? 0).toBeGreaterThan(0);
+
+    const layer = container.querySelector<HTMLElement>('.shell-briefing-layer');
+    expect(layer?.childElementCount ?? 0).toBeGreaterThan(0);
+    expect(container.querySelector('.shell-header')?.hasAttribute('inert')).toBe(true);
+    expect(container.querySelector('.shell-frame')?.hasAttribute('inert')).toBe(true);
+    expect(container.querySelector('.bottom-tabs')?.hasAttribute('inert')).toBe(true);
+    // The briefing is not a descendant of the inert chrome.
+    expect(container.querySelector('.shell-frame')?.contains(layer ?? null)).toBe(false);
+    expect(container.querySelector('main')?.childElementCount ?? 0).toBe(0);
+  });
+
+  it('makes the chrome interactive again when the briefing ends', async () => {
+    await renderShell();
+    await click(buttonByText('.shell-header-actions button', shellJa.header.start));
+    await settle();
+    await click(buttonByText('.shell-briefing-layer button', briefingJa.start.cancel));
+    await settle();
+
+    expect(container.querySelector('.shell-briefing-layer')).toBeNull();
+    expect(container.querySelector('.shell-header')?.hasAttribute('inert')).toBe(false);
+    expect(container.querySelector('.shell-frame')?.hasAttribute('inert')).toBe(false);
+    expect(container.querySelector('.bottom-tabs')?.hasAttribute('inert')).toBe(false);
+  });
+});
+
+describe('AppShell compare revisions (F10)', () => {
+  it('opens the comparison from the file menu through onCompare and never through onPickFiles', async () => {
+    const onCompare = vi.fn();
+    const onPickFiles = vi.fn();
+    await renderShell({ onCompare, onPickFiles });
+
+    await click(container.querySelector<HTMLButtonElement>('.file-menu-trigger')!);
+    await click(buttonByText('[role="menuitem"]', shellJa.file.compare));
+
+    expect(onCompare).toHaveBeenCalledTimes(1);
+    expect(onPickFiles).not.toHaveBeenCalled();
+  });
+
+  it('offers compare revisions in the bottom sheet "その他" through onCompare', async () => {
+    const onCompare = vi.fn();
+    const onPickFiles = vi.fn();
+    await renderShell({ onCompare, onPickFiles });
+
+    await click(buttonByText('.bottom-tab', shellJa.nav.more));
+    await click(buttonByText('.bottom-sheet-item', shellJa.file.compare));
+
+    expect(onCompare).toHaveBeenCalledTimes(1);
+    expect(onPickFiles).not.toHaveBeenCalled();
   });
 });

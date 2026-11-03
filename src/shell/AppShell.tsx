@@ -1,15 +1,17 @@
 // Owner: P0 (土台). Application frame (SPEC 1.1): header (52px), left rail (240px, 1280px and wider),
-// bottom tabs (under 1280px), main area, print document, settings drawer.
+// bottom tabs (under 1280px), main area, print document (src/export/PrintHost.tsx), settings drawer.
 // The header controls (side, view) are wired here; the screens are not.
-import { useState } from 'react';
+// While the verbal briefing is open, the shell chrome (header, rail, main, bottom tabs) is inert, and the
+// briefing is drawn in a full-screen layer outside the chrome, so it stays usable.
+import { useLayoutEffect, useRef, useState } from 'react';
+import type { CSSProperties, RefObject } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { LoadedRevision } from '../components/RevisionComparison';
 import { getMissionWhiteboardId } from '../hooks/useWhiteboard';
 import { useSettings } from '../hooks/useSettings';
 import InitialScreen from '../screens/InitialScreen';
 import type { MissionData, Side, UserNotes } from '../types/mission';
-import PrintDocument from '../export/printDocument';
-import { useExportModel } from '../export/useExportModel';
+import PrintHost from '../export/PrintHost';
 import { BottomTabs } from './BottomTabs';
 import FileMenu from './FileMenu';
 import { FlightRail } from './FlightRail';
@@ -29,9 +31,29 @@ export interface AppShellProps {
   isDragging: boolean;
   onNotesChange: (notes: UserNotes) => void;
   onPickFiles: () => void;
+  /**
+   * Opens the input for the old version of a comparison (F10). It never replaces the open mission.
+   * Optional so that a render without the comparison input (tests of other packages) still compiles; App always passes it.
+   */
+  onCompare?: () => void;
   onCloseRevisions: () => void;
   onCloseMission: () => void;
 }
+
+/** Full-screen layer for the verbal briefing: outside the shell chrome, above it. Inline because the frame CSS is shared. */
+const BRIEFING_LAYER_STYLE: CSSProperties = {
+  position: 'fixed',
+  top: 0,
+  right: 0,
+  bottom: 0,
+  left: 0,
+  zIndex: 50,
+  overflow: 'auto',
+  background: 'var(--surface-0)',
+  color: 'var(--text)',
+};
+
+const noop = () => {};
 
 export default function AppShell({
   mission,
@@ -42,6 +64,7 @@ export default function AppShell({
   isDragging,
   onNotesChange,
   onPickFiles,
+  onCompare = noop,
   onCloseRevisions,
   onCloseMission,
 }: AppShellProps) {
@@ -51,6 +74,7 @@ export default function AppShell({
         loading={loading}
         isDragging={isDragging}
         onPickFiles={onPickFiles}
+        onCompare={onCompare}
         onCloseMission={onCloseMission}
       />
     );
@@ -68,7 +92,7 @@ export default function AppShell({
         onCloseRevisions={onCloseRevisions}
       >
         <WorkspaceProvider>
-          <MissionShell onPickFiles={onPickFiles} onCloseMission={onCloseMission} />
+          <MissionShell onPickFiles={onPickFiles} onCompare={onCompare} onCloseMission={onCloseMission} />
         </WorkspaceProvider>
       </MissionProvider>
     </div>
@@ -79,10 +103,11 @@ export default function AppShell({
  * Shell before a mission is open. Language and theme stay reachable here (the old
  * header had them), so the display settings drawer is available without a mission.
  */
-function InitialShell({ loading, isDragging, onPickFiles, onCloseMission }: {
+function InitialShell({ loading, isDragging, onPickFiles, onCompare, onCloseMission }: {
   loading: boolean;
   isDragging: boolean;
   onPickFiles: () => void;
+  onCompare: () => void;
   onCloseMission: () => void;
 }) {
   const { t } = useTranslation('shell');
@@ -97,7 +122,7 @@ function InitialShell({ loading, isDragging, onPickFiles, onCloseMission }: {
       <header className="shell-header">
         <span className="shell-app-name">{t('shell:app.name')}</span>
         <div className="shell-header-actions">
-          <FileMenu hasMission={false} onOpen={onPickFiles} onCompare={onPickFiles} onClose={onCloseMission} />
+          <FileMenu hasMission={false} onOpen={onPickFiles} onCompare={onCompare} onClose={onCloseMission} />
           <button
             id="shell-settings-trigger"
             type="button"
@@ -119,8 +144,25 @@ function InitialShell({ loading, isDragging, onPickFiles, onCloseMission }: {
   );
 }
 
-function MissionShell({ onPickFiles, onCloseMission }: { onPickFiles: () => void; onCloseMission: () => void }) {
-  const { settingsOpen, setSettingsOpen } = useWorkspace();
+function MissionShell({ onPickFiles, onCompare, onCloseMission }: {
+  onPickFiles: () => void;
+  onCompare: () => void;
+  onCloseMission: () => void;
+}) {
+  const { settingsOpen, setSettingsOpen, screen } = useWorkspace();
+  const briefingOpen = screen === 'briefing';
+  const headerRef = useRef<HTMLElement>(null);
+  const frameRef = useRef<HTMLDivElement>(null);
+  const tabsRef = useRef<HTMLElement>(null);
+
+  // The attribute is set on the elements themselves (React 18 has no typed inert prop). The briefing is not
+  // inside these elements, so it is not made inert with them.
+  useLayoutEffect(() => {
+    for (const element of [headerRef.current, frameRef.current, tabsRef.current]) {
+      element?.toggleAttribute('inert', briefingOpen);
+    }
+  }, [briefingOpen]);
+
   const closeSettings = () => {
     setSettingsOpen(false);
     document.getElementById('shell-settings-trigger')?.focus();
@@ -128,19 +170,31 @@ function MissionShell({ onPickFiles, onCloseMission }: { onPickFiles: () => void
 
   return (
     <>
-      <ShellHeader onPickFiles={onPickFiles} onCloseMission={onCloseMission} />
-      <div className="shell-frame">
+      <ShellHeader
+        headerRef={headerRef}
+        onPickFiles={onPickFiles}
+        onCompare={onCompare}
+        onCloseMission={onCloseMission}
+      />
+      <div className="shell-frame" ref={frameRef}>
         <aside className="shell-rail">
           <WorkspaceNav />
           <FlightRail />
         </aside>
         <main id="main" className="shell-main" tabIndex={-1}>
-          <ScreenHost />
+          {briefingOpen ? null : <ScreenHost />}
         </main>
       </div>
+      {briefingOpen && (
+        <div className="shell-briefing-layer" style={BRIEFING_LAYER_STYLE}>
+          <ScreenHost />
+        </div>
+      )}
       <BottomTabs
+        navRef={tabsRef}
         onOpenSettings={() => setSettingsOpen(true)}
         onOpenFiles={onPickFiles}
+        onCompare={onCompare}
         onCloseMission={onCloseMission}
       />
       <PrintHost />
@@ -149,7 +203,12 @@ function MissionShell({ onPickFiles, onCloseMission }: { onPickFiles: () => void
   );
 }
 
-function ShellHeader({ onPickFiles, onCloseMission }: { onPickFiles: () => void; onCloseMission: () => void }) {
+function ShellHeader({ headerRef, onPickFiles, onCompare, onCloseMission }: {
+  headerRef: RefObject<HTMLElement>;
+  onPickFiles: () => void;
+  onCompare: () => void;
+  onCloseMission: () => void;
+}) {
   const { t } = useTranslation('shell');
   const { mission, side, sourceFile, viewMode } = useMission();
   const { setSide, setViewMode } = useSettings();
@@ -160,7 +219,7 @@ function ShellHeader({ onPickFiles, onCloseMission }: { onPickFiles: () => void;
   ];
 
   return (
-    <header className="shell-header">
+    <header className="shell-header" ref={headerRef}>
       <div className="shell-header-title" title={mission.meta.sortie}>
         <span className="shell-app-name">{t('shell:app.name')}</span>
         <span className="shell-mission-name">{mission.meta.sortie}</span>
@@ -190,7 +249,7 @@ function ShellHeader({ onPickFiles, onCloseMission }: { onPickFiles: () => void;
         <FileMenu
           hasMission
           onOpen={onPickFiles}
-          onCompare={onPickFiles}
+          onCompare={onCompare}
           onClose={onCloseMission}
         />
         <button type="button" className="btn btn-primary" onClick={() => setScreen('briefing')}>
@@ -207,27 +266,5 @@ function ShellHeader({ onPickFiles, onCloseMission }: { onPickFiles: () => void;
         </button>
       </div>
     </header>
-  );
-}
-
-/**
- * The printable briefing (P3). It is always mounted and hidden on screen, so Ctrl+P
- * from any screen prints the export plan. Maps that are not drawn yet print as
- * "準備中", so printing is never blocked (SPEC 5.1, F9).
- */
-function PrintHost() {
-  const { reportPrintMapState } = useWorkspace();
-  const { model, title, viewLabel, outT } = useExportModel();
-
-  return (
-    <div className="print-briefing">
-      <PrintDocument
-        pages={model.pages}
-        title={title}
-        viewLabel={viewLabel}
-        t={outT}
-        onMapStateChange={reportPrintMapState}
-      />
-    </div>
   );
 }

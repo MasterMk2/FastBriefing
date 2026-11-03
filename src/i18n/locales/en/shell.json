@@ -52,22 +52,6 @@
     "compare": "Compare revisions",
     "close": "Close mission"
   },
-  "settings": {
-    "title": "Display settings",
-    "reset": "Reset to defaults",
-    "close": "Close",
-    "language": "UI language",
-    "theme": "Theme",
-    "fontScale": "Text size",
-    "fontStandard": "Standard",
-    "fontLarge": "Large",
-    "themeFfs": "FFS dark",
-    "themeStandard": "Standard",
-    "themeNight": "Night red",
-    "languageJa": "日本語",
-    "languageEn": "English",
-    "partial": "Not all display settings are available yet. Language, theme and text size can be changed now."
-  },
   "stub": {
     "preparing": "In preparation",
     "body": "This screen is being redesigned."
