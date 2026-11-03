@@ -1,1 +1,307 @@
-/* Owner: see src/styles/index.css. Package styles are added by the owning package (SPEC 7.2). */
+/* P7: 自機カード（WingmanCard）とラインナップ（LineupCard）。色はトークンだけを使う（SPEC 4）。 */
+
+.lineup-card,
+.wingman-card {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-size: var(--fs-table);
+}
+
+.lineup-card {
+  display: grid;
+  gap: 16px;
+  padding: 16px;
+  max-width: 720px;
+}
+
+.lineup-card-title {
+  margin: 0;
+  font-size: var(--fs-body);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.lineup-section {
+  display: grid;
+  gap: 8px;
+}
+
+.lineup-section-title,
+.lineup-subtitle {
+  margin: 0;
+  font-size: var(--fs-note);
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.lineup-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 8px 16px;
+  margin: 0;
+}
+
+.lineup-facts > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.lineup-facts dt {
+  font-size: var(--fs-note);
+  color: var(--text-muted);
+}
+
+.lineup-facts dd {
+  margin: 0;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+.lineup-raw-key {
+  word-break: break-all;
+}
+
+/* Wide names (weapons, radio names) scroll inside this frame instead of widening the phone page. */
+.lineup-table-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.lineup-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-table);
+}
+
+.lineup-table th,
+.lineup-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+.lineup-table th {
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.lineup-empty,
+.wingman-empty {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.lineup-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.lineup-current {
+  margin: 0;
+  color: var(--info-text);
+}
+
+.lineup-button,
+.wingman-button {
+  min-height: var(--target-touch);
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.lineup-button-primary,
+.wingman-button-primary {
+  background: var(--primary-bg);
+  border-color: var(--primary-bg);
+  color: var(--primary-text);
+}
+
+.lineup-button:disabled,
+.wingman-button:disabled,
+.wingman-button[aria-disabled="true"] {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.lineup-button:focus-visible,
+.wingman-button:focus-visible,
+.wingman-card-summary:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* Scoped to this package: the stylesheets are shared, so a bare .num would reach other screens. */
+.lineup-card .num,
+.wingman-card .num {
+  font-variant-numeric: tabular-nums;
+}
+
+.lineup-table .num {
+  text-align: right;
+}
+
+.wingman-card {
+  max-width: 720px;
+}
+
+.wingman-elsewhere {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  max-width: 720px;
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-1);
+  color: var(--text);
+  font-size: var(--fs-table);
+}
+
+/* Callsigns and unit names come from the mission file: long ones wrap instead of widening a phone page. */
+.wingman-elsewhere > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.wingman-card-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  min-height: var(--target-touch);
+  padding: 8px 14px;
+  cursor: pointer;
+  list-style-position: inside;
+}
+
+.wingman-card-label {
+  font-size: var(--fs-note);
+  color: var(--text-muted);
+}
+
+.wingman-card-name {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.wingman-card-body {
+  display: grid;
+  gap: 12px;
+  padding: 0 14px 14px;
+}
+
+.wingman-section {
+  display: grid;
+  gap: 6px;
+}
+
+.wingman-section-title {
+  margin: 0;
+  font-size: var(--fs-note);
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.wingman-radio-list {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.wingman-radio {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  align-items: baseline;
+}
+
+.wingman-radio-channel,
+.wingman-radio-frequency {
+  min-width: 4em;
+  text-align: right;
+}
+
+.wingman-radio-name {
+  overflow-wrap: anywhere;
+}
+
+.wingman-point-nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.wingman-point-position {
+  flex: 1 1 auto;
+  text-align: center;
+}
+
+.wingman-point-name {
+  margin: 0;
+  font-size: var(--fs-body);
+  overflow-wrap: anywhere;
+}
+
+.wingman-point-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 8px 16px;
+  margin: 0;
+}
+
+.wingman-point-facts > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.wingman-point-facts dt {
+  font-size: var(--fs-note);
+  color: var(--text-muted);
+}
+
+.wingman-point-facts dd {
+  margin: 0;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+.wingman-point-leg {
+  grid-column: 1 / -1;
+}
+
+.wingman-point-coordinate {
+  font-size: var(--fs-table);
+}
+
+.wingman-clear {
+  justify-self: start;
+}
+
+/* The wingman card is for the screen only: it is never part of printed or exported material (F4). */
+.wingman-save-notice {
+  max-width: 720px;
+}
+
+@media print {
+  .wingman-card,
+  .wingman-elsewhere,
+  .wingman-save-notice {
+    display: none !important;
+  }
+}
