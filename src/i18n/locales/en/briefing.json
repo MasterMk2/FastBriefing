@@ -16,7 +16,8 @@
     "next": "Next",
     "exit": "Exit (Esc)",
     "contents": "Contents",
-    "counter": "{{current}} / {{total}}"
+    "counter": "{{current}} / {{total}}",
+    "slideBody": "Slide body (scrolls inside when it overflows)"
   },
   "empty": {
     "title": "Nothing to show",
@@ -59,7 +60,7 @@
     "groundTurbulenceValue": "{{value}} m/s",
     "none": "None",
     "windLevelHeader": "Altitude",
-    "windDirection": "Wind direction (from → to)",
+    "windDirection": "Wind direction",
     "windSpeed": "Wind speed",
     "windLevel": {
       "ground": "Ground",
@@ -120,7 +121,8 @@
     "unrecorded": "Not recorded (range unknown)"
   },
   "map": {
-    "all": "All flights"
+    "all": "All flights",
+    "flight": "Selected flight: {{callsign}}"
   },
   "smeac": {
     "situation": "Situation",

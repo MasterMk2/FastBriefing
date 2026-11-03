@@ -3,8 +3,8 @@
     "title": "Frequency conflicts",
     "none": "No conflicts",
     "count": "{{count}} conflicts",
-    "explanation": "Frequencies within {{kilohertz}} kHz with the same modulation (AM/FM) are counted as conflicts.",
-    "scope": "In creator view, the frequencies of both sides are compared together. The pre-distribution check L1 compares each side separately, so conflicts across sides appear here but not in L1."
+    "explanation": "Main frequencies (flight and support frequencies) within {{kilohertz}} kHz with the same modulation (AM/FM), used by different flights or support assets, are counted as conflicts. Matching radio presets (channels) are not counted.",
+    "scope": "In creator view, the main frequencies of both sides are compared together. A conflict across both sides is marked neutral. The pre-distribution check L1 uses the same definition."
   },
   "frequencyValue": "{{frequency}} MHz ({{modulation}})",
   "types": {
@@ -13,7 +13,8 @@
     "support": "The same frequency as a support asset"
   },
   "usage": {
-    "support": "Support asset frequency"
+    "support": "Support asset frequency",
+    "mainFrequency": "Flight frequency"
   },
   "table": {
     "title": "Frequency list",

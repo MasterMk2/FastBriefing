@@ -304,3 +304,11 @@
     gap: 0;
   }
 }
+
+/* A row named by an "この箇所へ" jump: an outline in the accent token, plus the focus ring the browser draws. */
+.comms-conflict.is-target,
+.support-item.is-target,
+.threats-table tr.is-target {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}

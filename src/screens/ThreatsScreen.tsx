@@ -1,9 +1,10 @@
-// Threats screen (SPEC 1.3 threats, F6). Owner: P5. Default export, no props.
+// Threats screen (SPEC 1.3 threats, F6). Owner: P4 for the integration (B4). Default export, no props.
 // Creator view only (D1): in pilot view it shows an empty state and never lists threats or crossings.
 // The list shows the AI groups of both sides with their side mark (SPEC 1.3 "陣営" column), so every
 // unrecorded group that lint L8 counts for either side can be found here. Crossings use the opposing side only.
 // Ranges are the reference table's engagement and detection ranges in metres (D3). Unknown ranges are
 // shown as "未収録", never as "なし", and never used in a crossing.
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import {
@@ -19,6 +20,7 @@ import { SideMark } from '../shell/SideMark';
 import { Unresolved } from '../shell/Unresolved';
 import { useMission } from '../shell/MissionContext';
 import { useUnits, type Units } from '../shell/units';
+import { useWorkspace } from '../shell/workspace';
 import type { AIGroup, Flight, Side } from '../types/mission';
 
 interface ThreatRow {
@@ -31,6 +33,21 @@ interface ThreatRow {
 export default function ThreatsScreen() {
   const { t } = useTranslation();
   const { view, side, viewMode } = useMission();
+  const { focusAnchor, clearFocusAnchor } = useWorkspace();
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [highlighted, setHighlighted] = useState<string | null>(null);
+
+  // "この箇所へ" from lint L8 names one AI group (threats:<side>:<index>). The row is highlighted and focused once.
+  useEffect(() => {
+    if (focusAnchor === null) return;
+    setHighlighted(focusAnchor);
+    clearFocusAnchor();
+  }, [focusAnchor, clearFocusAnchor]);
+
+  useEffect(() => {
+    if (highlighted === null) return;
+    focusAnchored(rootRef.current, highlighted);
+  }, [highlighted]);
 
   if (viewMode === 'pilot') {
     return <EmptyState title={t('threats:pilot.title')} body={t('threats:pilot.body')} />;
@@ -46,7 +63,7 @@ export default function ThreatsScreen() {
   ];
 
   return (
-    <div className="threats-screen">
+    <div className="threats-screen" ref={rootRef}>
       <section className="threats-section" aria-labelledby="threats-crossing-title">
         <h2 id="threats-crossing-title" className="threats-heading">{t('threats:crossing.title')}</h2>
         <p className="threats-note">{t('threats:crossing.note')}</p>
@@ -66,9 +83,21 @@ export default function ThreatsScreen() {
         )}
       </section>
 
-      <ThreatList rows={rows} />
+      <ThreatList rows={rows} highlighted={highlighted} />
     </div>
   );
+}
+
+/**
+ * Moves focus to the element whose data-anchor is the anchor (exact match, so no selector escaping is needed).
+ * scrollIntoView is optional-called because some DOM environments (jsdom) do not implement it.
+ */
+function focusAnchored(root: HTMLElement | null, anchor: string) {
+  const target = Array.from(root?.querySelectorAll<HTMLElement>('[data-anchor]') ?? [])
+    .find(element => element.dataset.anchor === anchor);
+  if (!target) return;
+  target.focus({ preventScroll: true });
+  target.scrollIntoView?.({ block: 'center' });
 }
 
 function CrossingRow({ flight, threats }: { flight: Flight; threats: CrossingThreat[] }) {
@@ -107,7 +136,7 @@ function runText(t: TFunction, type: string, run: CrossingRun): string {
   return run.state === 'inside' ? t('threats:crossing.inside', values) : t('threats:crossing.grazing', values);
 }
 
-function ThreatList({ rows }: { rows: ThreatRow[] }) {
+function ThreatList({ rows, highlighted }: { rows: ThreatRow[]; highlighted: string | null }) {
   const { t } = useTranslation();
   const units = useUnits();
 
@@ -131,21 +160,29 @@ function ThreatList({ rows }: { rows: ThreatRow[] }) {
               </tr>
             </thead>
             <tbody>
-              {rows.map(({ side, group, index }, rowIndex) => (
-                <tr key={`${side}:${rowIndex}:${group.type}:${group.startTime}`} data-anchor={`threats:${side}:${index}`}>
-                  <td><SideMark side={side} /></td>
-                  <td>{group.type}</td>
-                  <td className="threats-num">{group.count}</td>
-                  <td className="threats-num">{engagementText(t, units, group)}</td>
-                  <td className="threats-num">{detectionText(t, units, group)}</td>
-                  <td>
-                    {isPositionResolved(group)
-                      ? units.coord(group.latlon)
-                      : <Unresolved xy={group.position} />}
-                  </td>
-                  <td>{sourceText(t, group)}</td>
-                </tr>
-              ))}
+              {rows.map(({ side, group, index }, rowIndex) => {
+                const anchor = `threats:${side}:${index}`;
+                return (
+                  <tr
+                    key={`${side}:${rowIndex}:${group.type}:${group.startTime}`}
+                    className={anchor === highlighted ? 'is-target' : undefined}
+                    data-anchor={anchor}
+                    tabIndex={-1}
+                  >
+                    <td><SideMark side={side} /></td>
+                    <td>{group.type}</td>
+                    <td className="threats-num">{group.count}</td>
+                    <td className="threats-num">{engagementText(t, units, group)}</td>
+                    <td className="threats-num">{detectionText(t, units, group)}</td>
+                    <td>
+                      {isPositionResolved(group)
+                        ? units.coord(group.latlon)
+                        : <Unresolved xy={group.position} />}
+                    </td>
+                    <td>{sourceText(t, group)}</td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

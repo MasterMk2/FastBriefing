@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { etaMismatchPoints, lintMission, lintMissionForSide } from './lint';
+import { checkedLintRuleCount, etaMismatchPoints, LINT_RULE_CODES, lintMission, lintMissionForSide, lintRuleCodesFor } from './lint';
 import type { LintFinding } from '../types/lint';
 import {
   makeAIGroup,
@@ -12,6 +12,7 @@ import {
   makeUnit,
 } from '../__tests__/testMission';
 import { applyViewMode } from '../utils/viewMode';
+import { conflictAnchor, detectMainFrequencyConflicts } from './frequencyConflicts';
 
 const client = (overrides: Parameters<typeof makeUnit>[0] = {}) => makeUnit({ skill: 'Client', ...overrides });
 const radio = (frequencyHz: number, modulation = 0) => ({ channel: 1, frequency: frequencyHz, modulation, name: 'Tac' });
@@ -28,12 +29,12 @@ function baseCoalitions(extra: { blue?: Partial<ReturnType<typeof makeCoalition>
   };
 }
 
-describe('lintMission L1 frequency overlap', () => {
-  it('flags two different flights on the same frequency and modulation', () => {
+describe('lintMission L1 frequency overlap (main frequencies, Lead decision 1)', () => {
+  it('flags two different flights on the same main frequency and modulation', () => {
     const findings = lintMission(makeMission({
       blue: makeCoalition({ flights: [
-        makeFlight({ groupId: 1, callsign: 'Viper 1-1', units: [client({ radios: [radio(251000000)] })] }),
-        makeFlight({ groupId: 2, callsign: 'Viper 2-1', units: [client({ unitId: 2, radios: [radio(251000000)] })] }),
+        makeFlight({ groupId: 1, callsign: 'Viper 1-1', frequency: 251000000, units: [client()] }),
+        makeFlight({ groupId: 2, callsign: 'Viper 2-1', frequency: 251000000, units: [client({ unitId: 2 })] }),
       ] }),
       red: makeCoalition({ flights: [makeFlight({ groupId: 3, callsign: 'Ford 1-1', units: [client({ unitId: 9 })] })] }),
     }));
@@ -43,18 +44,30 @@ describe('lintMission L1 frequency overlap', () => {
     expect(l1[0]).toMatchObject({ severity: 'warning', side: 'blue', screen: 'comms', params: { frequency: '251.000', modulation: 'AM', count: 2 } });
   });
 
+  it('does not flag two flights that only share a radio preset (presets are the default of one type)', () => {
+    const findings = lintMission(makeMission({
+      blue: makeCoalition({ flights: [
+        makeFlight({ groupId: 1, callsign: 'Viper 1-1', frequency: 251000000, units: [client({ radios: [radio(251000000)] })] }),
+        makeFlight({ groupId: 2, callsign: 'Viper 2-1', frequency: 255000000, units: [client({ unitId: 2, radios: [radio(251000000)] })] }),
+      ] }),
+      red: makeCoalition({ flights: [makeFlight({ groupId: 3, callsign: 'Ford 1-1', units: [client({ unitId: 9 })] })] }),
+    }));
+
+    expect(codes(findings, 'L1')).toHaveLength(0);
+  });
+
   it('flags a difference of 1 kHz and ignores 1.1 kHz', () => {
     const at1kHz = lintMission(makeMission({
       blue: makeCoalition({ flights: [
-        makeFlight({ groupId: 1, units: [client({ radios: [radio(251000000)] })] }),
-        makeFlight({ groupId: 2, callsign: 'Viper 2-1', units: [client({ unitId: 2, radios: [radio(251001000)] })] }),
+        makeFlight({ groupId: 1, frequency: 251000000, units: [client()] }),
+        makeFlight({ groupId: 2, callsign: 'Viper 2-1', frequency: 251001000, units: [client({ unitId: 2 })] }),
       ] }),
       red: makeCoalition({ flights: [makeFlight({ groupId: 3, callsign: 'Ford 1-1', units: [client({ unitId: 9 })] })] }),
     }));
     const at1Point1kHz = lintMission(makeMission({
       blue: makeCoalition({ flights: [
-        makeFlight({ groupId: 1, units: [client({ radios: [radio(251000000)] })] }),
-        makeFlight({ groupId: 2, callsign: 'Viper 2-1', units: [client({ unitId: 2, radios: [radio(251001100)] })] }),
+        makeFlight({ groupId: 1, frequency: 251000000, units: [client()] }),
+        makeFlight({ groupId: 2, callsign: 'Viper 2-1', frequency: 251001100, units: [client({ unitId: 2 })] }),
       ] }),
       red: makeCoalition({ flights: [makeFlight({ groupId: 3, callsign: 'Ford 1-1', units: [client({ unitId: 9 })] })] }),
     }));
@@ -65,7 +78,7 @@ describe('lintMission L1 frequency overlap', () => {
 
   it('does not flag two wingmen of one flight that share a preset', () => {
     const findings = lintMission(makeMission({
-      blue: makeCoalition({ flights: [makeFlight({ groupId: 1, units: [
+      blue: makeCoalition({ flights: [makeFlight({ groupId: 1, frequency: 251000000, units: [
         client({ unitId: 1, radios: [radio(251000000)] }),
         client({ unitId: 2, radios: [radio(251000000)] }),
       ] })] }),
@@ -78,13 +91,22 @@ describe('lintMission L1 frequency overlap', () => {
   it('flags a support asset on the same frequency as a flight', () => {
     const findings = lintMission(makeMission({
       blue: makeCoalition({
-        flights: [makeFlight({ groupId: 1, units: [client({ radios: [radio(305000000)] })] })],
+        flights: [makeFlight({ groupId: 1, frequency: 305000000, units: [client()] })],
         support: [makeSupport({ frequency: 305000000 })],
       }),
       red: makeCoalition({ flights: [makeFlight({ groupId: 3, callsign: 'Ford 1-1', units: [client({ unitId: 9 })] })] }),
     }));
 
     expect(codes(findings, 'L1')).toHaveLength(1);
+  });
+
+  it('reports one finding per frequency, and marks a conflict across both coalitions as neutral', () => {
+    const findings = lintMission(makeMission({
+      blue: makeCoalition({ flights: [makeFlight({ groupId: 1, frequency: 251000000, units: [client()] })] }),
+      red: makeCoalition({ flights: [makeFlight({ groupId: 2, callsign: 'Ford 1-1', frequency: 251000000, units: [client({ unitId: 9 })] })] }),
+    }));
+
+    expect(codes(findings, 'L1')).toEqual([expect.objectContaining({ side: 'neutral', anchor: 'comms:conflict:AM:251.000' })]);
   });
 });
 
@@ -363,6 +385,28 @@ describe('lintMission L10 client count', () => {
 
     expect(codes(findings, 'L10')).toEqual([expect.objectContaining({ side: 'red' })]);
   });
+
+  it('points the jump at the first flight of the side, so the flight screen can open on it', () => {
+    const findings = lintMission(makeMission({
+      blue: makeCoalition({ flights: [makeFlight({ groupId: 4, units: [makeUnit({ skill: 'AI' })] })] }),
+    }));
+
+    expect(codes(findings, 'L10')).toEqual([expect.objectContaining({ screen: 'flights', flightKey: 'blue:4' })]);
+  });
+});
+
+describe('checkedLintRuleCount (the overview reports how many rules it checked)', () => {
+  it('counts all ten rules in creator view and leaves the threat rule out in pilot view', () => {
+    expect(LINT_RULE_CODES).toHaveLength(10);
+    expect(checkedLintRuleCount('creator')).toBe(10);
+    expect(checkedLintRuleCount('pilot')).toBe(9);
+  });
+
+  it('takes the count and the pilot filter from the same rule list (lintRuleCodesFor)', () => {
+    expect(lintRuleCodesFor('creator')).toEqual(LINT_RULE_CODES);
+    expect(lintRuleCodesFor('pilot')).toEqual(['L1', 'L2', 'L3', 'L4', 'L5', 'L6', 'L7', 'L9', 'L10']);
+    expect(checkedLintRuleCount('pilot')).toBe(lintRuleCodesFor('pilot').length);
+  });
 });
 
 describe('lintMissionForSide L10 uses the displayed side (D2)', () => {
@@ -431,8 +475,8 @@ describe('lintMissionForSide in pilot view (D1)', () => {
       }),
       red: makeCoalition({
         flights: [
-          makeFlight({ groupId: 2, callsign: 'Ford 1-1', units: [client({ unitId: 9, radios: [radio(251000000)] })] }),
-          makeFlight({ groupId: 3, callsign: 'Ford 2-1', units: [client({ unitId: 10, radios: [radio(251000000)] })] }),
+          makeFlight({ groupId: 2, callsign: 'Ford 1-1', frequency: 251000000, units: [client({ unitId: 9 })] }),
+          makeFlight({ groupId: 3, callsign: 'Ford 2-1', frequency: 251000000, units: [client({ unitId: 10 })] }),
         ],
         aiGroups: [makeAIGroup({ type: 'Mystery', threatRangeSource: 'unknown' })],
         airbases: [makeAirbase({ id: 5, name: 'Kutaisi', owner: 'RED' })],
@@ -467,13 +511,35 @@ describe('lintMission anchors (the targets of "この箇所へ")', () => {
   it('anchors L1 at its conflict, using the same anchor as the comms screen', () => {
     const findings = lintMission(makeMission({
       blue: makeCoalition({ flights: [
-        makeFlight({ groupId: 1, callsign: 'Viper 1-1', units: [client({ radios: [radio(251000000)] })] }),
-        makeFlight({ groupId: 2, callsign: 'Viper 2-1', units: [client({ unitId: 2, radios: [radio(251000000)] })] }),
+        makeFlight({ groupId: 1, callsign: 'Viper 1-1', frequency: 251000000, units: [client()] }),
+        makeFlight({ groupId: 2, callsign: 'Viper 2-1', frequency: 251000000, units: [client({ unitId: 2 })] }),
       ] }),
       red: makeCoalition({ flights: [makeFlight({ groupId: 3, callsign: 'Ford 1-1', units: [client({ unitId: 9 })] })] }),
     }));
 
     expect(codes(findings, 'L1')).toEqual([expect.objectContaining({ screen: 'comms', anchor: 'comms:conflict:AM:251.000' })]);
+  });
+
+  it('gives L1 the same count and anchors as the comms screen conflict list', () => {
+    const mission = makeMission({
+      blue: makeCoalition({
+        flights: [
+          makeFlight({ groupId: 1, frequency: 251000000, units: [client()] }),
+          makeFlight({ groupId: 2, callsign: 'Viper 2-1', frequency: 251000000, units: [client({ unitId: 2 })] }),
+          makeFlight({ groupId: 3, callsign: 'Viper 3-1', frequency: 262000000, units: [client({ unitId: 3 })] }),
+        ],
+        support: [makeSupport({ frequency: 262000000 })],
+      }),
+      red: makeCoalition({ flights: [makeFlight({ groupId: 4, callsign: 'Ford 1-1', units: [client({ unitId: 9 })] })] }),
+    });
+
+    // The expected values are fixed here: two conflicts, each with two users (two flights, or a flight and a support asset).
+    const l1 = codes(lintMission(mission), 'L1');
+    expect(l1.map(finding => finding.anchor)).toEqual(['comms:conflict:AM:251.000', 'comms:conflict:AM:262.000']);
+    expect(l1.map(finding => finding.params?.count)).toEqual([2, 2]);
+    expect(detectMainFrequencyConflicts(mission).map(conflict => conflictAnchor(conflict))).toEqual(
+      ['comms:conflict:AM:251.000', 'comms:conflict:AM:262.000'],
+    );
   });
 
   it('anchors L7 at the first unresolved route point and the first unresolved support asset', () => {

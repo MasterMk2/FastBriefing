@@ -1,9 +1,10 @@
 // Owner: P4 (概要とブリーフィング). Full-screen briefing (SPEC 5.1 F8, 1.3).
 // Contract: default export, no props. Opened from the shell header ("ブリーフィング開始").
 // Data comes from useMission() (view, side, viewMode, settings, notes) only. The start
-// step lets the presenter include weather, navlog, threats (creator only), the map and the
-// notes; the rest follows settings.briefingSections. Keys: ← → PageUp/PageDown Home End,
-// F (full screen), Esc (leave). Keys are ignored while typing in a field.
+// step starts from settings.briefingSections (a section the saved list does not hold starts off)
+// and lets the presenter change weather, navlog, threats (creator only), the map and the notes.
+// Keys: ← → PageUp/PageDown Home End, F (full screen), Esc (leave). Keys are ignored while typing in a field.
+// Leaving (Esc, the exit button, or "戻る" at the start) returns to the screen the briefing was opened from.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { buildBriefingSlides, type BriefingSlide, type SlideCell, type Translate } from '../briefing/slides';
@@ -13,21 +14,10 @@ import { Unresolved } from '../shell/Unresolved';
 import { useMission } from '../shell/MissionContext';
 import { useUnits } from '../shell/units';
 import { useWorkspace } from '../shell/workspace';
-import { BRIEFING_SECTIONS } from '../utils/briefingSections';
 
 /** Sections the presenter can switch on or off at the start (F8). */
 const TOGGLE_SECTIONS = ['weather', 'route', 'threats', 'map', 'notes'] as const;
 type ToggleSection = typeof TOGGLE_SECTIONS[number];
-
-/**
- * Starting state of a toggle. The saved setting decides when the section list can hold the
- * section. A section the list cannot hold yet (weather and route until P3 extends it) starts on,
- * so the navlog is not silently missing from a default briefing.
- */
-function initialInclusion(section: ToggleSection, saved: ReadonlySet<string>): boolean {
-  if (!(BRIEFING_SECTIONS as readonly string[]).includes(section)) return true;
-  return saved.has(section);
-}
 
 /** Moves keyboard focus into the show, so the next Tab starts at its first control. */
 function useFocusOnMount<T extends HTMLElement>() {
@@ -71,17 +61,18 @@ function clampIndex(value: number, total: number): number {
 export default function BriefingMode() {
   const { t } = useTranslation(['briefing', 'shell']);
   const { view, side, viewMode, settings, notes } = useMission();
-  const { setScreen } = useWorkspace();
+  const { setScreen, previousScreen, flightKey } = useWorkspace();
   const units = useUnits();
 
+  // Each toggle starts from the saved list. Threats are offered in creator view only (D1).
   const [toggles, setToggles] = useState<Record<ToggleSection, boolean>>(() => {
     const saved = new Set<string>(settings.briefingSections);
     return {
-      weather: initialInclusion('weather', saved),
-      route: initialInclusion('route', saved),
-      threats: viewMode === 'creator' && initialInclusion('threats', saved),
-      map: initialInclusion('map', saved),
-      notes: initialInclusion('notes', saved),
+      weather: saved.has('weather'),
+      route: saved.has('route'),
+      threats: viewMode === 'creator' && saved.has('threats'),
+      map: saved.has('map'),
+      notes: saved.has('notes'),
     };
   });
   const [deck, setDeck] = useState<BriefingSlide[] | null>(null);
@@ -90,11 +81,13 @@ export default function BriefingMode() {
   const total = deck?.length ?? 0;
   const viewLabel = t(`shell:view.${viewMode}`);
   const translate: Translate = (key, values) => String(t(key, values));
+  // Back to the screen the briefing was opened from (the overview when there is none).
+  const returnScreen = previousScreen ?? 'overview';
 
   const exit = useCallback(() => {
     exitFullscreen();
-    setScreen('overview');
-  }, [setScreen]);
+    setScreen(returnScreen);
+  }, [setScreen, returnScreen]);
 
   useEffect(() => {
     if (!deck) return undefined;
@@ -158,7 +151,7 @@ export default function BriefingMode() {
           {viewMode !== 'creator' && <p className="briefing-muted">{t('briefing:start.threatsPilotHidden')}</p>}
         </fieldset>
         <div className="briefing-start-actions">
-          <button type="button" className="briefing-button" onClick={() => setScreen('overview')}>
+          <button type="button" className="briefing-button" onClick={() => setScreen(returnScreen)}>
             {t('briefing:start.cancel')}
           </button>
           <button
@@ -178,6 +171,8 @@ export default function BriefingMode() {
                 notes: notes.smeac,
                 units,
                 t: translate,
+                focusFlightKey: flightKey,
+                timeDisplay: settings.timeDisplay,
               }));
               setIndex(0);
             }}
@@ -260,7 +255,8 @@ function BriefingSlides({ deck, index, onIndex, onExit, viewLabel }: BriefingSli
         </nav>
         <div className="briefing-stage">
           {/* The 16:9 frame fits the stage; a slide that is taller than the frame scrolls inside it. */}
-          <div className="briefing-canvas">
+          {/* The 16:9 frame scrolls when a slide overflows it, so it can take the keyboard too. */}
+          <div className="briefing-canvas" role="region" tabIndex={0} aria-label={t('briefing:nav.slideBody')}>
             <SlideView slide={current} />
           </div>
         </div>
@@ -335,10 +331,9 @@ function SlideView({ slide }: { slide: BriefingSlide }) {
       {slide.text && <p className="briefing-text">{slide.text}</p>}
       {slide.map && (
         <div className="briefing-map">
-          {/* All flights: MapPanel has no flight filter yet, so the caption says so. */}
           <p className="briefing-map-caption">{slide.map.caption}</p>
           <div className="briefing-map-frame">
-            <MapPanel readOnly height="100%" />
+            <MapPanel readOnly height="100%" focusFlightKey={slide.map.flightKey} />
           </div>
         </div>
       )}

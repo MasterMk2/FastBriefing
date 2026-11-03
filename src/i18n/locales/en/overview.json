@@ -16,8 +16,7 @@
   },
   "lint": {
     "title": "Pre-distribution check",
-    "none": "No problems (to confirm: {{count}})",
-    "notChecked": "The pre-distribution check is not implemented yet, so problems have not been checked",
+    "none": "No problems (rules checked: {{count}})",
     "goto": "Go to this place",
     "severity": {
       "error": "Error",
@@ -45,7 +44,7 @@
     "none": "None",
     "wind": "Wind",
     "windLevelHeader": "Altitude",
-    "windDirection": "Wind direction (from → to)",
+    "windDirection": "Wind direction",
     "windSpeed": "Wind speed",
     "windLevel": {
       "ground": "Ground",

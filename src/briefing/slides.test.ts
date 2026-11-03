@@ -313,12 +313,36 @@ describe('buildBriefingSlides (F8)', () => {
     expect(slides[0].text).toBe('Strike the depot');
   });
 
-  it('builds the map slide for all flights, since the map cannot filter to one flight yet', () => {
+  it('builds the map slide for all flights when no flight is selected', () => {
     const mission = makeMission({ blue: [flight(7, 'Viper 7', [point(1, 600)])] });
 
     const [all] = buildBriefingSlides(input(mission, { sections: new Set(['map']) }));
 
-    expect(all.map).toEqual({ caption: 'briefing:map.all' });
+    expect(all.map).toEqual({ caption: 'briefing:map.all', flightKey: null });
+  });
+
+  it('builds the map slide for the selected flight, and falls back to all flights for a flight not in the view', () => {
+    const mission = makeMission({ blue: [flight(7, 'Viper 7', [point(1, 600)])] });
+
+    const [selected] = buildBriefingSlides(input(mission, { sections: new Set(['map']), focusFlightKey: 'blue:7' }));
+    const [missing] = buildBriefingSlides(input(mission, { sections: new Set(['map']), focusFlightKey: 'blue:99' }));
+
+    expect(selected.map).toEqual({ caption: 'briefing:map.flight', flightKey: 'blue:7' });
+    expect(missing.map).toEqual({ caption: 'briefing:map.all', flightKey: null });
+  });
+
+  it('dates the overview by the Zulu clock when only Zulu time is displayed (D6)', () => {
+    // Local clock 02:00 on 1 January at UTC+9 is 17:00 on 31 December Zulu.
+    const mission = makeMission();
+    mission.meta.utcOffset = 9;
+    mission.meta.startTime = 7200;
+    const dateOf = (timeDisplay: 'local' | 'zulu') => {
+      const [overview] = buildBriefingSlides(input(mission, { sections: new Set(['overview']), timeDisplay }));
+      return overview.pairs?.find(pair => pair.label === 'briefing:overview.date')?.value;
+    };
+
+    expect(dateOf('local')).toBe('2026-01-01');
+    expect(dateOf('zulu')).toBe('2025-12-31');
   });
 
   it('builds the weather slide with the wind table and a METAR line', () => {

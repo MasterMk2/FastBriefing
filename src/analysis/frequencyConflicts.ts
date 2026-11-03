@@ -238,6 +238,49 @@ function classifyFrequencyCluster(entries: CommunicationFrequency[]): FrequencyC
   return types;
 }
 
+/**
+ * The entries that count for conflicts (Lead decision 1): each flight's main frequency (Flight.frequency,
+ * the group frequency) and each support asset's frequency. Radio presets are left out. Two matching presets
+ * are the usual default of one aircraft type, not a conflict; they stay in the comms table only.
+ */
+export function collectMainFrequencyEntries(mission: MissionData): CommunicationFrequency[] {
+  return collectFrequencyEntries(mission, { includeGroupFrequency: true })
+    .filter(entry => entry.source === 'support' || entry.groupFrequency === true);
+}
+
+/**
+ * Coalition of a conflict's users. A conflict whose users come from both coalitions is 'neutral'
+ * (the same mark that lint L4 uses for a mixed group).
+ */
+export function conflictSide(conflict: Pick<FrequencyConflict, 'users'>): Side | 'neutral' {
+  const sides = [...new Set(conflict.users.map(user => user.side))];
+  return sides.length === 1 ? sides[0] : 'neutral';
+}
+
+/**
+ * Conflicts of the main frequencies, one per frequency and modulation (Lead decision 1). Lint L1 and the
+ * comms screen both read this function, so their counts and anchors agree. Entries of both coalitions are
+ * compared together; a conflict across coalitions is reported as 'neutral' by conflictSide.
+ */
+export function detectMainFrequencyConflicts(mission: MissionData): FrequencyConflict[] {
+  const merged = new Map<string, FrequencyConflict>();
+  for (const conflict of detectFrequencyConflicts(collectMainFrequencyEntries(mission))) {
+    const anchor = conflictAnchor(conflict);
+    const previous = merged.get(anchor);
+    if (!previous) {
+      merged.set(anchor, conflict);
+      continue;
+    }
+    const users = new Map([...previous.users, ...conflict.users].map(user => [user.id, user] as const));
+    merged.set(anchor, {
+      ...previous,
+      users: [...users.values()].sort((a, b) => a.id.localeCompare(b.id)),
+      types: [...new Set([...previous.types, ...conflict.types])],
+    });
+  }
+  return [...merged.values()].sort((a, b) => a.frequencyMHz - b.frequencyMHz);
+}
+
 /** Channel label for a radio preset: "R2 / CH3" when the mission has several radio banks, else "CH3". */
 export function formatRadioChannel(radio: Pick<RadioPreset, 'radio' | 'channel'>): string {
   return radio.radio === undefined ? `CH${radio.channel}` : `R${radio.radio} / CH${radio.channel}`;

@@ -7,7 +7,24 @@ import { i18nReady } from '../i18n';
 import { MissionProvider } from '../shell/MissionContext';
 import { useWorkspace, WorkspaceProvider } from '../shell/workspace';
 import type { DisplaySettings, Flight, MissionData, RoutePoint } from '../types/mission';
+import type { ScreenId } from '../types/screen';
+import { useEffect } from 'react';
 import BriefingMode from './BriefingMode';
+
+// The real MapPanel, with each render's props recorded: the map slide is checked by what it hands the map
+// (the selected flight), not only by the caption text beside it.
+const mapPanelCalls = vi.hoisted(() => [] as Array<{ focusFlightKey?: string | null }>);
+vi.mock('../map/MapPanel', async importOriginal => {
+  const actual = await importOriginal<typeof import('../map/MapPanel')>();
+  const { createElement } = await import('react');
+  return {
+    ...actual,
+    MapPanel: (props: Parameters<typeof actual.MapPanel>[0]) => {
+      mapPanelCalls.push(props);
+      return createElement(actual.MapPanel, props);
+    },
+  };
+});
 
 let container: HTMLDivElement;
 let root: ReturnType<typeof createRoot>;
@@ -112,17 +129,31 @@ function Probe() {
   return <output data-testid="workspace" data-screen={screen} />;
 }
 
+/** Opens the briefing from a screen, as the header button does: the screen before the briefing is `from`. */
+function OpenedFrom({ from }: { from: ScreenId }) {
+  const { setScreen } = useWorkspace();
+  useEffect(() => {
+    setScreen(from);
+    setScreen('briefing');
+  }, [from, setScreen]);
+  return null;
+}
+
 function screenNow(): string {
   return container.querySelector('[data-testid="workspace"]')?.getAttribute('data-screen') ?? '';
 }
 
-async function renderBriefing(settings: Partial<DisplaySettings>) {
+/**
+ * Renders the briefing start step. The default saved list holds the five sections the slide counts below assume
+ * (overview, weather, navlog, flights and comms, one slide each).
+ */
+async function renderBriefing(settings: Partial<DisplaySettings>, openedFrom?: ScreenId) {
   localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify({
     ...DEFAULT_SETTINGS,
     settingsVersion: SETTINGS_VERSION,
     viewMode: 'creator',
     side: 'blue',
-    briefingSections: ['overview', 'flights', 'comms'],
+    briefingSections: ['overview', 'weather', 'flights', 'route', 'comms'],
     ...settings,
   }));
   await act(async () => {
@@ -138,6 +169,7 @@ async function renderBriefing(settings: Partial<DisplaySettings>) {
         >
           <WorkspaceProvider>
             <Probe />
+            {openedFrom && <OpenedFrom from={openedFrom} />}
             <BriefingMode />
           </WorkspaceProvider>
         </MissionProvider>
@@ -196,8 +228,15 @@ afterEach(async () => {
 });
 
 describe('BriefingMode start step (F8)', () => {
-  it('starts with the weather and navlog included, though the saved list does not hold them yet', async () => {
+  it('starts from the saved list: weather and navlog start off when the saved list does not hold them', async () => {
     await renderBriefing({ briefingSections: ['overview', 'flights', 'comms'] });
+
+    expect(checkboxFor('天候').checked).toBe(false);
+    expect(checkboxFor('ナビログ').checked).toBe(false);
+  });
+
+  it('starts weather and navlog on when the saved list holds them', async () => {
+    await renderBriefing({ briefingSections: ['overview', 'weather', 'route'] });
 
     expect(checkboxFor('天候').checked).toBe(true);
     expect(checkboxFor('ナビログ').checked).toBe(true);
@@ -225,11 +264,18 @@ describe('BriefingMode start step (F8)', () => {
     expect(labels).not.toContain('脅威');
   });
 
-  it('returns to the overview from the back button', async () => {
+  it('returns to the overview from the back button when it was opened from there', async () => {
     await renderBriefing({});
     await click(buttonByText('戻る'));
 
     expect(screenNow()).toBe('overview');
+  });
+
+  it('returns to the screen the briefing was opened from, from the back button', async () => {
+    await renderBriefing({}, 'flights');
+    await click(buttonByText('戻る'));
+
+    expect(screenNow()).toBe('flights');
   });
 });
 
@@ -287,13 +333,40 @@ describe('BriefingMode slide show (F8)', () => {
     field.remove();
   });
 
-  it('leaves the show with Escape', async () => {
+  it('leaves the show with Escape, back to the overview when there is no earlier screen', async () => {
     await renderBriefing({});
     await startShow();
 
     await pressKey('Escape');
 
     expect(screenNow()).toBe('overview');
+  });
+
+  it('leaves the show with Escape, back to the screen the briefing was opened from', async () => {
+    await renderBriefing({}, 'comms');
+    await startShow();
+
+    await pressKey('Escape');
+
+    expect(screenNow()).toBe('comms');
+  });
+
+  it('makes the slide body keyboard reachable and names it', async () => {
+    await renderBriefing({});
+    await startShow();
+
+    const body = container.querySelector('.briefing-canvas');
+    expect(body?.getAttribute('tabindex')).toBe('0');
+    expect(body?.getAttribute('aria-label')).toBe('スライドの本文（溢れた部分は内側でスクロールできます）');
+  });
+
+  it('exposes the slide body as a named region, so the name is read with it', async () => {
+    await renderBriefing({});
+    await startShow();
+
+    const body = container.querySelector('[role="region"][aria-label="スライドの本文（溢れた部分は内側でスクロールできます）"]');
+    expect(body).not.toBeNull();
+    expect(body?.getAttribute('tabindex')).toBe('0');
   });
 
   it('does not break when the browser has no full-screen API', async () => {
@@ -328,19 +401,22 @@ describe('BriefingMode slide show (F8)', () => {
     expect(container.textContent).not.toContain('SA-10');
   });
 
-  it('shows the map slide for all flights, and puts the slide in the 16:9 frame', async () => {
+  it('shows the map slide for the selected flight, and puts the slide in the 16:9 frame', async () => {
+    // The overview is the first flight of the own side by default, so the map follows Viper 1 (blue group 1).
     await renderBriefing({ briefingSections: ['overview', 'map'] });
     await startShow();
+    mapPanelCalls.length = 0;
     await pressKey('End');
 
-    expect(container.querySelector('.briefing-map-caption')?.textContent).toBe('全機');
+    expect(container.querySelector('.briefing-map-caption')?.textContent).toBe('選んだフライト: Viper 1');
     expect(container.querySelector('.briefing-stage .briefing-canvas .briefing-slide')).not.toBeNull();
+    // The caption and the map agree: the map is handed the selected flight, not the whole mission.
+    expect(mapPanelCalls.length).toBeGreaterThan(0);
+    expect(mapPanelCalls.at(-1)?.focusFlightKey).toBe('blue:1');
   });
 
   it('shows an empty-state message when no section is selected', async () => {
     await renderBriefing({ briefingSections: [] });
-    await click(checkboxFor('天候'));
-    await click(checkboxFor('ナビログ'));
     await startShow();
 
     expect(container.textContent).toContain('表示する項目がありません');
