@@ -1,1 +1,60 @@
-{}
+{
+  "title": "表示設定",
+  "close": "閉じる",
+  "reset": "既定に戻す",
+  "resetNote": "既定に戻すと、表示設定の項目すべてと、表示モード（作成者・パイロット）と陣営も既定に戻ります。断面の順序とプリセットは残ります。",
+  "intro": "変更はすぐに反映されます。保存ボタンはありません。",
+  "unsaved": "この端末に保存できません。再読み込みすると、保存されている直前の設定に戻ります。",
+  "section": {
+    "units": "単位",
+    "coordinateTime": "座標と時刻",
+    "display": "表示",
+    "map": "地図"
+  },
+  "altitude": "高度",
+  "speed": "速度",
+  "distance": "距離",
+  "pressure": "気圧",
+  "temperature": "温度",
+  "example": "表示例: {{value}}",
+  "coordinate": {
+    "label": "座標形式",
+    "DDM": "DDM（度・分）",
+    "DMS": "DMS（度・分・秒）",
+    "MGRS": "MGRS",
+    "DEC": "DEC（十進の度）",
+    "aircraft": "機種の既定（不明なら DDM）"
+  },
+  "time": {
+    "label": "時刻",
+    "local": "現地",
+    "zulu": "Zulu",
+    "both": "両方"
+  },
+  "wind": {
+    "label": "風",
+    "from": "吹いてくる",
+    "to": "吹いていく",
+    "both": "両方"
+  },
+  "language": {
+    "label": "UI 言語",
+    "ja": "日本語",
+    "en": "English"
+  },
+  "theme": {
+    "label": "テーマ",
+    "ffs": "FFS 暗色",
+    "standard": "標準",
+    "night": "夜間赤"
+  },
+  "fontScale": {
+    "label": "文字の大きさ",
+    "standard": "標準",
+    "large": "大"
+  },
+  "mapBackground": {
+    "label": "地図の背景",
+    "show": "地図の背景を表示する"
+  }
+}

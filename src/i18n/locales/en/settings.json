@@ -1,1 +1,60 @@
-{}
+{
+  "title": "Display settings",
+  "close": "Close",
+  "reset": "Reset to defaults",
+  "resetNote": "Reset returns every display setting to its default, including the view mode (creator or pilot) and the side. The briefing section order and presets are kept.",
+  "intro": "Changes apply at once. There is no save button.",
+  "unsaved": "This device cannot save settings. After a reload, the last saved settings apply.",
+  "section": {
+    "units": "Units",
+    "coordinateTime": "Coordinates and time",
+    "display": "Display",
+    "map": "Map"
+  },
+  "altitude": "Altitude",
+  "speed": "Speed",
+  "distance": "Distance",
+  "pressure": "Pressure",
+  "temperature": "Temperature",
+  "example": "Example: {{value}}",
+  "coordinate": {
+    "label": "Coordinate format",
+    "DDM": "DDM (degrees and decimal minutes)",
+    "DMS": "DMS (degrees, minutes, seconds)",
+    "MGRS": "MGRS",
+    "DEC": "DEC (decimal degrees)",
+    "aircraft": "Aircraft default (DDM if unknown)"
+  },
+  "time": {
+    "label": "Time",
+    "local": "Local",
+    "zulu": "Zulu",
+    "both": "Both"
+  },
+  "wind": {
+    "label": "Wind direction",
+    "from": "From",
+    "to": "To",
+    "both": "Both"
+  },
+  "language": {
+    "label": "UI language",
+    "ja": "日本語",
+    "en": "English"
+  },
+  "theme": {
+    "label": "Theme",
+    "ffs": "FFS dark",
+    "standard": "Standard",
+    "night": "Night red"
+  },
+  "fontScale": {
+    "label": "Text size",
+    "standard": "Standard",
+    "large": "Large"
+  },
+  "mapBackground": {
+    "label": "Map background",
+    "show": "Show the map background"
+  }
+}
