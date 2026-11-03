@@ -1,1 +1,667 @@
-/* Owner: see src/styles/index.css. Package styles are added by the owning package (SPEC 7.2). */
+/* Map screen and shared map panel (P2). Colours come from tokens.css only. */
+
+.map-screen {
+  height: calc(100vh - var(--shell-header-height) - 32px);
+  min-height: 480px;
+  display: flex;
+}
+
+.map-screen > .map-panel {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.map-panel {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-0);
+  color: var(--text);
+}
+
+.map-canvas {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: var(--surface-1);
+}
+
+.map-overlay {
+  position: absolute;
+  z-index: 500;
+  background: var(--surface-1);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: var(--fs-note);
+}
+
+/* Layers (top left, three groups, collapsible) */
+.map-layers-panel {
+  top: 8px;
+  left: 8px;
+  max-width: 240px;
+  max-height: calc(100% - 16px);
+  overflow: auto;
+}
+
+.map-layers summary,
+.map-offmap summary {
+  min-height: var(--target-desktop);
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.map-layers[open] > summary {
+  border-bottom: 1px solid var(--border);
+}
+
+.map-layer-group {
+  margin: 0;
+  padding: 6px 10px 8px;
+  border: 0;
+  border-top: 1px solid var(--border);
+  min-width: 0;
+}
+
+.map-layer-group legend {
+  padding: 0;
+  color: var(--text-muted);
+  font-size: var(--fs-note);
+}
+
+.map-layer-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: var(--target-desktop);
+  cursor: pointer;
+}
+
+.map-layer-toggle input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+/* Top right: zoom, fit, off-map list, background status */
+.map-topright {
+  top: 8px;
+  right: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  max-width: min(360px, calc(100% - 16px));
+  padding: 6px;
+  background: transparent;
+  border: 0;
+}
+
+.map-zoom {
+  display: flex;
+  gap: 4px;
+}
+
+.map-zoom .map-button {
+  width: var(--target-desktop);
+  padding: 0;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.map-offmap {
+  width: 100%;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.map-offmap ul {
+  margin: 0;
+  padding: 4px 10px 8px;
+  list-style: none;
+  max-height: 240px;
+  overflow: auto;
+}
+
+.map-offmap li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-height: var(--target-desktop);
+}
+
+.map-status {
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-1);
+  color: var(--text-muted);
+  font-size: var(--fs-note);
+}
+
+.map-button {
+  min-height: var(--target-desktop);
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-1);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.map-button:hover {
+  border-color: var(--text-muted);
+}
+
+.map-layers summary:focus-visible,
+.map-offmap summary:focus-visible,
+.map-legend summary:focus-visible,
+.map-button:focus-visible,
+.map-tool-actions button:focus-visible,
+.map-editor-actions button:focus-visible,
+.map-swatch:focus-visible,
+.map-layer-toggle input:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* Annotation tools (bottom left, editing only) */
+.map-tools {
+  bottom: 8px;
+  left: 8px;
+  width: min(300px, calc(100% - 16px));
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+  max-height: calc(100% - 16px);
+  overflow: auto;
+}
+
+.map-tools .segmented {
+  width: 100%;
+}
+
+.map-tools .segmented-option {
+  flex: 1 1 0;
+  min-height: var(--target-desktop);
+}
+
+.map-swatches {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.map-swatch {
+  width: var(--target-desktop);
+  height: var(--target-desktop);
+  padding: 0;
+  border: 2px solid var(--border);
+  border-radius: 50%;
+  background: var(--surface-0);
+  cursor: pointer;
+}
+
+.map-swatch.is-pressed {
+  border-color: var(--text);
+  box-shadow: inset 0 0 0 3px var(--surface-1);
+}
+
+.map-swatch-info { background: var(--info-text); }
+.map-swatch-danger { background: var(--danger-text); }
+.map-swatch-warning { background: var(--warning-text); }
+.map-swatch-success { background: var(--success-text); }
+
+/* Each swatch carries its own shape, so the swatches differ even where two tokens are the same colour. */
+.map-swatch-glyph {
+  display: block;
+  color: var(--surface-0);
+  font-size: 11px;
+  line-height: 1;
+}
+
+.map-tool-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.map-tool-actions button,
+.map-editor-actions button {
+  min-height: var(--target-desktop);
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-0);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.map-tool-actions button:disabled {
+  color: var(--text-muted);
+  cursor: default;
+}
+
+.map-tool-help,
+.map-count {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--fs-note);
+}
+
+/*
+ * Legend (bottom right, only the layers that are on). A details element: folded on narrow widths.
+ * It sits above the attribution strip (the OpenStreetMap credit is in the bottom right corner).
+ */
+.map-legend {
+  bottom: 32px;
+  right: 8px;
+  max-width: min(260px, calc(100% - 16px));
+  max-height: 40%;
+  overflow: auto;
+}
+
+.map-legend summary {
+  min-height: var(--target-desktop);
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.map-legend[open] > summary {
+  border-bottom: 1px solid var(--border);
+}
+
+.map-legend-list {
+  margin: 0;
+  padding: 6px 10px;
+  list-style: none;
+}
+
+.map-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 22px;
+  font-size: var(--fs-note);
+}
+
+/* Shape key: the side shapes that are drawn (square blue, diamond red, circle neutral). */
+.map-legend-shapes {
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+
+.map-legend-shape {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.map-legend-sample {
+  display: inline-block;
+  flex: 0 0 auto;
+  width: 28px;
+  height: 0;
+  border-top: 2px solid var(--text);
+}
+
+.map-legend-sample.map-route-blue { border-top-color: var(--info-text); }
+.map-legend-sample.map-route-red { border-top: 2px dashed var(--danger-text); }
+.map-legend-sample.map-route-neutral { border-top: 2px dotted var(--text-muted); }
+.map-legend-sample.map-range-threat { width: 14px; height: 14px; border: 2px solid var(--danger-text); border-radius: 50%; }
+.map-legend-sample.map-range-detection { width: 14px; height: 14px; border: 2px dashed var(--text-muted); border-radius: 50%; }
+.map-legend-sample.map-zone { border-top: 2px dashed var(--text-muted); }
+.map-legend-sample.map-drawing-default { border-top: 2px solid var(--text-muted); }
+
+/* Mark samples hold the real mark or pin element, so they take their size from it, not from a line. */
+.map-legend-sample.map-legend-mark {
+  width: auto;
+  height: auto;
+  min-width: 28px;
+  border: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.map-empty {
+  position: absolute;
+  top: 56px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 500;
+  width: min(420px, calc(100% - 24px));
+}
+
+/* Route lines. Leaflet writes default stroke attributes; these class rules override them. */
+path.map-route {
+  fill: none;
+  stroke-linejoin: round;
+}
+
+path.map-route-blue { stroke: var(--info-text); stroke-width: 2px; }
+path.map-route-red { stroke: var(--danger-text); stroke-width: 2px; stroke-dasharray: 8 6; }
+path.map-route-neutral { stroke: var(--text-muted); stroke-width: 2px; stroke-dasharray: 2 6; }
+path.map-route.is-selected { stroke-width: 4px; }
+
+.map-icon {
+  background: transparent;
+  border: 0;
+}
+
+/* Route point numbers */
+.map-icon-waypoint span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  box-sizing: border-box;
+  border-radius: 50%;
+  border: 2px solid var(--text);
+  background: var(--surface-0);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.map-icon-waypoint.is-selected span {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/*
+ * Coalition marks (SPEC 1.4): blue square, red diamond, neutral circle, with the
+ * glyph carrying the kind (airbase, navpoint, support, bullseye, enemy).
+ * Colour comes from the coalition token; the shape keeps the coalition readable without colour.
+ */
+.map-mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 22px;
+  height: 22px;
+  border: 2px solid var(--surface-0);
+  background: var(--text-muted);
+  color: var(--surface-0);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.map-mark-glyph {
+  display: block;
+}
+
+.map-mark-blue {
+  border-radius: 0;
+  background: var(--info-text);
+}
+
+.map-mark-red {
+  border-radius: 0;
+  background: var(--danger-text);
+  transform: rotate(45deg);
+}
+
+.map-mark-red .map-mark-glyph {
+  transform: rotate(-45deg);
+}
+
+.map-mark-neutral {
+  border-radius: 50%;
+  background: var(--text-muted);
+}
+
+.map-mark.map-mark-wide {
+  width: 34px;
+  border-radius: 4px;
+}
+
+.map-mark-code {
+  font-size: 10px;
+  letter-spacing: 0.02em;
+}
+
+/* Threat, detection and zone shapes: token colours over Leaflet's defaults. */
+path.map-range {
+  stroke-width: 1px;
+}
+
+path.map-range-threat {
+  fill: var(--danger-text);
+  fill-opacity: 0.08;
+  stroke: var(--danger-text);
+}
+
+path.map-range-threat.map-range-neutral {
+  fill: var(--text-muted);
+  stroke: var(--text-muted);
+}
+
+path.map-range-detection {
+  fill: none;
+  stroke: var(--text-muted);
+  stroke-dasharray: 8 6;
+}
+
+path.map-zone {
+  fill: var(--text-muted);
+  fill-opacity: 0.08;
+  stroke: var(--text-muted);
+  stroke-width: 2px;
+  stroke-dasharray: 5 5;
+}
+
+path.map-drawing-default {
+  fill: var(--text-muted);
+  fill-opacity: 0.2;
+  stroke: var(--text-muted);
+}
+
+path.map-stroke-preview {
+  stroke-dasharray: 2 4;
+}
+
+/* The user's pin. The colour is the stored ink colour (inline, after validation). */
+.map-user-pin {
+  background: transparent;
+  border: 0;
+}
+
+.map-user-pin-body {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 26px;
+  height: 26px;
+  border-radius: 50% 50% 50% 0;
+  transform: rotate(-45deg);
+  border: 2px solid var(--surface-0);
+  background: var(--info-text);
+}
+
+.map-user-pin-mark {
+  transform: rotate(45deg);
+  color: var(--surface-0);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+/* Popups for annotations */
+.map-pin-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 220px;
+  color: var(--text);
+}
+
+.map-pin-editor label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: var(--fs-note);
+}
+
+.map-pin-editor input,
+.map-pin-editor textarea {
+  min-height: var(--target-desktop);
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-0);
+  color: var(--text);
+  font: inherit;
+}
+
+.map-pin-editor textarea {
+  resize: vertical;
+}
+
+.map-editor-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.map-editor-actions button.map-danger {
+  color: var(--danger-text);
+  border-color: var(--danger-border);
+}
+
+.map-popup-button {
+  margin-top: 6px;
+}
+
+/* Unsupported map: the DCS coordinate table replaces the map. */
+.map-panel-unsupported {
+  overflow: auto;
+  background: transparent;
+  border: 0;
+}
+
+.map-unsupported {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.map-dcs-table-wrap {
+  overflow: auto;
+  max-height: calc(100vh - 220px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.map-dcs-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-table);
+  font-variant-numeric: tabular-nums;
+}
+
+.map-dcs-table caption {
+  text-align: left;
+  padding: 6px 8px;
+  color: var(--text-muted);
+}
+
+.map-dcs-table th,
+.map-dcs-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.map-dcs-table .num {
+  text-align: right;
+}
+
+/* Narrow widths: the panels stack and the touch targets grow. */
+@media (max-width: 767px) {
+  .map-screen {
+    height: calc(100dvh - var(--shell-header-height) - var(--shell-bottom-height) - 32px);
+    min-height: 360px;
+  }
+
+  /*
+   * The bottom edge is a stack, from the bottom: the attribution strip (kept clear), the layers bar,
+   * the annotation tools and the legend. The layers panel is a sheet on that edge, shut by default;
+   * open, it covers the tools and the legend. Nothing is left at the top-left, where the zoom buttons are.
+   */
+  .map-panel {
+    --map-bottom-gap: 32px;
+  }
+
+  .map-layers-panel {
+    top: auto;
+    bottom: var(--map-bottom-gap);
+    left: 8px;
+    right: 8px;
+    max-width: none;
+    max-height: 60%;
+    z-index: 600;
+  }
+
+  .map-topright {
+    max-width: calc(100% - 16px);
+  }
+
+  .map-tools {
+    width: calc(100% - 16px);
+    bottom: calc(var(--map-bottom-gap) + var(--target-touch) + 8px);
+    max-height: 40%;
+  }
+
+  /* The legend sits above the annotation tools (which take up to 40% of the height) and folds by default. */
+  .map-legend {
+    bottom: calc(var(--map-bottom-gap) + var(--target-touch) + 8px + 40% + 8px);
+    max-width: calc(100% - 16px);
+    max-height: 30%;
+  }
+
+  .map-layers summary,
+  .map-legend summary,
+  .map-button,
+  .map-tool-actions button,
+  .map-editor-actions button,
+  .map-layer-toggle {
+    min-height: var(--target-touch);
+  }
+
+  .map-zoom .map-button {
+    width: var(--target-touch);
+  }
+
+  .map-swatch {
+    width: var(--target-touch);
+    height: var(--target-touch);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .map-panel * {
+    transition: none !important;
+    animation: none !important;
+  }
+}

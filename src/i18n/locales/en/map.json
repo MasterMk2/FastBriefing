@@ -1,1 +1,138 @@
-{}
+{
+  "layers": {
+    "title": "Layers",
+    "group": {
+      "route": "Routes and facilities",
+      "units": "Support and threats",
+      "unitsSupport": "Support",
+      "drawing": "Drawings and notes"
+    },
+    "flights": "Flight routes",
+    "navpoints": "NavPoints",
+    "airbases": "Airbases",
+    "bullseye": "Bullseye",
+    "support": "Support",
+    "threats": "Threat ranges",
+    "detection": "Detection ranges",
+    "enemies": "AI groups",
+    "zones": "Trigger zones",
+    "drawings": "ME drawings",
+    "annotations": "Annotations"
+  },
+  "tools": {
+    "label": "Annotation tools",
+    "color": "Colour",
+    "move": "Move",
+    "pin": "Pin",
+    "line": "Line",
+    "help": {
+      "move": "Drag the map to move it.",
+      "pin": "Tap the map to place a pin. Esc returns to move.",
+      "line": "Drag to draw a line. Touching with two fingers stops the line so the map can move. Esc returns to move."
+    },
+    "colors": {
+      "info": "Blue",
+      "danger": "Red",
+      "warning": "Orange",
+      "success": "Green"
+    },
+    "undoPin": "Undo last pin",
+    "undoLine": "Undo last line",
+    "undoNone": "Undo",
+    "restore": "Restore",
+    "pinCentre": "Pin at map centre",
+    "count": "Annotations {{count}} / {{max}}",
+    "pointsLeft": "Line points left {{remaining}} / {{max}}",
+    "storageFailed": "This device cannot save. Annotations you add may not be kept.",
+    "hidden": "Annotations are hidden, so they cannot be edited. Turn on the Annotations layer.",
+    "removed": "Removed the {{kind}}. Use Restore to put it back.",
+    "limit": {
+      "annotations": "The limit of {{max}} annotations is reached. Remove one before adding another.",
+      "strokePoints": "A line can have up to {{max}} points, so this line ended here. Draw the rest as a new line.",
+      "totalPoints": "The total number of line points is close to the limit ({{max}}). {{remaining}} points remain."
+    }
+  },
+  "annotations": {
+    "defaultPin": "Pin {{count}}",
+    "label": "Name",
+    "notes": "Notes",
+    "color": "Colour",
+    "width": "Width",
+    "save": "Save",
+    "delete": "Delete",
+    "kind": {
+      "pin": "pin",
+      "stroke": "line"
+    }
+  },
+  "controls": {
+    "fitAll": "Fit all",
+    "offMap": "{{count}} off map",
+    "backgroundHidden": "Base map hidden (display settings)",
+    "backgroundLoading": "Preparing the base map",
+    "backgroundMissing": "No base map",
+    "zoom": "Zoom",
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out"
+  },
+  "empty": {
+    "noPoints": "No points to show. Points whose coordinates cannot be resolved are listed as off map.",
+    "noLayers": "No layers are on.",
+    "restoreLayers": "Restore layers"
+  },
+  "unsupported": {
+    "title": "Unsupported map: DCS {{theatre}}, list only",
+    "body": "Latitude and longitude cannot be converted for this map. The map is not drawn; a list of DCS coordinates is shown instead.",
+    "caption": "DCS coordinates (metres)",
+    "col": {
+      "side": "Side",
+      "kind": "Kind",
+      "name": "Name"
+    },
+    "kind": {
+      "waypoint": "Waypoint",
+      "navPoint": "NavPoint",
+      "support": "Support",
+      "bullseye": "Bullseye",
+      "group": "AI group"
+    }
+  },
+  "legend": {
+    "title": "Legend",
+    "route": "{{side}} route",
+    "shapes": "Side shapes",
+    "shape": {
+      "blue": "Blue (square)",
+      "red": "Red (diamond)",
+      "neutral": "Neutral (circle)"
+    },
+    "navpoint": "NavPoint",
+    "airbase": "Airbase",
+    "bullseye": "Bullseye",
+    "support": "Support (shape: side, code: type)",
+    "threat": "Threat range",
+    "detection": "Detection range",
+    "enemy": "AI group (shape: side)",
+    "zone": "Trigger zone",
+    "drawing": "ME drawing",
+    "annotation": "Annotation"
+  },
+  "popup": {
+    "openFlight": "Open this flight's navlog",
+    "threat": "{{side}} {{type}}: threat range {{range}} m",
+    "detection": "{{side}} {{type}}: detection range {{range}} m",
+    "enemy": "{{side}}: {{type}} ({{count}})",
+    "zone": "Trigger zone: {{name}}"
+  },
+  "airbase": {
+    "fallback": "Airbase {{id}}"
+  },
+  "support": {
+    "kind": {
+      "tanker": "Tanker",
+      "awacs": "AWACS",
+      "carrier": "Carrier",
+      "jtac": "JTAC"
+    }
+  }
+}
