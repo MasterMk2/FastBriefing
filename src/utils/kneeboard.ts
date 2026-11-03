@@ -10,13 +10,16 @@ import { applyViewMode } from './viewMode';
 
 export interface KneeboardSection {
   heading: string;
+  /** Plain text fallback (used by the PNG renderer). Table rows are also written here as text. */
   lines: string[];
+  /** Optional table for Markdown and print (P3). */
+  table?: { header: string[]; rows: string[][] };
 }
 
 export type KneeboardPage =
   | { kind: 'text'; section: BriefingSection; title: string; sections: KneeboardSection[] }
   | { kind: 'map'; section: 'map'; title: string; scene: MissionMapScene }
-  | { kind: 'whiteboard'; section: 'whiteboard'; title: string; data: WhiteboardData };
+  | { kind: 'whiteboard'; section: 'notes'; title: string; data: WhiteboardData };
 
 export type KneeboardTranslate = (key: string, options?: Record<string, string | number>) => string;
 
@@ -45,6 +48,7 @@ export function planKneeboardPages(
         break;
       case 'notes':
         pages.push(planNotes(visible, flights, t));
+        pages.push({ kind: 'whiteboard', section, title: t('whiteboard.title'), data: whiteboard });
         break;
       case 'flights':
         pages.push(...planFlights(visible, flights, settings, t));
@@ -69,9 +73,6 @@ export function planKneeboardPages(
         break;
       case 'threats':
         pages.push(planThreats(visible, settings, t));
-        break;
-      case 'whiteboard':
-        pages.push({ kind: 'whiteboard', section, title: t('whiteboard.title'), data: whiteboard });
         break;
     }
   }

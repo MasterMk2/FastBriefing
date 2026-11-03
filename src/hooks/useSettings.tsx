@@ -9,6 +9,7 @@ import i18n, {
 } from '../i18n';
 import {
   DEFAULT_BRIEFING_SECTIONS,
+  migrateLegacyBriefingSections,
   normalizeBriefingPresets,
   normalizeBriefingSections,
   type BriefingPreset,
@@ -135,12 +136,28 @@ function migrateV3Sections(value: unknown): BriefingSection[] {
 }
 
 /**
+ * Pre-v5 selections (and the presets saved with them) get the sections that the
+ * old printout already contained: weather after overview, and the nav logs after flights.
+ */
+function migratePreV5Sections(settings: DisplaySettings): DisplaySettings {
+  return {
+    ...settings,
+    briefingSections: migrateLegacyBriefingSections(settings.briefingSections),
+    briefingPresets: settings.briefingPresets.map(preset => ({
+      ...preset,
+      sections: migrateLegacyBriefingSections(preset.sections),
+    })),
+  };
+}
+
+/**
  * Deserialize the versioned settings envelope.  Keeping this as a separate
  * migration boundary makes adding a future version explicit instead of
  * silently accepting an incompatible shape.
  *
  * v1: every stored theme becomes FFS (a stored 'default' cannot be told apart).
- * v2-v4: fields carry over; the old 'default' theme becomes 'standard'.
+ * v2-v4: fields carry over; the old 'default' theme becomes 'standard'. The
+ *     briefing sections and presets gain the weather and nav-log sections (v5).
  * v5: adds fontScale, side (null = automatic), window and time display, map
  *     background and kneeboard width, each with its default when absent.
  */
@@ -152,16 +169,17 @@ export function migrateSettings(value: unknown): DisplaySettings {
 
   switch (value.settingsVersion) {
     case SETTINGS_VERSION:
+      return validateSettings(value);
     case 4:
     case 2:
-      return validateSettings(value);
+      return migratePreV5Sections(validateSettings(value));
     case 3:
-      return { ...validateSettings(value), briefingSections: migrateV3Sections(value.briefingSections) };
+      return migratePreV5Sections({ ...validateSettings(value), briefingSections: migrateV3Sections(value.briefingSections) });
     case 1:
       // v1 records predate the FFS default: a stored 'default' cannot be told
       // apart from an implicit choice, so migrate every v1 record to 'ffs'
       // while preserving the other validated fields.
-      return { ...validateSettings(value), theme: 'ffs' };
+      return migratePreV5Sections({ ...validateSettings(value), theme: 'ffs' });
     default:
       console.warn('FastBriefing settings version is missing or unsupported; resetting to defaults.');
       return cloneDefaultSettings();

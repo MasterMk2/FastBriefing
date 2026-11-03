@@ -61,7 +61,12 @@ export default function PrintView({ mission, settings, whiteboard, onMapRenderSt
           case 'overview':
             return <PrintOverview key={section} mission={viewMission} settings={settings} t={printT} />;
           case 'notes':
-            return <PrintNotes key={section} mission={viewMission} t={printT} />;
+            return (
+              <div key={section} className="print-notes-group">
+                <PrintNotes mission={viewMission} t={printT} />
+                <PrintWhiteboard whiteboard={whiteboard} t={printT} />
+              </div>
+            );
           case 'flights':
             return (
               <section key={section} className="section print-flight-list">
@@ -100,8 +105,6 @@ export default function PrintView({ mission, settings, whiteboard, onMapRenderSt
             return <PrintSupport key={section} mission={viewMission} settings={settings} t={printT} />;
           case 'threats':
             return <PrintThreats key={section} mission={viewMission} settings={settings} t={printT} />;
-          case 'whiteboard':
-            return <PrintWhiteboard key={section} whiteboard={whiteboard} t={printT} />;
         }
       })}
     </div>

@@ -8,7 +8,7 @@ import {
 } from './briefingPng';
 
 const settings = {
-  briefingSections: ['overview', 'notes', 'flights', 'map', 'comms', 'support', 'threats', 'whiteboard'],
+  briefingSections: ['overview', 'flights', 'map', 'comms', 'support', 'threats', 'notes'],
   temperatureUnit: 'C',
   pressureUnit: 'hPa',
   distanceUnit: 'nm',
@@ -87,7 +87,7 @@ describe('briefing PNG content', () => {
       t,
     );
 
-    expect(sections.map(section => section.id)).toEqual(settings.briefingSections);
+    expect(sections.map(section => section.id)).toEqual([...settings.briefingSections, 'whiteboard']);
     const byId = Object.fromEntries(sections.map(section => [section.id, section.lines.join('\n')]));
     expect(byId.overview).toContain('Sinai');
     expect(byId.notes).toContain('Enemy SAMs');
@@ -102,9 +102,9 @@ describe('briefing PNG content', () => {
 
   it('paginates maximum notes without dropping the reserved drawing page', () => {
     const notes = 'x'.repeat(MAX_WHITEBOARD_NOTES);
-    const [section] = buildBriefingPngSections(
+    const sections = buildBriefingPngSections(
       mission,
-      { ...settings, briefingSections: ['whiteboard'] },
+      { ...settings, briefingSections: ['notes'] },
       {
         notes,
         strokes: Array.from({ length: MAX_WHITEBOARD_STROKES }, (_, index) => ({
@@ -116,6 +116,8 @@ describe('briefing PNG content', () => {
       },
       t,
     );
+    const section = sections.find(candidate => candidate.id === 'whiteboard');
+    if (!section) throw new Error('whiteboard section missing');
     const wrapped = wrapBriefingPngLines(section.lines, value => value.length * 10, 100);
     const pages = paginateBriefingPngSection(section, wrapped);
 

@@ -50,7 +50,7 @@ export default function MissionMapCanvas({
     void (async () => {
       let state: MissionMapRenderState = 'error';
       try {
-        const rendered = await drawMissionMap(
+        const result = await drawMissionMap(
           renderedContext,
           scene,
           0,
@@ -59,7 +59,7 @@ export default function MissionMapCanvas({
           canvas.height,
           resolvedLabels,
         );
-        state = rendered || !hasMissionMapContent(scene) ? 'ready' : 'error';
+        state = result.background || !hasMissionMapContent(scene) ? 'ready' : 'error';
       } catch {
         drawMapFailure(renderedContext, renderedCanvas, resolvedLabels.basemapUnavailable);
       } finally {

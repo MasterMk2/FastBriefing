@@ -19,15 +19,15 @@ function mission(): MissionData {
 
 describe('briefing Markdown', () => {
   it('emits only selected sections in planner order', () => {
-    const settings: DisplaySettings = { ...DEFAULT_SETTINGS, briefingSections: ['whiteboard', 'notes', 'map'] };
+    const settings: DisplaySettings = { ...DEFAULT_SETTINGS, briefingSections: ['notes', 'map'] };
     const markdown = buildBriefingMarkdown(mission(), settings, { notes: 'Board text', strokes: [] }, t);
     const whiteboard = markdown.indexOf('export.markdown.whiteboard');
     const notes = markdown.indexOf('planner.sections.notes');
     const map = markdown.indexOf('export.markdown.mapSection');
 
-    expect(whiteboard).toBeGreaterThan(0);
-    expect(notes).toBeGreaterThan(whiteboard);
-    expect(map).toBeGreaterThan(notes);
+    expect(notes).toBeGreaterThan(0);
+    expect(whiteboard).toBeGreaterThan(notes);
+    expect(map).toBeGreaterThan(whiteboard);
     expect(markdown).not.toContain('export.markdown.flightList');
   });
 

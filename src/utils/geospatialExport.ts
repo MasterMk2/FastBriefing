@@ -36,18 +36,30 @@ export interface GeospatialExport {
 const CIRCLE_SEGMENTS = 64;
 const EARTH_RADIUS_METERS = 6371008.8;
 
+export interface GeospatialOptions {
+  /**
+   * Keys (`side:groupId`) of the flights to export. When given, only those flights' routes and
+   * waypoint notes are written; map annotations and zones are mission-wide and are left out.
+   * Omit it for the whole mission.
+   */
+  flightKeys?: ReadonlySet<string>;
+}
+
 /** Export only positions resolved to WGS84. Never turn DCS coordinates into 0,0. */
 export function buildGeospatialExport(
   mission: MissionData,
   viewMode: DisplaySettings['viewMode'],
   side?: Side | null,
+  options: GeospatialOptions = {},
 ): GeospatialExport {
   const visible = applyViewMode(mission, viewMode, side);
   const features: GeoFeature[] = [];
   let skipped = 0;
+  const flightKeys = options.flightKeys;
 
   for (const side of ['blue', 'red', 'neutral'] as const) {
     for (const flight of visible.coalitions[side].flights) {
+      if (flightKeys && !flightKeys.has(`${side}:${flight.groupId}`)) continue;
       const coordinates = flight.route.map(point =>
         point.latlonResolved === false ? null : toLonLat(point.latlon));
       flight.route.forEach((point, routeIndex) => {
@@ -82,7 +94,7 @@ export function buildGeospatialExport(
     }
   }
 
-  for (const annotation of visible.userNotes.mapAnnotations) {
+  for (const annotation of flightKeys ? [] : visible.userNotes.mapAnnotations) {
     if (annotation.kind === 'pin') {
       const position = toLonLat(annotation.position);
       if (!position) { skipped += 1; continue; }
@@ -102,7 +114,7 @@ export function buildGeospatialExport(
     }
   }
 
-  for (const zone of visible.coalitions.blue.zones) {
+  for (const zone of flightKeys ? [] : visible.coalitions.blue.zones) {
     let geometry: Geometry | null = null;
     if (zone.type === 0) {
       const center = dcsToLatLon(visible.meta.theatre, zone.xy[0], zone.xy[1]);
