@@ -123,19 +123,6 @@ export default function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
     return () => window.removeEventListener('keydown', handleKey);
   }, [open]);
 
-  // Temporary bridge (P8). The map screens (MapTab, RevisionMap) do not read settings.mapBackground
-  // yet, so the setting is written to a root attribute that settings.css uses to hide the Leaflet
-  // tiles. Remove this once P2's MapPanel reads the setting directly. Both shells mount the drawer,
-  // so the attribute follows the setting on every screen, whether the drawer is open or not.
-  const mapBackground = settings.mapBackground;
-  useEffect(() => {
-    const root = document.documentElement;
-    root.dataset.mapBackground = mapBackground ? 'shown' : 'hidden';
-    return () => {
-      delete root.dataset.mapBackground;
-    };
-  }, [mapBackground]);
-
   if (!open) return null;
 
   const coordinateLabels: Record<CoordinateFormatSetting, string> = {

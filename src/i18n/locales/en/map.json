@@ -31,10 +31,10 @@
       "line": "Drag to draw a line. Touching with two fingers stops the line so the map can move. Esc returns to move."
     },
     "colors": {
-      "info": "Blue",
-      "danger": "Red",
-      "warning": "Orange",
-      "success": "Green"
+      "ink1": "Colour 1",
+      "ink2": "Colour 2",
+      "ink3": "Colour 3",
+      "ink4": "Colour 4"
     },
     "undoPin": "Undo last pin",
     "undoLine": "Undo last line",
@@ -50,7 +50,12 @@
       "annotations": "The limit of {{max}} annotations is reached. Remove one before adding another.",
       "strokePoints": "A line can have up to {{max}} points, so this line ended here. Draw the rest as a new line.",
       "totalPoints": "The total number of line points is close to the limit ({{max}}). {{remaining}} points remain."
-    }
+    },
+    "clearAll": "Clear all annotations",
+    "clearConfirm": "Clear all {{count}} annotations? Restore brings them back in one step.",
+    "clearYes": "Clear",
+    "clearNo": "Keep",
+    "removedAll": "Cleared {{count}} annotations. Use Restore to put them back."
   },
   "annotations": {
     "defaultPin": "Pin {{count}}",
@@ -134,5 +139,9 @@
       "carrier": "Carrier",
       "jtac": "JTAC"
     }
+  },
+  "solo": {
+    "showing": "Showing {{callsign}} only",
+    "showAll": "Show all flights"
   }
 }

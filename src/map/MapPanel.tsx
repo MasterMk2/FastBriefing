@@ -3,13 +3,14 @@ import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import type { LatLngBounds, Map as LeafletMap } from 'leaflet';
-import { Circle, LayerGroup, MapContainer, Marker, Polyline, Popup, TileLayer, useMap } from 'react-leaflet';
+import { Circle, LayerGroup, MapContainer, Marker, Polygon, Polyline, Popup, TileLayer, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import type { MapPanelProps } from '../types/screen';
-import type { Drawing, MapAnnotation, MapPinAnnotation, MapStrokeAnnotation, RoutePoint, TriggerZone } from '../types/mission';
+import type { Drawing, Flight, MapAnnotation, MapPinAnnotation, MapStrokeAnnotation, MissionData, RoutePoint, TriggerZone } from '../types/mission';
 import { useMission } from '../shell/MissionContext';
 import { DEFAULT_MAP_UI, useWorkspace } from '../shell/workspace';
-import type { MapTool } from '../shell/workspace';
+import type { MapTool, RouteFocus } from '../shell/workspace';
+import { parseFlightKey } from '../utils/flightKey';
 import { Notice } from '../shell/Notice';
 import { Segmented } from '../shell/Segmented';
 import { SideMark } from '../shell/SideMark';
@@ -39,7 +40,9 @@ import type { LayerGroupId, LayerId } from './mapLayers';
 import {
   checkAdd,
   createAnnotationId,
+  nextPinNumber,
   PointerGestures,
+  pinNumberPattern,
   removeAnnotation,
   restoreAnnotation,
   strokePointTotal,
@@ -47,7 +50,7 @@ import {
   undoLast,
 } from './annotationTools';
 import type { AnnotationRejection, RemovedAnnotation } from './annotationTools';
-import { markIcon, MARK_GLYPHS, supportIcon, SUPPORT_CODES, userPinIcon, waypointIcon } from './icons';
+import { focusIcon, markIcon, MARK_GLYPHS, supportIcon, SUPPORT_CODES, userPinIcon, waypointIcon } from './icons';
 
 const TILE_URL = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
 const TILE_ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
@@ -61,15 +64,45 @@ const MARK_LAYERS: readonly LayerId[] = ['navpoints', 'airbases', 'bullseye', 's
 type BackgroundState = 'loading' | 'ready' | 'failed';
 
 /**
- * Ink colours, as tokens. The stored value is the resolved colour at the time of the click.
- * The glyph is a shape per swatch, so the swatches stay apart where the themes give the same colour (night).
+ * The four ink swatches (tokens --ink-1 to --ink-4). MapUi.color keeps the token name, so a theme change
+ * recolours the ink the user picked. Each swatch has its own shape, so they stay apart without colour.
  */
 const INK_SWATCHES = [
-  { id: 'info', token: '--info-text', glyph: '■' },
-  { id: 'danger', token: '--danger-text', glyph: '◆' },
-  { id: 'warning', token: '--warning-text', glyph: '▲' },
-  { id: 'success', token: '--success-text', glyph: '●' },
+  { id: 'ink1', token: '--ink-1', glyph: '■' },
+  { id: 'ink2', token: '--ink-2', glyph: '◆' },
+  { id: 'ink3', token: '--ink-3', glyph: '▲' },
+  { id: 'ink4', token: '--ink-4', glyph: '●' },
 ] as const;
+const DEFAULT_INK_TOKEN = '--ink-1';
+/** Sentinel for the default pin number, replaced by a capture group when the pin name pattern is built. */
+const PIN_NUMBER_SENTINEL = 987654321;
+
+/** Route picked in the route table, resolved to its point. The map marks it and pans there only when it is out of view. */
+interface RouteFocusTarget {
+  point: LatLon;
+  title: string;
+}
+
+/** Last removal that 元に戻す can undo: one annotation, or every annotation after "注釈をすべて消す". */
+type Removal =
+  | { kind: 'one'; removed: RemovedAnnotation }
+  | { kind: 'all'; annotations: MapAnnotation[] };
+
+function isInkToken(color: string): boolean {
+  return INK_SWATCHES.some(swatch => swatch.token === color);
+}
+
+/** The flight of the view that a key names (any coalition), or null when it is not in the view. */
+function findFlightInView(view: MissionData, key: string | null): Flight | null {
+  const parsed = parseFlightKey(key);
+  if (!parsed) return null;
+  return view.coalitions[parsed.side].flights.find(flight => flight.groupId === parsed.groupId) ?? null;
+}
+
+/** Pattern of the default pin names in the current language. */
+function pinPatternFor(t: TFunction): RegExp {
+  return pinNumberPattern(String(t('map:annotations.defaultPin', { count: PIN_NUMBER_SENTINEL })), PIN_NUMBER_SENTINEL);
+}
 
 /** Whole-map fit (initial mount, flight selection, "全体表示"). Annotation edits never change this. */
 interface FitRequest {
@@ -94,7 +127,7 @@ function resolveToken(token: string): string {
  */
 function colorInputValue(color: string): string {
   if (HEX_COLOR.test(color)) return color;
-  const token = resolveToken('--info-text');
+  const token = resolveToken(DEFAULT_INK_TOKEN);
   return HEX_COLOR.test(token) ? token : DEFAULT_MAP_UI.color;
 }
 
@@ -168,25 +201,44 @@ function rejectionText(t: TFunction, rejection: AnnotationRejection): string {
   return t('map:tools.limit.totalPoints', { max: rejection.limit, remaining: rejection.remaining });
 }
 
-export function MapPanel({ readOnly = false, height = '100%' }: MapPanelProps) {
+export function MapPanel({ readOnly = false, height = '100%', focusFlightKey }: MapPanelProps) {
   const { t } = useTranslation();
   const { mission, view, settings, side, viewMode, setNotes, storageFailed } = useMission();
-  const { flightKey: selectedKey, setFlightKey, setScreen, mapUi, setMapUi } = useWorkspace();
+  const { flightKey: selectedKey, setFlightKey, setScreen, mapUi, setMapUi, routeFocus } = useWorkspace();
   const theatre = view.meta.theatre;
   const supported = isSupportedTheatre(theatre);
-  const model = useMemo<MapModel>(() => buildMapModel(view, side, viewMode), [view, side, viewMode]);
+  // The solo view belongs to the map screen. The read-only briefing map follows its focus flight instead (Lead decision 4).
+  const soloKey = readOnly ? null : mapUi.soloFlightKey;
+  const model = useMemo<MapModel>(
+    () => buildMapModel(view, side, viewMode, soloKey),
+    [view, side, viewMode, soloKey],
+  );
   const annotations = mission.userNotes.mapAnnotations;
   const editable = !readOnly && supported;
   const shown = (id: LayerId) => isLayerAvailable(id, viewMode) && isLayerOn(mapUi.layers, id);
   // Annotations are edited only while their layer is on: a hidden annotation cannot be picked or undone.
   const annotationsOn = editable && shown('annotations');
   const tool: MapTool = annotationsOn ? mapUi.tool : 'move';
-  // The untouched default colour follows the current theme's blue token, so it reads on the FFS dark map.
-  const ink = mapUi.color === DEFAULT_MAP_UI.color ? resolveToken('--info-text') : mapUi.color;
-  // Several swatches can share one colour (the night theme has one red). Only the first of them is pressed.
-  const inkSwatchId = INK_SWATCHES.find(swatch => resolveToken(swatch.token) === ink)?.id;
+  // Route picks change the flight selection only in the move tool of an editable map. The read-only briefing map
+  // never changes the selection, so a press there cannot move the briefing to another screen (the pin and line tools place only their mark, T9).
+  const selectable = !readOnly && tool === 'move';
+  // The ink is the token the user picked (the default is --ink-1). The stored colour is the resolved value.
+  const inkToken = isInkToken(mapUi.color) ? mapUi.color : DEFAULT_INK_TOKEN;
+  const ink = resolveToken(inkToken);
 
-  const [lastRemoved, setLastRemoved] = useState<RemovedAnnotation | null>(null);
+  // The flight the map centres on. A read-only map (the briefing) shows every flight unless a focus is given,
+  // so null and undefined both mean every flight there. The editable map uses the workspace selection when
+  // focusFlightKey is undefined (the map screen, the flight screen). A string focuses that flight and dims the others.
+  const focusKey = readOnly
+    ? (focusFlightKey ?? null)
+    : focusFlightKey === undefined ? selectedKey : focusFlightKey;
+  const dimOthers = typeof focusFlightKey === 'string';
+  const isHighlighted = (routeKey: string) => routeKey === focusKey || routeKey === routeFocus?.flightKey;
+
+  const [removal, setRemoval] = useState<Removal | null>(null);
+  const [confirmingClear, setConfirmingClear] = useState(false);
+  const clearButtonRef = useRef<HTMLButtonElement | null>(null);
+  const keepButtonRef = useRef<HTMLButtonElement | null>(null);
   const [rejection, setRejection] = useState<AnnotationRejection | null>(null);
   const [background, setBackground] = useState<BackgroundState>('loading');
   // Narrow widths start with the legend folded and the layers sheet shut, so neither covers the map.
@@ -201,29 +253,61 @@ export function MapPanel({ readOnly = false, height = '100%' }: MapPanelProps) {
 
   const bounds = useMemo<FitBounds>(() => ({
     all: collectBounds(model, theatre),
-    flight: selectedKey ? flightBounds(model, selectedKey) : null,
-  }), [model, theatre, selectedKey]);
+    flight: focusKey ? flightBounds(model, focusKey) : null,
+  }), [model, theatre, focusKey]);
 
-  const [fit, setFit] = useState<FitRequest>(() => ({ id: 1, target: selectedKey ? 'flight' : 'all' }));
-  const lastKey = useRef(selectedKey);
+  const [fit, setFit] = useState<FitRequest>(() => ({ id: 1, target: focusKey ? 'flight' : 'all' }));
+  const lastKey = useRef(focusKey);
   useEffect(() => {
-    if (lastKey.current === selectedKey) return;
-    lastKey.current = selectedKey;
-    setFit(previous => ({ id: previous.id + 1, target: selectedKey ? 'flight' : 'all' }));
-  }, [selectedKey]);
+    if (lastKey.current === focusKey) return;
+    lastKey.current = focusKey;
+    setFit(previous => ({ id: previous.id + 1, target: focusKey ? 'flight' : 'all' }));
+  }, [focusKey]);
 
-  // Escape returns to move, except while the user is typing in a field.
+  // The route point picked in the route table. Only the marker and (when out of view) the pan follow it; no refit.
+  const focusTarget = useMemo<RouteFocusTarget | null>(() => {
+    if (!routeFocus) return null;
+    const entry = model.flights.find(candidate => candidate.routeKey === routeFocus.flightKey);
+    const waypoint = entry?.flight.route[routeFocus.routeIndex];
+    if (!entry || !waypoint || !isResolvedLatLon(waypoint.latlon, waypoint.latlonResolved)) return null;
+    return {
+      point: waypoint.latlon,
+      title: `${entry.flight.callsign || entry.flight.name}: ${waypoint.name}`,
+    };
+  }, [routeFocus, model]);
+
+  // "この機だけ地図に" banner: names the flight and offers to show every flight again.
+  const soloFlight = soloKey ? findFlightInView(view, soloKey) : null;
+  const showAllFlights = () => setMapUi(previous => ({ ...previous, soloFlightKey: null }));
+
+  // Escape returns to move, except while the user is typing in a field or while the clear confirmation is open
+  // (that Escape closes the confirmation instead).
   useEffect(() => {
     if (!editable || tool === 'move') return undefined;
     const onKey = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return;
+      if (event.key !== 'Escape' || confirmingClear) return;
       const target = event.target;
       if (target instanceof Element && target.closest('input, textarea, select, [contenteditable="true"]')) return;
       setMapUi(previous => ({ ...previous, tool: 'move' }));
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [editable, tool, setMapUi]);
+  }, [editable, tool, setMapUi, confirmingClear]);
+
+  // Opening the clear confirmation moves focus to its safe choice (やめる). Escape or やめる closes it and returns
+  // focus to the button that opened it.
+  useEffect(() => {
+    if (!confirmingClear) return undefined;
+    keepButtonRef.current?.focus();
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      setConfirmingClear(false);
+      clearButtonRef.current?.focus();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [confirmingClear]);
 
   const sideLabel = (value: CoalitionKey) => t(`shell:side.${value}`);
 
@@ -250,17 +334,17 @@ export function MapPanel({ readOnly = false, height = '100%' }: MapPanelProps) {
       return false;
     }
     setRejection(null);
-    setLastRemoved(null);
+    setRemoval(null);
     commit([...annotations, candidate]);
     return true;
   };
   const addPin = (at: LatLon) => {
-    const count = annotations.filter(item => item.kind === 'pin').length + 1;
+    const number = nextPinNumber(annotations, pinPatternFor(t));
     addAnnotation({
       id: createAnnotationId('pin'),
       kind: 'pin',
       position: at,
-      label: t('map:annotations.defaultPin', { count }),
+      label: t('map:annotations.defaultPin', { count: number }),
       notes: '',
       color: ink,
     });
@@ -283,7 +367,7 @@ export function MapPanel({ readOnly = false, height = '100%' }: MapPanelProps) {
   const removeById = (id: string) => {
     const result = removeAnnotation(annotations, id);
     if (!result.removed) return;
-    setLastRemoved(result.removed);
+    setRemoval({ kind: 'one', removed: result.removed });
     setRejection(null);
     commit(result.next);
   };
@@ -291,18 +375,33 @@ export function MapPanel({ readOnly = false, height = '100%' }: MapPanelProps) {
   const undo = () => {
     const result = undoLast(annotations);
     if (!result.removed) return;
-    setLastRemoved(result.removed);
+    setRemoval({ kind: 'one', removed: result.removed });
     setRejection(null);
     commit(result.next);
   };
+  /** "注釈をすべて消す" after the user confirmed. One step of 元に戻す brings every annotation back. */
+  const clearAll = () => {
+    if (annotations.length === 0) return;
+    setRemoval({ kind: 'all', annotations });
+    setRejection(null);
+    setConfirmingClear(false);
+    commit([]);
+  };
   const restore = () => {
-    if (!lastRemoved) return;
-    const result = restoreAnnotation(annotations, lastRemoved);
+    if (!removal) return;
+    if (removal.kind === 'all') {
+      if (annotations.length > 0) return;
+      setRemoval(null);
+      setRejection(null);
+      commit(removal.annotations);
+      return;
+    }
+    const result = restoreAnnotation(annotations, removal.removed);
     if (!result.ok) {
       setRejection(result);
       return;
     }
-    setLastRemoved(null);
+    setRemoval(null);
     setRejection(null);
     commit(result.next);
   };
@@ -430,6 +529,7 @@ export function MapPanel({ readOnly = false, height = '100%' }: MapPanelProps) {
     >
       <MapContainer className="map-canvas" center={DEFAULT_CENTER} zoom={DEFAULT_ZOOM} scrollWheelZoom={true} zoomControl={false}>
         <MapHandle target={mapRef} />
+        <RouteFocusPan selection={routeFocus} point={focusTarget?.point ?? null} />
         {settings.mapBackground && (
           <TileLayer
             url={TILE_URL}
@@ -494,11 +594,24 @@ export function MapPanel({ readOnly = false, height = '100%' }: MapPanelProps) {
           <FlightRoute
             key={`${entry.side}-${entry.flight.groupId}`}
             entry={entry}
-            selected={entry.key !== null && entry.key === selectedKey}
+            highlighted={isHighlighted(entry.routeKey)}
+            dimmed={dimOthers && !isHighlighted(entry.routeKey)}
+            selectable={selectable}
             onSelect={selectFlight}
-            onOpen={openFlight}
+            onOpen={readOnly ? undefined : openFlight}
           />
         ))}
+
+        {focusTarget && shown('flights') && (
+          <Marker
+            position={focusTarget.point}
+            icon={focusIcon()}
+            interactive={false}
+            zIndexOffset={1000}
+            title={focusTarget.title}
+            alt={focusTarget.title}
+          />
+        )}
 
         {shown('zones') && model.zones.map((zone, index) => (
           <ZoneLayer key={`zone-${zone.zoneId}-${index}`} zone={zone} theatre={theatre} />
@@ -650,6 +763,13 @@ export function MapPanel({ readOnly = false, height = '100%' }: MapPanelProps) {
         )}
       </div>
 
+      {soloFlight && (
+        <div className="map-overlay map-solo" role="status">
+          <span>{t('map:solo.showing', { callsign: soloFlight.callsign || soloFlight.name })}</span>
+          <button type="button" className="map-button" onClick={showAllFlights}>{t('map:solo.showAll')}</button>
+        </div>
+      )}
+
       {!anyLayerOn ? (
         <div className="map-empty" role="status">
           <Notice tone="info" title={t('map:empty.noLayers')}>
@@ -670,8 +790,7 @@ export function MapPanel({ readOnly = false, height = '100%' }: MapPanelProps) {
           <Segmented label={t('map:tools.label')} options={toolOptions} value={tool} onChange={setTool} />
           <div className="map-swatches" role="group" aria-label={t('map:tools.color')}>
             {INK_SWATCHES.map(swatch => {
-              const value = resolveToken(swatch.token);
-              const pressed = swatch.id === inkSwatchId;
+              const pressed = swatch.token === inkToken;
               return (
                 <button
                   key={swatch.id}
@@ -679,7 +798,7 @@ export function MapPanel({ readOnly = false, height = '100%' }: MapPanelProps) {
                   className={`map-swatch map-swatch-${swatch.id}${pressed ? ' is-pressed' : ''}`}
                   aria-pressed={pressed}
                   aria-label={t(`map:tools.colors.${swatch.id}`)}
-                  onClick={() => setMapUi(previous => ({ ...previous, color: value }))}
+                  onClick={() => setMapUi(previous => ({ ...previous, color: swatch.token }))}
                 >
                   <span className="map-swatch-glyph" aria-hidden="true">{swatch.glyph}</span>
                 </button>
@@ -688,9 +807,35 @@ export function MapPanel({ readOnly = false, height = '100%' }: MapPanelProps) {
           </div>
           <div className="map-tool-actions">
             <button type="button" disabled={annotations.length === 0} onClick={undo}>{t(undoKey)}</button>
-            {lastRemoved && <button type="button" onClick={restore}>{t('map:tools.restore')}</button>}
+            {removal && <button type="button" onClick={restore}>{t('map:tools.restore')}</button>}
             {tool === 'pin' && <button type="button" onClick={pinAtCentre}>{t('map:tools.pinCentre')}</button>}
+            <button
+              ref={clearButtonRef}
+              type="button"
+              disabled={annotations.length === 0}
+              onClick={() => setConfirmingClear(true)}
+            >
+              {t('map:tools.clearAll')}
+            </button>
           </div>
+          {confirmingClear && annotations.length > 0 && (
+            <div className="map-confirm" role="group" aria-label={t('map:tools.clearAll')}>
+              <p>{t('map:tools.clearConfirm', { count: annotations.length })}</p>
+              <div className="map-tool-actions">
+                <button type="button" className="map-danger" onClick={clearAll}>{t('map:tools.clearYes')}</button>
+                <button
+                  ref={keepButtonRef}
+                  type="button"
+                  onClick={() => {
+                    setConfirmingClear(false);
+                    clearButtonRef.current?.focus();
+                  }}
+                >
+                  {t('map:tools.clearNo')}
+                </button>
+              </div>
+            </div>
+          )}
           <p className="map-tool-help">{t(`map:tools.help.${tool}`)}</p>
           <p className="map-count">{t('map:tools.count', { count: annotations.length, max: MAX_MAP_ANNOTATIONS })}</p>
           <p className="map-count">
@@ -701,9 +846,11 @@ export function MapPanel({ readOnly = false, height = '100%' }: MapPanelProps) {
           </p>
           {storageFailed && <Notice tone="warning">{t('map:tools.storageFailed')}</Notice>}
           {rejection && <Notice tone="warning">{rejectionText(t, rejection)}</Notice>}
-          {lastRemoved && (
+          {removal && (
             <p className="map-count">
-              {t('map:tools.removed', { kind: t(`map:annotations.kind.${lastRemoved.annotation.kind}`) })}
+              {removal.kind === 'one'
+                ? t('map:tools.removed', { kind: t(`map:annotations.kind.${removal.removed.annotation.kind}`) })
+                : t('map:tools.removedAll', { count: removal.annotations.length })}
             </p>
           )}
             </>
@@ -728,6 +875,25 @@ function LegendItem({ sampleClass, label, children }: { sampleClass?: string; la
       <span>{label}</span>
     </li>
   );
+}
+
+/**
+ * Pans to the route point picked in the route table, only when it is outside the view. The view is never
+ * refitted for a route pick (F12). Every pick is a new selection object, so picking the same row again pans again,
+ * even though the point itself keeps its identity. The point is read through a ref, so a rebuilt model alone never pans.
+ */
+function RouteFocusPan({ selection, point }: { selection: RouteFocus | null; point: LatLon | null }) {
+  const map = useMap();
+  const latest = useRef(point);
+  useEffect(() => {
+    latest.current = point;
+  }, [point]);
+  useEffect(() => {
+    const target = latest.current;
+    if (!selection || !target) return;
+    if (!map.getBounds().contains(target)) map.panTo(target);
+  }, [map, selection]);
+  return null;
 }
 
 /** Applies the fit request. Reads the latest bounds through a ref, so a new bounds value alone never refits. */
@@ -855,25 +1021,32 @@ function routeRuns(route: RoutePoint[]): LatLon[][] {
   return runs;
 }
 
-function FlightRoute({ entry, selected, onSelect, onOpen }: {
+function FlightRoute({ entry, highlighted, dimmed, selectable, onSelect, onOpen }: {
   entry: FlightEntry;
-  selected: boolean;
+  /** The selected flight, or the flight of the route focus. */
+  highlighted: boolean;
+  /** Another flight while one flight is focused (the briefing map). */
+  dimmed: boolean;
+  /** Whether a press picks the flight (move tool only). */
+  selectable: boolean;
   onSelect: (key: string) => void;
-  onOpen: (key: string) => void;
+  /** Absent on the read-only map, where a popup offers no link to another screen. */
+  onOpen?: (key: string) => void;
 }) {
   const { t } = useTranslation();
   const { flight, side: owner, key } = entry;
   const label = flight.callsign || flight.name;
   const runs = routeRuns(flight.route);
-  const select = key ? { click: () => onSelect(key) } : undefined;
+  const select = selectable && key ? { click: () => onSelect(key) } : undefined;
+  const state = `${highlighted ? 'selected' : 'idle'}-${dimmed ? 'dim' : 'full'}`;
   return (
     <>
       {runs.map((run, runIndex) => run.length > 1 && (
-        // The key holds the selection: react-leaflet does not change a path's class after it is drawn.
+        // The key holds the state: react-leaflet does not change a path's class after it is drawn.
         <Polyline
-          key={`run-${runIndex}-${selected ? 'selected' : 'idle'}`}
+          key={`run-${runIndex}-${state}`}
           positions={run}
-          className={`map-route map-route-${owner}${selected ? ' is-selected' : ''}`}
+          className={`map-route map-route-${owner}${highlighted ? ' is-selected' : ''}${dimmed ? ' is-dim' : ''}`}
           eventHandlers={select}
         />
       ))}
@@ -884,7 +1057,7 @@ function FlightRoute({ entry, selected, onSelect, onOpen }: {
           <Marker
             key={`${owner}-${flight.groupId}-wp-${routeIndex}`}
             position={waypoint.latlon}
-            icon={waypointIcon(routeIndex + 1, selected)}
+            icon={waypointIcon(routeIndex + 1, highlighted, dimmed)}
             title={title}
             alt={title}
             eventHandlers={select}
@@ -892,7 +1065,7 @@ function FlightRoute({ entry, selected, onSelect, onOpen }: {
             <Popup>
               <strong>{title}</strong>
               {waypoint.action && <div>{waypoint.action}</div>}
-              {key && (
+              {key && onOpen && (
                 <button type="button" className="map-button" onClick={() => onOpen(key)}>
                   {t('map:popup.openFlight')}
                 </button>
@@ -950,8 +1123,9 @@ function DrawingLayer({ drawing, theatre }: { drawing: Drawing; theatre: string 
             : null;
         }
         if (object.primitiveType === 'Polygon') {
+          // A polygon is closed and lightly filled, so its area reads without covering the routes.
           return positions.length > 1
-            ? <Polyline key={key} positions={positions} className={className} weight={object.thickness} {...pathOptions} />
+            ? <Polygon key={key} positions={positions} className={className} weight={object.thickness} fillOpacity={0.15} {...pathOptions} />
             : null;
         }
         if (object.primitiveType === 'TextBox') {

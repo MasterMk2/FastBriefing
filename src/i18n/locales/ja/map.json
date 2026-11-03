@@ -31,10 +31,10 @@
       "line": "ドラッグして線を描きます。2 本指で触ると線は止まり、地図を動かせます。Esc で移動に戻ります。"
     },
     "colors": {
-      "info": "青",
-      "danger": "赤",
-      "warning": "橙",
-      "success": "緑"
+      "ink1": "色 1",
+      "ink2": "色 2",
+      "ink3": "色 3",
+      "ink4": "色 4"
     },
     "undoPin": "直前のピンを取り消す",
     "undoLine": "直前の線を取り消す",
@@ -50,7 +50,12 @@
       "annotations": "注釈は上限の {{max}} 件に達しています。消してから追加してください。",
       "strokePoints": "1 本の線は {{max}} 点までです。ここで線を終えました。続きは新しい線で描いてください。",
       "totalPoints": "線の点数の合計が上限（{{max}} 点）に近づいています。残りは {{remaining}} 点です。"
-    }
+    },
+    "clearAll": "注釈をすべて消す",
+    "clearConfirm": "注釈 {{count}} 件をすべて消します。「元に戻す」で一度に戻せます。",
+    "clearYes": "消す",
+    "clearNo": "やめる",
+    "removedAll": "注釈 {{count}} 件をすべて消しました。「元に戻す」で戻せます。"
   },
   "annotations": {
     "defaultPin": "ピン {{count}}",
@@ -134,5 +139,9 @@
       "carrier": "空母",
       "jtac": "JTAC"
     }
+  },
+  "solo": {
+    "showing": "{{callsign}} だけを表示中",
+    "showAll": "全機を表示に戻す"
   }
 }

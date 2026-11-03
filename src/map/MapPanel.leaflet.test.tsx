@@ -70,12 +70,19 @@ function makeMission(annotations: MapAnnotation[]): MissionData {
     units: [],
     route: [point(1, [42, 42]), point(2, [42.1, 42.1]), point(3, [42.2, 42.2])],
   } as unknown as Flight;
+  const second = {
+    ...flight,
+    groupId: 2,
+    name: 'BLUE2',
+    callsign: 'BLUE2',
+    route: [point(1, [43.5, 43.5]), point(2, [43.6, 43.6])],
+  } as unknown as Flight;
   return {
     sourceFingerprint: 'fp-leaflet-test',
     meta: { theatre: 'Caucasus', descriptionBlueTask: '', descriptionRedTask: '' },
     weather: {},
     coalitions: {
-      blue: { ...emptySide(), flights: [flight] },
+      blue: { ...emptySide(), flights: [flight, second] },
       red: emptySide(),
       neutral: emptySide(),
     },
@@ -150,17 +157,19 @@ describe('drawn map (real react-leaflet)', () => {
     expect(after[0].getAttribute('stroke-width')).toBe('12');
   });
 
-  it('the route of the picked flight gets the selected class', async () => {
+  it('the own side first flight is selected at mount, and a click on another flight line picks that flight', async () => {
     await render(makeMission([]));
     const routeClasses = () => [...host.querySelectorAll<SVGPathElement>('path.map-route-blue')]
       .map(node => node.getAttribute('class') ?? '');
-    expect(routeClasses()).toHaveLength(1);
-    expect(routeClasses()[0]).not.toContain('is-selected');
+    expect(routeClasses()).toHaveLength(2);
+    expect(routeClasses()[0]).toContain('is-selected');
+    expect(routeClasses()[1]).not.toContain('is-selected');
 
     // Picking a flight on the map: a click on its route line (Leaflet's own click handler selects the flight).
-    const line = host.querySelector<SVGPathElement>('path.map-route-blue');
+    const line = host.querySelectorAll<SVGPathElement>('path.map-route-blue')[1];
     await act(async () => line?.dispatchEvent(new MouseEvent('click', { bubbles: true })));
-    expect(routeClasses()[0]).toContain('is-selected');
+    expect(routeClasses()[1]).toContain('is-selected');
+    expect(routeClasses()[0]).not.toContain('is-selected');
   });
 
   it('a press on a route marker in pin mode opens nothing and adds no pin; a press on empty map adds one', async () => {

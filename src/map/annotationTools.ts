@@ -87,6 +87,26 @@ export function truncateLabel(label: string, max: number = MAX_MAP_LABEL_LENGTH)
   return chars.length > max ? `${chars.slice(0, max - 1).join('')}…` : label;
 }
 
+/**
+ * Pattern for the default pin names ("ピン 3", "Pin 3"), built from the translated template. The number in the
+ * template is replaced by `sentinel` before the template is escaped, so the pattern captures the number.
+ */
+export function pinNumberPattern(template: string, sentinel: number): RegExp {
+  const escaped = template.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`^${escaped.replace(String(sentinel), '(\\d+)')}$`);
+}
+
+/** The next default pin number: one more than the largest number among the default names (renamed pins do not count). */
+export function nextPinNumber(annotations: readonly MapAnnotation[], pattern: RegExp): number {
+  let largest = 0;
+  for (const annotation of annotations) {
+    if (annotation.kind !== 'pin') continue;
+    const match = pattern.exec(annotation.label);
+    if (match) largest = Math.max(largest, Number(match[1]));
+  }
+  return largest + 1;
+}
+
 export function createAnnotationId(prefix: string): string {
   const random = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
     ? crypto.randomUUID()
