@@ -1,10 +1,11 @@
-import type { Flight, Side, MissionMeta, MissionData, SMEACNotes, SupportAsset, Weather, DisplaySettings } from '../types/mission';
+import type { Flight, Side, MissionMeta, MissionData, SMEACNotes, SupportAsset, Weather, DisplaySettings, IssueCode } from '../types/mission';
 import type { Units } from '../shell/units';
 import { BRIEFING_SECTIONS, type BriefingSection } from '../utils/briefingSections';
 import { parseFlightKey } from '../utils/flightKey';
 import { calculateRouteLegs } from '../utils/routeLegs';
 import { buildMetar } from '../utils/metar';
 import { formatDateYMD, hasEta, missionLocalDate, missionZuluDate } from '../utils/time';
+import { hasIssue } from '../core/issues';
 
 /** Upper bound of table rows on one slide (SPEC 1.3: 1 slide at most 14 rows). */
 export const BRIEFING_ROWS_PER_SLIDE = 14;
@@ -221,13 +222,17 @@ function weatherSlide(input: BriefingSlideInput): BriefingSlide {
   const { weather, meta } = input.view;
   const { units, t } = input;
   const cloudLabel = weather.clouds.label.trim() || naText(input);
+  // A value the normalizer filled with a default is marked, as on the overview and in the handout.
+  const defaulted = (value: string, code: IssueCode) => (
+    hasIssue(input.view.issues, code) ? t('briefing:weather.defaultedValue', { value }) : value
+  );
   return {
     key: 'weather',
     section: 'weather',
     title: t('briefing:section.weather'),
     pairs: [
-      { label: t('briefing:weather.temperature'), value: units.temp(weather.temperature) },
-      { label: t('briefing:weather.qnh'), value: units.pressure(weather.qnh) },
+      { label: t('briefing:weather.temperature'), value: defaulted(units.temp(weather.temperature), 'weather.temperatureDefaulted') },
+      { label: t('briefing:weather.qnh'), value: defaulted(units.pressure(weather.qnh), 'weather.qnhDefaulted') },
       { label: t('briefing:weather.visibility'), value: units.distance(weather.visibility) },
       {
         label: t('briefing:weather.clouds'),

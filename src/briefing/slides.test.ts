@@ -370,6 +370,25 @@ describe('buildBriefingSlides (F8)', () => {
     expect(slide.text).toContain('briefing:weather.metar');
   });
 
+  it('marks the QNH and the temperature on the weather slide only when the normalizer filled them with a default', () => {
+    const valueOf = (mission: ReturnType<typeof makeMission>, label: string) => {
+      const [slide] = buildBriefingSlides(input(mission, { sections: new Set(['weather']) }));
+      return slide.pairs?.find(pair => pair.label === label)?.value;
+    };
+
+    const set = makeMission();
+    expect(valueOf(set, 'briefing:weather.qnh')).not.toBe('briefing:weather.defaultedValue');
+    expect(valueOf(set, 'briefing:weather.temperature')).not.toBe('briefing:weather.defaultedValue');
+
+    const defaulted = makeMission();
+    defaulted.issues = [
+      { code: 'weather.qnhDefaulted', severity: 'warning' },
+      { code: 'weather.temperatureDefaulted', severity: 'warning' },
+    ];
+    expect(valueOf(defaulted, 'briefing:weather.qnh')).toBe('briefing:weather.defaultedValue');
+    expect(valueOf(defaulted, 'briefing:weather.temperature')).toBe('briefing:weather.defaultedValue');
+  });
+
   it('shows the channel of the lead radio on the flight frequency, and the TACAN of a support asset', () => {
     const lead = flight(1, 'Viper 1', [point(1, 600)]);
     lead.units = [{
