@@ -192,6 +192,8 @@ interface Units {
 | （行） | `src/screens/flight/FlightRow.tsx` | P1 | なし | props 下記 |
 | （カード） | `src/screens/flight/LineupCard.tsx` | P7 | なし | props 下記 |
 | （カード） | `src/screens/flight/WingmanCard.tsx` | P7 | なし | props 下記 |
+| （関数） | `src/analysis/lint.ts` | P5 | なし | `lintMission(mission: MissionData): LintFinding[]`（名前付き export）。呼び出し側は `useMission().view` を渡す。error → warning → info の順 |
+| （部品） | `src/map/MapPanel.tsx` | P2 | `MapTab.tsx` | `MapPanel(props: MapPanelProps)`（名前付き export）。P1（1600px 以上の右ペイン）と P4（readOnly）が使う |
 
 ### 6.1 凍結する props
 
