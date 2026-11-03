@@ -13,6 +13,11 @@ interface MissionMapCanvasProps {
   className?: string;
   labels?: MissionMapLabels;
   onRenderStateChange?: (state: MissionMapRenderState) => void;
+  /**
+   * Whether the basemap tiles are wanted (decision 6). This legacy component reads no settings, so it
+   * takes the choice from its caller. Omitted keeps its previous behaviour (tiles wanted).
+   */
+  basemap?: boolean;
 }
 
 export type MissionMapRenderState = 'loading' | 'ready' | 'error';
@@ -22,6 +27,7 @@ export default function MissionMapCanvas({
   className = '',
   labels,
   onRenderStateChange,
+  basemap = true,
 }: MissionMapCanvasProps) {
   const { t } = useTranslation();
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -38,7 +44,7 @@ export default function MissionMapCanvas({
     renderedCanvas.height = canvas.height;
     const renderedContext = renderedCanvas.getContext('2d');
     if (!renderedContext) return;
-    const scene = buildMissionMapScene(mission);
+    const scene = { ...buildMissionMapScene(mission), basemap };
     const resolvedLabels = labels ?? {
       empty: t('mapRaster.empty'),
       basemapUnavailable: t('mapRaster.basemapUnavailable'),
@@ -75,7 +81,7 @@ export default function MissionMapCanvas({
     return () => {
       active = false;
     };
-  }, [labels, mission, onRenderStateChange, t]);
+  }, [basemap, labels, mission, onRenderStateChange, t]);
 
   return <canvas ref={canvasRef} className={className} width={1536} height={1024} aria-label={t('mapRaster.label')} />;
 }

@@ -68,7 +68,7 @@ describe('kneeboard plan', () => {
       ...mission.coalitions.blue.flights[0], callsign: `Extra ${index + 1}`, groupId: 10 + index,
     })));
     const maps = planKneeboardPages(mission, settings, translate).filter(page => page.kind === 'map');
-    expect(maps.map(page => page.title)).toEqual(['kneeboard.map 1/2', 'kneeboard.map 2/2']);
+    expect(maps.map(page => page.title)).toEqual(['legacy:kneeboard.map 1/2', 'legacy:kneeboard.map 2/2']);
     expect(maps.flatMap(page => page.scene.routes.map(route => route.label))).toEqual([
       'Visible', 'Other', 'Extra 1', 'Extra 2', 'Extra 3', 'Extra 4',
     ]);
@@ -92,5 +92,29 @@ describe('kneeboard plan', () => {
     const text = JSON.stringify(pages);
     expect(text).not.toContain('Enemy');
     expect(text).toContain('Visible');
+  });
+});
+
+describe('map pages and the basemap setting (decision 6)', () => {
+  const mapsWith = (mapBackground: boolean) => planKneeboardPages(
+    fixture(),
+    { ...settings, briefingSections: ['map'], mapBackground },
+    translate,
+  ).filter(page => page.kind === 'map');
+
+  it('marks every map page as wanting no basemap when the setting is off', () => {
+    const maps = mapsWith(false);
+    expect(maps.length).toBeGreaterThan(0);
+    for (const page of maps) {
+      expect(page.kind === 'map' && page.scene.basemap).toBe(false);
+    }
+  });
+
+  it('marks every map page as wanting a basemap when the setting is on', () => {
+    const maps = mapsWith(true);
+    expect(maps.length).toBeGreaterThan(0);
+    for (const page of maps) {
+      expect(page.kind === 'map' && page.scene.basemap).toBe(true);
+    }
   });
 });

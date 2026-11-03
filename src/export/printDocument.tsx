@@ -1,10 +1,8 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import WhiteboardDrawing from '../components/WhiteboardDrawing';
 import type { KneeboardPage, KneeboardSection, KneeboardTranslate } from '../utils/kneeboard';
-import { drawMissionMap, hasMissionMapContent, type MissionMapLabels, type MissionMapScene } from '../utils/missionMapRaster';
+import { drawMissionMap, mapDrawFailed, type MissionMapLabels, type MissionMapScene } from '../utils/missionMapRaster';
 import { mapLabels } from '../utils/kneeboardRenderer';
-
-export type PrintMapState = 'loading' | 'ready' | 'error';
 
 interface PrintDocumentProps {
   pages: readonly KneeboardPage[];
@@ -12,8 +10,11 @@ interface PrintDocumentProps {
   title: string;
   viewLabel: string;
   t: KneeboardTranslate;
-  /** Reports the combined state of every map on the document (loading until all are drawn). */
-  onMapStateChange?: (state: PrintMapState) => void;
+  /**
+   * Whether the map pages may be drawn (decision 7). Until it is true, a map page says that it is
+   * being prepared and no tile is requested, so reading the mission alone costs nothing.
+   */
+  drawMaps: boolean;
 }
 
 /**
@@ -23,18 +24,10 @@ interface PrintDocumentProps {
  * text, and a map without its basemap prints the overlay with "地図背景なし", so
  * printing is never blocked.
  */
-export default function PrintDocument({ pages, title, viewLabel, t, onMapStateChange }: PrintDocumentProps) {
-  const mapCount = pages.filter(page => page.kind === 'map').length;
-  const [mapStates, setMapStates] = useState<Record<number, PrintMapState>>({});
-  const combined = combineMapStates(mapStates, mapCount);
-
-  useEffect(() => {
-    onMapStateChange?.(combined);
-  }, [combined, onMapStateChange]);
-
+export default function PrintDocument({ pages, title, viewLabel, t, drawMaps }: PrintDocumentProps) {
   const labels = useMemo<MissionMapLabels>(() => mapLabels(t), [t]);
+  const keys = pageKeys(pages);
 
-  let mapIndex = 0;
   return (
     <div className="print-document">
       <header className="print-document-head">
@@ -43,15 +36,14 @@ export default function PrintDocument({ pages, title, viewLabel, t, onMapStateCh
       </header>
       {pages.map((page, pageIndex) => {
         if (page.kind === 'map') {
-          const index = mapIndex;
-          mapIndex += 1;
           return (
-            <section key={`page-${pageIndex}`} className="print-page print-map-page">
+            <section key={keys[pageIndex]} className="print-page print-map-page">
               <h2>{page.title}</h2>
               <PrintMap
                 scene={page.scene}
                 labels={labels}
-                onState={state => setMapStates(current => (current[index] === state ? current : { ...current, [index]: state }))}
+                drawMaps={drawMaps}
+                deferredText={t('export:ui.mapDeferred')}
                 loadingText={t('export:ui.mapPreparing')}
               />
             </section>
@@ -59,7 +51,7 @@ export default function PrintDocument({ pages, title, viewLabel, t, onMapStateCh
         }
         if (page.kind === 'whiteboard') {
           return (
-            <section key={`page-${pageIndex}`} className="print-page print-whiteboard-page">
+            <section key={keys[pageIndex]} className="print-page print-whiteboard-page">
               <h2>{page.title}</h2>
               <p className="print-notes">{page.data.notes.trim() || t('export:label.noWhiteboardNotes')}</p>
               {page.data.strokes.length > 0 && (
@@ -73,7 +65,7 @@ export default function PrintDocument({ pages, title, viewLabel, t, onMapStateCh
           );
         }
         return (
-          <section key={`page-${pageIndex}`} className="print-page">
+          <section key={keys[pageIndex]} className="print-page">
             <h2>{page.title}</h2>
             {page.sections.map((section, sectionIndex) => (
               <PrintSection key={`section-${sectionIndex}`} section={section} />
@@ -109,69 +101,78 @@ function PrintSection({ section }: { section: KneeboardSection }) {
   );
 }
 
-function PrintMap({ scene, labels, onState, loadingText }: {
+/**
+ * A key per page that stays with the page when another page is added before it. A map keeps its key by
+ * its place among the pages of its kind, so a page added before it does not mount the map again.
+ */
+function pageKeys(pages: readonly KneeboardPage[]): string[] {
+  const counts = new Map<string, number>();
+  return pages.map(page => {
+    const count = counts.get(page.kind) ?? 0;
+    counts.set(page.kind, count + 1);
+    return `${page.kind}-${count}`;
+  });
+}
+
+type MapStatus ='deferred' | 'loading' | 'ready' | 'error';
+
+function PrintMap({ scene, labels, drawMaps, deferredText, loadingText }: {
   scene: MissionMapScene;
   labels: MissionMapLabels;
-  onState: (state: PrintMapState) => void;
+  drawMaps: boolean;
+  deferredText: string;
   loadingText: string;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const onStateRef = useRef(onState);
-  const [ready, setReady] = useState<PrintMapState>('loading');
-
-  // The parent passes a new callback on every render; the drawing effect reads the latest one.
-  useEffect(() => {
-    onStateRef.current = onState;
+  const [status, setStatus] = useState<MapStatus>(drawMaps ? 'loading' : 'deferred');
+  // The draw is keyed by what the map shows, not by object identity. The export model is rebuilt when an
+  // unrelated setting changes (the theme, for example), and the same map must not be drawn again then.
+  const sceneKey = useMemo(() => JSON.stringify(scene), [scene]);
+  // Read by the drawing effect below. Declared first, so it runs first in the same commit.
+  const sceneRef = useRef(scene);
+  useLayoutEffect(() => {
+    sceneRef.current = scene;
   });
 
   useLayoutEffect(() => {
+    if (!drawMaps) {
+      setStatus('deferred');
+      return undefined;
+    }
     const canvas = canvasRef.current;
     const context = canvas?.getContext('2d');
     if (!canvas || !context) {
-      setReady('error');
-      onStateRef.current('error');
-      return;
+      setStatus('error');
+      return undefined;
     }
-    // `active` turns false when the scene or labels change, or the map unmounts. A draw still
-    // waiting for its basemap then does nothing, so it cannot paint over the newer draw.
+    // `active` turns false when the map is drawn again or unmounts. A draw still waiting for its tiles then
+    // stops before it paints, so it cannot paint over the newer draw.
     let active = true;
-    setReady('loading');
-    onStateRef.current('loading');
+    const drawn = sceneRef.current;
+    setStatus('loading');
     void (async () => {
-      let state: PrintMapState = 'error';
+      let next: MapStatus = 'error';
       try {
-        const result = await drawMissionMap(context, scene, 0, 0, canvas.width, canvas.height, labels, {
+        const result = await drawMissionMap(context, drawn, 0, 0, canvas.width, canvas.height, labels, {
           isCurrent: () => active,
         });
-        state = result.background || !hasMissionMapContent(scene) ? 'ready' : 'error';
+        next = mapDrawFailed(drawn, result) ? 'error' : 'ready';
       } catch {
-        state = 'error';
+        next = 'error';
       }
-      if (active) {
-        setReady(state);
-        onStateRef.current(state);
-      }
+      if (active) setStatus(next);
     })();
     return () => {
       active = false;
     };
-  }, [scene, labels]);
+  }, [drawMaps, sceneKey, labels]);
 
   return (
     <div className="print-map-frame">
       <canvas ref={canvasRef} className="print-map-canvas" width={1536} height={1024} aria-label={labels.routes} />
-      {ready !== 'ready' && <p className="print-map-status">{ready === 'error' ? labels.basemapUnavailable : loadingText}</p>}
+      {status === 'deferred' && <p className="print-map-status">{deferredText}</p>}
+      {status === 'loading' && <p className="print-map-status">{loadingText}</p>}
+      {status === 'error' && <p className="print-map-status">{labels.basemapUnavailable}</p>}
     </div>
   );
-}
-
-function combineMapStates(states: Record<number, PrintMapState>, mapCount: number): PrintMapState {
-  if (mapCount === 0) return 'ready';
-  let state: PrintMapState = 'ready';
-  for (let index = 0; index < mapCount; index += 1) {
-    const value = states[index] ?? 'loading';
-    if (value === 'error') return 'error';
-    if (value === 'loading') state = 'loading';
-  }
-  return state;
 }

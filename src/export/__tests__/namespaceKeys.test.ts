@@ -18,6 +18,8 @@ const EXPORT_SOURCES = [
   'export/exportModel.ts',
   'export/useExportModel.ts',
   'screens/ExportScreen.tsx',
+  // planKneeboardPages is the old tab's planner (ExportTab.tsx); it stays until the tab is removed.
+  'utils/kneeboard.ts',
 ];
 
 const staticKeyCall = /\bt\(\s*(['"`])([^'"`]*)\1/g;

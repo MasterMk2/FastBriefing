@@ -8,6 +8,7 @@ import type { ChangeEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSettings } from '../hooks/useSettings';
 import { useMission } from '../shell/MissionContext';
+import { EXPORT_FLIGHT_ANCHOR, useWorkspace } from '../shell/workspace';
 import { Field } from '../shell/Field';
 import { Notice } from '../shell/Notice';
 import { SideMark } from '../shell/SideMark';
@@ -43,6 +44,7 @@ export default function ExportScreen() {
   const { mission, settings, side, sourceFile, view } = useMission();
   const { setBriefingSections, setBriefingPresets, setOutputLanguage, setViewMode, setKneeboardWidth } = useSettings();
   const { model, scope, outT, title, viewLabel } = useExportModel();
+  const { focusAnchor, flightKey, clearFocusAnchor } = useWorkspace();
   const [format, setFormat] = useState<FormatId>('print');
   const [markdownStyle, setMarkdownStyle] = useState<MarkdownStyle>('table');
   const [status, setStatus] = useState<Partial<Record<FormatId, { tone: 'info' | 'error'; text: string }>>>({});
@@ -52,6 +54,10 @@ export default function ExportScreen() {
   const [presetNotice, setPresetNotice] = useState('');
   const [previewOpen, setPreviewOpen] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
+  const screenRef = useRef<HTMLDivElement>(null);
+  const previewOpenerRef = useRef<HTMLButtonElement>(null);
+  const previewPrintRef = useRef<HTMLButtonElement>(null);
+  const previewWasOpen = useRef(false);
 
   const selectedSections = settings.briefingSections;
   const orderedSections = useMemo<BriefingSection[]>(() => [
@@ -95,23 +101,55 @@ export default function ExportScreen() {
   // Pilot view offers only the displayed side; the other side is not in the view at all (D1).
   const sideOptions: Side[] = pilotView ? [side] : ['blue', 'red'];
 
-  // Close the print preview with Escape, and take it off the page when the screen goes away.
+  // Close the print preview with Escape, and take it off the page when the screen goes away. While it is
+  // open the focus moves into its bar, and the screen behind it is inert, so the keyboard does not reach
+  // the controls under the preview. The bar itself stays usable.
   useEffect(() => {
     const root = document.documentElement;
     if (previewOpen) root.dataset.printPreview = 'on';
     else delete root.dataset.printPreview;
     if (!previewOpen) return undefined;
+    const behind = Array.from(screenRef.current?.children ?? [])
+      .filter(item => !item.classList.contains('print-preview-bar'));
+    for (const item of behind) item.setAttribute('inert', '');
+    previewPrintRef.current?.focus();
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') setPreviewOpen(false);
     };
     window.addEventListener('keydown', onKey);
     return () => {
       window.removeEventListener('keydown', onKey);
+      for (const item of behind) item.removeAttribute('inert');
       delete root.dataset.printPreview;
     };
   }, [previewOpen]);
 
+  // Closing the preview returns the focus to the button that opened it. This runs after the effect above has
+  // removed the inert mark, so the focus can land.
+  useEffect(() => {
+    if (previewOpen) {
+      previewWasOpen.current = true;
+      return;
+    }
+    if (!previewWasOpen.current) return;
+    previewWasOpen.current = false;
+    previewOpenerRef.current?.focus();
+  }, [previewOpen]);
+
   const setScope = (next: ExportScope) => setExportScope(mission.sourceFingerprint, next);
+
+  // "この資料を作る" on the flight screen arrives here with the flight chosen as the target (SPEC F9, T2).
+  // A missing or unknown flight leaves the target as it is; the anchor is consumed either way.
+  // A boolean, not the flight list: the list is rebuilt whenever the export model is, and this effect must
+  // not run again because of that (the scope write re-renders the screen before the anchor is cleared).
+  const chosenFlightInView = flightKey !== null && flightOptions.some(item => item.key === flightKey);
+  useEffect(() => {
+    if (focusAnchor !== EXPORT_FLIGHT_ANCHOR) return;
+    if (chosenFlightInView && flightKey) {
+      setExportScope(mission.sourceFingerprint, { kind: 'flights', flightKeys: [flightKey] });
+    }
+    clearFocusAnchor();
+  }, [focusAnchor, flightKey, chosenFlightInView, mission.sourceFingerprint, clearFocusAnchor]);
 
   const changeTarget = (kind: TargetKind) => {
     if (kind === 'mission') setScope({ kind: 'mission' });
@@ -276,7 +314,7 @@ export default function ExportScreen() {
   };
 
   return (
-    <div className="export-screen">
+    <div className="export-screen" ref={screenRef}>
       <aside className="export-plan" aria-label={t('export:ui.title')}>
         <h2 className="export-title">{t('export:ui.title')}</h2>
 
@@ -433,7 +471,7 @@ export default function ExportScreen() {
           <p className="export-hint">{t('export:ui.formatPrintHelp')}</p>
           <p className="export-hint">{t('export:ui.printHint')}</p>
           <div className="export-actions">
-            <button type="button" className="btn btn-secondary" onClick={() => setPreviewOpen(true)} disabled={Boolean(blockedReason)}>{t('export:ui.printPreview')}</button>
+            <button ref={previewOpenerRef} type="button" className="btn btn-secondary" onClick={() => setPreviewOpen(true)} disabled={Boolean(blockedReason)}>{t('export:ui.printPreview')}</button>
             <button type="button" className={primary('print')} onClick={printDocument} disabled={Boolean(blockedReason)}>{t('export:ui.printDo')}</button>
           </div>
         </section>
@@ -529,7 +567,7 @@ export default function ExportScreen() {
       {previewOpen && (
         <div className="print-preview-bar" role="region" aria-label={t('export:ui.printPreview')}>
           <span>{t('export:ui.printPreview')}</span>
-          <button type="button" className="btn btn-primary" onClick={printDocument}>{t('export:ui.printDo')}</button>
+          <button ref={previewPrintRef} type="button" className="btn btn-primary" onClick={printDocument}>{t('export:ui.printDo')}</button>
           <button type="button" className="btn btn-secondary" onClick={() => setPreviewOpen(false)}>{t('export:ui.printPreviewClose')}</button>
         </div>
       )}
