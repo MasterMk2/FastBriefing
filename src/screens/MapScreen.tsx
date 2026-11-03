@@ -1,12 +1,10 @@
-// STUB. Owner: P2 (地図). P2 replaces this file with the MapPanel screen.
-// Contract: default export, no props. Map UI state (layers, tool, colour) lives in useWorkspace().mapUi.
-//   Read data with useMission(). The same MapPanel is later shared with the flight screen (1600px+).
-// Carried over: MapTab({ mission, settings, onNotesChange }) from src/components/MapTab.tsx.
-// Removed at integration: MapTab.tsx (SPEC 8).
-import MapTab from '../components/MapTab';
-import { useMission } from '../shell/MissionContext';
+import { MapPanel } from '../map/MapPanel';
 
+/** The map screen. The panel fills the main area; its state lives in useWorkspace().mapUi. */
 export default function MapScreen() {
-  const { mission, settings, setNotes } = useMission();
-  return <MapTab mission={mission} settings={settings} onNotesChange={setNotes} />;
+  return (
+    <div className="map-screen">
+      <MapPanel height="100%" />
+    </div>
+  );
 }
