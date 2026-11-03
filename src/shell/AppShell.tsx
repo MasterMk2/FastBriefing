@@ -1,15 +1,15 @@
 // Owner: P0 (土台). Application frame (SPEC 1.1): header (52px), left rail (240px, 1280px and wider),
 // bottom tabs (under 1280px), main area, print document, settings drawer.
 // The header controls (side, view) are wired here; the screens are not.
-import { useLayoutEffect, useState } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import PrintView from '../components/PrintView';
 import type { LoadedRevision } from '../components/RevisionComparison';
 import { getMissionWhiteboardId } from '../hooks/useWhiteboard';
 import { useSettings } from '../hooks/useSettings';
 import InitialScreen from '../screens/InitialScreen';
 import type { MissionData, Side, UserNotes } from '../types/mission';
-import { getNativePrintBlockReason, installPrintReadinessGuard } from '../utils/printReadiness';
+import PrintDocument from '../export/printDocument';
+import { useExportModel } from '../export/useExportModel';
 import { BottomTabs } from './BottomTabs';
 import FileMenu from './FileMenu';
 import { FlightRail } from './FlightRail';
@@ -211,39 +211,23 @@ function ShellHeader({ onPickFiles, onCloseMission }: { onPickFiles: () => void;
 }
 
 /**
- * Print document and print guard (moved from MissionView). The document is
- * mounted only on the export screen, so printing from any screen with Ctrl+P
- * shows the briefing material only after the export screen has been opened (see P3 for the full path).
+ * The printable briefing (P3). It is always mounted and hidden on screen, so Ctrl+P
+ * from any screen prints the export plan. Maps that are not drawn yet print as
+ * "準備中", so printing is never blocked (SPEC 5.1, F9).
  */
 function PrintHost() {
-  const { t } = useTranslation();
-  const { mission, settings, whiteboard } = useMission();
-  const { screen, printMapState, reportPrintMapState } = useWorkspace();
-  const hasPrintMap = settings.briefingSections.includes('map');
-  const printBlockReason = getNativePrintBlockReason(screen === 'export', hasPrintMap, printMapState);
-  const printBlocked = printBlockReason !== null;
-
-  useLayoutEffect(() => installPrintReadinessGuard(
-    window,
-    document.documentElement,
-    () => printBlocked,
-  ), [printBlocked]);
+  const { reportPrintMapState } = useWorkspace();
+  const { model, title, viewLabel, outT } = useExportModel();
 
   return (
     <div className="print-briefing">
-      <div className="print-map-blocked-message" role="alert">
-        {printBlockReason === 'export-unavailable'
-          ? t('export.nativePrintOpenExport')
-          : t(printMapState === 'error' ? 'export.printMapFailed' : 'export.printMapLoading')}
-      </div>
-      {screen === 'export' && (
-        <PrintView
-          mission={mission}
-          settings={settings}
-          whiteboard={whiteboard.data}
-          onMapRenderStateChange={reportPrintMapState}
-        />
-      )}
+      <PrintDocument
+        pages={model.pages}
+        title={title}
+        viewLabel={viewLabel}
+        t={outT}
+        onMapStateChange={reportPrintMapState}
+      />
     </div>
   );
 }

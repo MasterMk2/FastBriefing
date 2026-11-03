@@ -1,4 +1,4 @@
-import type { AIGroup, DrawingObject, Flight, MissionData, SupportAsset, TriggerZone } from '../types/mission';
+import type { AIGroup, DrawingObject, Flight, MissionData, Side, SupportAsset, TriggerZone } from '../types/mission';
 import { dcsToLatLon, latLonToDCS } from './coordinates';
 
 export interface MissionMapRoute {
@@ -27,6 +27,8 @@ export interface MissionMapLabels {
   support: string;
   threats: string;
   zones: string;
+  /** Shown when some map annotations could not be projected and are therefore not drawn. */
+  skippedAnnotations?: string;
 }
 
 const ROUTE_COLORS = { blue: '#175cd3', red: '#b42318', neutral: '#667085' } as const;
@@ -36,7 +38,11 @@ const MAX_TILE_ZOOM = 14;
 const TILE_LOAD_TIMEOUT_MS = 8000;
 const tileCache = new Map<string, Promise<HTMLImageElement | null>>();
 
-export function buildMissionMapScene(mission: MissionData, flights?: readonly Flight[]): MissionMapScene {
+/**
+ * `threatSide` is the side whose AI groups are drawn as threats: the opposing side of the
+ * displayed one. It defaults to red (the previous behaviour, for callers without a side).
+ */
+export function buildMissionMapScene(mission: MissionData, flights?: readonly Flight[], threatSide: Side = 'red'): MissionMapScene {
   const selectedFlights = flights
     ? new Set(flights)
     : null;
@@ -88,7 +94,7 @@ export function buildMissionMapScene(mission: MissionData, flights?: readonly Fl
       ...mission.coalitions.red.support,
       ...mission.coalitions.neutral.support,
     ]),
-    threats: mission.coalitions.red.aiGroups.filter(group => isFinitePoint(group.position)),
+    threats: mission.coalitions[threatSide].aiGroups.filter(group => isFinitePoint(group.position)),
     userPins,
     userStrokes,
     unprojectableMapAnnotations,
@@ -102,6 +108,26 @@ export function hasMissionMapContent(scene: MissionMapScene): boolean {
     + scene.unprojectableMapAnnotations > 0;
 }
 
+/** What a map draw produced. `background` is false when the basemap could not be drawn (offline, or no tile). */
+export interface MissionMapDrawResult {
+  background: boolean;
+  /** Overlay objects drawn: routes, zones, drawings, threats, support and the user's marks. */
+  drawn: number;
+}
+
+export interface MissionMapDrawOptions {
+  /**
+   * Checked once the basemap has loaded. When it returns false, nothing is drawn, because a
+   * newer draw has replaced this one. Lets a stale asynchronous draw never paint over a fresh one.
+   */
+  isCurrent?: () => boolean;
+}
+
+/**
+ * Draws the map into the rectangle. The overlay (routes, zones, drawings, threats, support,
+ * the user's marks) is drawn even when the basemap is missing; the result says whether the
+ * basemap was drawn, so callers can print "地図背景なし" next to the overlay.
+ */
 export async function drawMissionMap(
   context: CanvasRenderingContext2D,
   scene: MissionMapScene,
@@ -110,64 +136,74 @@ export async function drawMissionMap(
   width: number,
   height: number,
   labels: MissionMapLabels,
-): Promise<boolean> {
+  options: MissionMapDrawOptions = {},
+): Promise<MissionMapDrawResult> {
+  const nothing: MissionMapDrawResult = { background: false, drawn: 0 };
   context.save();
-  context.fillStyle = '#f5f8fb';
-  context.fillRect(left, top, width, height);
-  context.strokeStyle = '#d0d5dd';
-  context.lineWidth = 2;
-  context.strokeRect(left, top, width, height);
+  try {
+    context.fillStyle = '#f5f8fb';
+    context.fillRect(left, top, width, height);
+    context.strokeStyle = '#d0d5dd';
+    context.lineWidth = 2;
+    context.strokeRect(left, top, width, height);
 
-  if (scene.unprojectableMapAnnotations > 0) {
-    drawMapMessage(context, labels.basemapUnavailable, left, top);
+    const extent = calculateExtent(scene);
+    if (!extent) {
+      context.fillStyle = '#475467';
+      context.font = '28px sans-serif';
+      context.fillText(labels.empty, left + 32, top + 64);
+      return nothing;
+    }
+
+    const projection = createMapProjection(scene.theatre, extent, left, top, width, height);
+    if (!projection) {
+      drawMapMessage(context, labels.basemapUnavailable, left, top, 0);
+      return nothing;
+    }
+    const project = projection.projectDcs;
+    const scale = projection.dcsScale;
+
+    let background = false;
+    context.save();
+    try {
+      context.beginPath();
+      context.rect(left, top, width, height);
+      context.clip();
+      const tileCount = await drawBasemapTiles(context, projection, left, top, width, height);
+      if (options.isCurrent && !options.isCurrent()) return nothing;
+      background = tileCount > 0;
+
+      for (const object of scene.drawings) drawObject(context, object, project);
+      for (const zone of scene.zones) drawZone(context, zone, project, scale);
+      for (const threat of scene.threats) drawThreat(context, threat, project, scale);
+      for (const route of scene.routes) drawRoute(context, route, project, left, top, width);
+      for (const asset of scene.support) drawSupport(context, asset, project);
+      for (const stroke of scene.userStrokes) drawUserStroke(context, stroke, project);
+      for (const pin of scene.userPins) drawUserPin(context, pin, project);
+      if (background) drawAttribution(context, left, top, width, height);
+    } finally {
+      context.restore();
+    }
+
+    let messageRow = 0;
+    if (!background) {
+      drawMapMessage(context, labels.basemapUnavailable, left, top, messageRow);
+      messageRow += 1;
+    }
+    if (scene.unprojectableMapAnnotations > 0 && labels.skippedAnnotations) {
+      drawMapMessage(context, labels.skippedAnnotations, left, top, messageRow);
+    }
+
+    drawNorthArrow(context, left + width - 54, top + 34);
+    drawLegend(context, scene, left + 20, top + height - 28, labels);
+    return {
+      background,
+      drawn: scene.routes.length + scene.zones.length + scene.drawings.length + scene.threats.length
+        + scene.support.length + scene.userStrokes.length + scene.userPins.length,
+    };
+  } finally {
     context.restore();
-    return false;
   }
-
-  const extent = calculateExtent(scene);
-  if (!extent) {
-    context.fillStyle = '#475467';
-    context.font = '28px sans-serif';
-    context.fillText(labels.empty, left + 32, top + 64);
-    context.restore();
-    return false;
-  }
-
-  const projection = createMapProjection(scene.theatre, extent, left, top, width, height);
-  if (!projection) {
-    drawMapMessage(context, labels.basemapUnavailable, left, top);
-    context.restore();
-    return false;
-  }
-  const project = projection.projectDcs;
-  const scale = projection.dcsScale;
-
-  context.save();
-  context.beginPath();
-  context.rect(left, top, width, height);
-  context.clip();
-  const tileCount = await drawBasemapTiles(context, projection, left, top, width, height);
-  if (tileCount === 0) {
-    context.restore();
-    drawMapMessage(context, labels.basemapUnavailable, left, top);
-    context.restore();
-    return false;
-  }
-
-  for (const object of scene.drawings) drawObject(context, object, project);
-  for (const zone of scene.zones) drawZone(context, zone, project, scale);
-  for (const threat of scene.threats) drawThreat(context, threat, project, scale);
-  for (const route of scene.routes) drawRoute(context, route, project, left, top, width);
-  for (const asset of scene.support) drawSupport(context, asset, project);
-  for (const stroke of scene.userStrokes) drawUserStroke(context, stroke, project);
-  for (const pin of scene.userPins) drawUserPin(context, pin, project);
-  if (tileCount > 0) drawAttribution(context, left, top, width, height);
-  context.restore();
-
-  drawNorthArrow(context, left + width - 54, top + 34);
-  drawLegend(context, scene, left + 20, top + height - 28, labels);
-  context.restore();
-  return true;
 }
 
 interface MapProjection {
@@ -346,10 +382,11 @@ function calculateExtent(scene: MissionMapScene) {
   };
 }
 
-function drawMapMessage(context: CanvasRenderingContext2D, message: string, left: number, top: number) {
+/** One line of text at the top-left of the map; `row` stacks further lines below the first. */
+function drawMapMessage(context: CanvasRenderingContext2D, message: string, left: number, top: number, row: number) {
   context.fillStyle = '#475467';
   context.font = '28px sans-serif';
-  context.fillText(message, left + 32, top + 64);
+  context.fillText(message, left + 32, top + 64 + row * 40);
 }
 
 function drawObject(context: CanvasRenderingContext2D, object: DrawingObject, project: (point: [number, number]) => [number, number]) {

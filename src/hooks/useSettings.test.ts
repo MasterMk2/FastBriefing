@@ -121,14 +121,14 @@ describe('useSettings persistence', () => {
     });
   });
 
-  it('v3の選択順を保ちつつ新しい記入欄を概要の後へ追加する', () => {
+  it('v3の選択順を保ちつつ新しい記入欄と天候欄を概要の後へ追加する', () => {
     const stored = JSON.stringify({
       settingsVersion: 3,
       briefingSections: ['whiteboard', 'overview', 'map'],
     });
 
     expect(loadSettings(createStorage(stored)).briefingSections).toEqual([
-      'whiteboard', 'overview', 'notes', 'map',
+      'overview', 'weather', 'notes', 'map',
     ]);
   });
 
@@ -161,7 +161,7 @@ describe('useSettings persistence', () => {
 
     expect(loadSettings(createStorage(stored))).toEqual({
       ...DEFAULT_SETTINGS,
-      briefingSections: ['whiteboard', 'overview'],
+      briefingSections: ['notes', 'overview'],
     });
   });
 
@@ -276,6 +276,39 @@ describe('useSettings schema v5', () => {
   it('treats a record that is not an object as defaults and keeps the v3 section migration', () => {
     expect(migrateSettings('not an object')).toEqual(DEFAULT_SETTINGS);
     expect(migrateSettings({ settingsVersion: 3, briefingSections: ['overview', 'flights'] }).briefingSections)
-      .toEqual(['overview', 'notes', 'flights']);
+      .toEqual(['overview', 'weather', 'notes', 'flights', 'route']);
+  });
+
+  it('gives a v4 selection the weather after overview and the nav logs after flights', () => {
+    const stored = JSON.stringify({ settingsVersion: 4, briefingSections: ['overview', 'flights', 'map'] });
+
+    expect(loadSettings(createStorage(stored)).briefingSections).toEqual([
+      'overview', 'weather', 'flights', 'route', 'map',
+    ]);
+  });
+
+  it('keeps a v4 selection that already has the weather and the nav logs', () => {
+    const stored = JSON.stringify({ settingsVersion: 4, briefingSections: ['overview', 'weather', 'flights', 'route'] });
+
+    expect(loadSettings(createStorage(stored)).briefingSections).toEqual([
+      'overview', 'weather', 'flights', 'route',
+    ]);
+  });
+
+  it('migrates the sections of v4 presets too, so applying an old preset keeps the printout', () => {
+    const stored = JSON.stringify({
+      settingsVersion: 4,
+      briefingPresets: [{ name: 'Old', sections: ['overview', 'flights'] }],
+    });
+
+    expect(loadSettings(createStorage(stored)).briefingPresets).toEqual([
+      { name: 'Old', sections: ['overview', 'weather', 'flights', 'route'] },
+    ]);
+  });
+
+  it('does not add the weather or nav logs to a current record the user trimmed', () => {
+    const stored = JSON.stringify({ settingsVersion: SETTINGS_VERSION, briefingSections: ['overview', 'flights'] });
+
+    expect(loadSettings(createStorage(stored)).briefingSections).toEqual(['overview', 'flights']);
   });
 });

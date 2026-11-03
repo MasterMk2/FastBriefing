@@ -17,14 +17,14 @@ export type BriefingPngTranslation = (
 ) => string;
 
 export interface BriefingPngSection {
-  id: BriefingSection;
+  id: BriefingSection | 'whiteboard';
   title: string;
   lines: string[];
   includeWhiteboardDrawing: boolean;
 }
 
 export interface BriefingPngPage {
-  sectionId: BriefingSection;
+  sectionId: BriefingPngSection['id'];
   title: string;
   lines: string[];
   drawWhiteboard: boolean;
@@ -59,7 +59,7 @@ export function buildBriefingPngSections(
       || category === 'ship';
   });
 
-  const sections: Record<BriefingSection, BriefingPngSection> = {
+  const sections: Partial<Record<BriefingSection, BriefingPngSection>> = {
     overview: {
       id: 'overview',
       title: t('planner.sections.overview'),
@@ -171,17 +171,27 @@ export function buildBriefingPngSections(
         }))
         : [t('export.markdown.noThreats')],
     },
-    whiteboard: {
+  };
+
+  // The whiteboard is printed with the notes section (see below).
+  const whiteboardSection: BriefingPngSection = {
       id: 'whiteboard',
       title: t('export.markdown.whiteboard'),
       includeWhiteboardDrawing: true,
       lines: whiteboard.notes.trim()
         ? whiteboard.notes.trim().split(/\r?\n/)
         : [t('export.markdown.noWhiteboardNotes')],
-    },
-  };
+    };
 
-  return settings.briefingSections.map(section => sections[section]);
+  return settings.briefingSections.flatMap((section): BriefingPngSection[] => {
+    if (section === 'notes') return [sections.notes, whiteboardSection].filter(isPngSection);
+    const entry = sections[section];
+    return entry ? [entry] : [];
+  });
+
+  function isPngSection(value: BriefingPngSection | undefined): value is BriefingPngSection {
+    return value !== undefined;
+  }
 }
 
 export function wrapBriefingPngLines(

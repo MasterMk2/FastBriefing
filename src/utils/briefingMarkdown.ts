@@ -18,13 +18,12 @@ export function buildBriefingMarkdown(
   for (const section of settings.briefingSections) {
     switch (section) {
       case 'overview': blocks.push(overviewMarkdown(mission, settings, t)); break;
-      case 'notes': blocks.push(notesMarkdown(mission, t)); break;
+      case 'notes': blocks.push(notesMarkdown(mission, t), whiteboardMarkdown(whiteboard, t)); break;
       case 'flights': blocks.push(flightsMarkdown(mission, settings, t)); break;
       case 'map': blocks.push(mapMarkdown(mission, t)); break;
       case 'comms': blocks.push(commsMarkdown(mission, t)); break;
       case 'support': blocks.push(supportMarkdown(mission, t)); break;
       case 'threats': blocks.push(threatsMarkdown(mission, settings, t)); break;
-      case 'whiteboard': blocks.push(whiteboardMarkdown(whiteboard, t)); break;
     }
   }
   return blocks.filter(Boolean).join('\n');

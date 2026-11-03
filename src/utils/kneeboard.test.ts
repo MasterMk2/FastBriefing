@@ -36,14 +36,19 @@ function fixture(): MissionData {
   } as unknown as MissionData;
 }
 
-const settings = { ...DEFAULT_SETTINGS, viewMode: 'pilot' as const, side: 'blue' as const };
+const settings = {
+  ...DEFAULT_SETTINGS,
+  viewMode: 'pilot' as const,
+  side: 'blue' as const,
+  briefingSections: ['overview', 'notes', 'flights', 'map', 'comms', 'support', 'threats'] as BriefingSection[],
+};
 const translate = (key: string) => key;
 
 describe('kneeboard plan', () => {
   it('includes notes, nav logs and comms while filtering hidden flights', () => {
     const pages = planKneeboardPages(fixture(), settings, translate);
     expect(pages.map(page => page.section)).toEqual([
-      'overview', 'notes', 'flights', 'flights', 'map', 'comms', 'support', 'threats', 'whiteboard',
+      'overview', 'notes', 'notes', 'flights', 'flights', 'map', 'comms', 'support', 'threats',
     ]);
     const content = JSON.stringify(pages);
     expect(content).toContain('Friendly forces');
@@ -70,9 +75,9 @@ describe('kneeboard plan', () => {
   });
 
   it('follows planner selection and order for every section family', () => {
-    const ordered = { ...settings, briefingSections: ['whiteboard', 'map', 'overview'] as BriefingSection[] };
+    const ordered = { ...settings, briefingSections: ['notes', 'map', 'overview'] as BriefingSection[] };
     const pages = planKneeboardPages(fixture(), ordered, translate, null, { notes: 'board', strokes: [] });
-    expect(pages.map(page => page.section)).toEqual(['whiteboard', 'map', 'overview']);
+    expect(pages.map(page => page.section)).toEqual(['notes', 'notes', 'map', 'overview']);
   });
 
   it('includes waypoint purpose and notes in the navigation log', () => {

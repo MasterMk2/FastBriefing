@@ -1,15 +1,21 @@
 import type { KneeboardPage, KneeboardTranslate } from './kneeboard';
 import { WHITEBOARD_HEIGHT, WHITEBOARD_WIDTH } from '../hooks/useWhiteboard';
-import { drawMissionMap, hasMissionMapContent, type MissionMapScene } from './missionMapRaster';
+import { drawMissionMap, type MissionMapLabels } from './missionMapRaster';
 
 const BASE_WIDTH = 1536;
 const BASE_HEIGHT = 2048;
 const MARGIN = 96;
 const CONTENT_BOTTOM = 1870;
 const TEXT_LINE_HEIGHT = 48;
-const ESTIMATED_CHARS_PER_LINE = 40;
 export const MAX_KNEEBOARD_PAGES = 64;
 export const MAX_KNEEBOARD_PIXELS = 128_000_000;
+
+export interface KneeboardRenderOptions {
+  /** Called after each page is encoded, with the finished count and the total. */
+  onProgress?: (done: number, total: number) => void;
+  /** Checked between batches. An aborted render rejects with an error whose name is 'AbortError'. */
+  signal?: AbortSignal;
+}
 
 interface CanvasPage {
   canvas: HTMLCanvasElement;
@@ -27,31 +33,79 @@ type PhysicalPage =
   | { kind: 'map'; title: string; page: Extract<KneeboardPage, { kind: 'map' }> }
   | { kind: 'whiteboard'; title: string; page: Extract<KneeboardPage, { kind: 'whiteboard' }>; noteLines: string[] };
 
+export type KneeboardBudget =
+  | { kind: 'ok' }
+  | { kind: 'pages'; limit: number }
+  | { kind: 'pixels'; limit: number };
+
+/**
+ * Whether `pageCount` pages at `width` fit the limits. The page limit does not depend on the
+ * width, so it is reported separately: a smaller width cannot fix it.
+ */
+export function kneeboardBudget(pageCount: number, width: number): KneeboardBudget {
+  if (pageCount > MAX_KNEEBOARD_PAGES) return { kind: 'pages', limit: MAX_KNEEBOARD_PAGES };
+  const height = Math.round(width * 4 / 3);
+  const pixels = pageCount * width * height;
+  if (!Number.isSafeInteger(pixels) || pixels > MAX_KNEEBOARD_PIXELS) {
+    return { kind: 'pixels', limit: Math.floor(MAX_KNEEBOARD_PIXELS / (width * height)) };
+  }
+  return { kind: 'ok' };
+}
+
+/** The largest offered width at which `pageCount` pages fit, or null when none does. */
+export function largestFittingWidth(pageCount: number, widths: readonly number[]): number | null {
+  if (pageCount > MAX_KNEEBOARD_PAGES) return null;
+  return [...widths].sort((a, b) => b - a).find(width => kneeboardBudget(pageCount, width).kind === 'ok') ?? null;
+}
+
+/**
+ * A 2D context for measuring text. Uses a real canvas when the browser has one, and
+ * otherwise a fixed-width stand-in, so the page count is always computed the same way.
+ */
+export function createMeasurementContext(): CanvasRenderingContext2D {
+  const canvas = document.createElement('canvas');
+  canvas.width = 1;
+  canvas.height = 1;
+  const context = canvas.getContext('2d');
+  if (context) return context;
+  return {
+    font: '',
+    measureText: (text: string) => ({ width: Array.from(text).length * 17 }),
+  } as unknown as CanvasRenderingContext2D;
+}
+
+/**
+ * The exact number of physical pages `renderKneeboardPages` will produce for these pages.
+ * The estimate on the export screen uses this same pagination, so it never disagrees with
+ * the result.
+ */
+export function countKneeboardPages(
+  pages: readonly KneeboardPage[],
+  t: KneeboardTranslate,
+  context: CanvasRenderingContext2D,
+): number {
+  context.font = '32px sans-serif';
+  return paginatePages(pages, t, context).length;
+}
+
 export async function renderKneeboardPages(
   pages: KneeboardPage[],
   width: number,
   t: KneeboardTranslate,
+  options: KneeboardRenderOptions = {},
 ): Promise<Uint8Array[]> {
   if (!Number.isInteger(width) || width % 3 !== 0 || width < 768 || width > 3072) {
-    throw new Error(t('kneeboard.invalidWidth'));
+    throw new Error(t('export:kneeboard.invalidWidth'));
   }
 
-  // Reject obviously excessive work before allocating even a single full-size canvas.
-  assertKneeboardRenderBudget(estimateKneeboardPageCount(pages), width, t);
-  const measurementCanvas = document.createElement('canvas');
-  measurementCanvas.width = 1;
-  measurementCanvas.height = 1;
-  const measurementContext = measurementCanvas.getContext('2d');
-  if (!measurementContext) throw new Error('Canvas 2D context unavailable');
-  measurementContext.font = '32px sans-serif';
+  const measurementContext = createMeasurementContext();
   const physicalPages = paginatePages(pages, t, measurementContext);
-  measurementCanvas.width = 1;
-  measurementCanvas.height = 1;
   assertKneeboardRenderBudget(physicalPages.length, width, t);
 
   const output: Uint8Array[] = [];
   const batchSize = width > 2048 ? 1 : 2;
   for (let batchStart = 0; batchStart < physicalPages.length; batchStart += batchSize) {
+    if (options.signal?.aborted) throw abortError(t);
     const encodings: Promise<Uint8Array>[] = [];
     for (let index = batchStart; index < Math.min(batchStart + batchSize, physicalPages.length); index += 1) {
       const spec = physicalPages[index];
@@ -80,6 +134,7 @@ export async function renderKneeboardPages(
         }));
     }
     output.push(...await Promise.all(encodings));
+    options.onProgress?.(output.length, physicalPages.length);
   }
   return output;
 }
@@ -89,42 +144,23 @@ export function assertKneeboardRenderBudget(
   width: number,
   t: KneeboardTranslate,
 ): void {
-  if (pageCount > MAX_KNEEBOARD_PAGES) {
-    throw new Error(t('kneeboard.tooManyPages', { count: pageCount, limit: MAX_KNEEBOARD_PAGES }));
+  const budget = kneeboardBudget(pageCount, width);
+  if (budget.kind === 'pages') {
+    throw new Error(t('export:kneeboard.tooManyPages', { count: pageCount, limit: budget.limit }));
   }
-  const height = Math.round(width * 4 / 3);
-  const pixels = pageCount * width * height;
-  if (!Number.isSafeInteger(pixels) || pixels > MAX_KNEEBOARD_PIXELS) {
-    const limit = Math.floor(MAX_KNEEBOARD_PIXELS / (width * height));
-    throw new Error(t('kneeboard.tooManyPixels', { count: pageCount, limit }));
+  if (budget.kind === 'pixels') {
+    throw new Error(t('export:kneeboard.tooManyPixels', { count: pageCount, limit: budget.limit }));
   }
 }
 
-export function estimateKneeboardPageCount(pages: readonly KneeboardPage[]): number {
-  return pages.reduce((total, page) => {
-    if (page.kind === 'map') return total + 1;
-    if (page.kind === 'whiteboard' && page.data.strokes.length > 0) {
-      const noteLines = estimateWrappedLines(page.data.notes);
-      return total + 1 + Math.ceil(Math.max(0, noteLines - 7) / 31);
-    }
-    const sections = page.kind === 'text'
-      ? page.sections
-      : [{ heading: '', lines: page.data.notes ? page.data.notes.split(/\r?\n/) : [''] }];
-    const height = sections.reduce((sum, section) => sum + 86
-      + section.lines.reduce((lineSum, line) => lineSum + estimateWrappedLines(line) * TEXT_LINE_HEIGHT, 0), 0);
-    return total + Math.max(1, Math.ceil(height / (CONTENT_BOTTOM - 240)));
-  }, 0);
-}
-
-function estimateWrappedLines(value: string): number {
-  return value.split(/\r?\n/).reduce(
-    (sum, line) => sum + Math.max(1, Math.ceil(Array.from(line).length / ESTIMATED_CHARS_PER_LINE)),
-    0,
-  );
+function abortError(t: KneeboardTranslate): Error {
+  const error = new Error(t('export:kneeboard.aborted'));
+  error.name = 'AbortError';
+  return error;
 }
 
 function paginatePages(
-  pages: KneeboardPage[],
+  pages: readonly KneeboardPage[],
   t: KneeboardTranslate,
   context: CanvasRenderingContext2D,
 ): PhysicalPage[] {
@@ -137,11 +173,11 @@ function paginatePages(
     } else if (page.data.strokes.length === 0) {
       result.push(...paginateTextPage({
         kind: 'text',
-        section: 'whiteboard',
+        section: 'notes',
         title: page.title,
         sections: [{
-          heading: t('whiteboard.notes'),
-          lines: page.data.notes ? page.data.notes.split(/\r?\n/) : [t('export.markdown.noWhiteboardNotes')],
+          heading: t('export:label.whiteboardNotes'),
+          lines: page.data.notes ? page.data.notes.split(/\r?\n/) : [t('export:label.noWhiteboardNotes')],
         }],
       }, t, context));
     } else {
@@ -154,9 +190,9 @@ function paginatePages(
       if (overflow.length > 0) {
         result.push(...paginateTextPage({
           kind: 'text',
-          section: 'whiteboard',
-          title: `${page.title} (${t('kneeboard.continued')})`,
-          sections: [{ heading: t('whiteboard.notes'), lines: overflow }],
+          section: 'notes',
+          title: `${page.title} (${t('export:label.continued')})`,
+          sections: [{ heading: t('export:label.whiteboardNotes'), lines: overflow }],
         }, t, context));
       }
     }
@@ -175,7 +211,7 @@ function paginateTextPage(
   let y = 240;
   const nextPage = () => {
     pages.push({ kind: 'text', title, commands });
-    title = `${page.title} (${t('kneeboard.continued')})`;
+    title = `${page.title} (${t('export:label.continued')})`;
     commands = [];
     y = 240;
   };
@@ -246,6 +282,10 @@ function wrapLine(context: CanvasRenderingContext2D, value: string, maxWidth: nu
   return lines;
 }
 
+/**
+ * Draws the map page. A missing basemap does not fail the page: the overlay is drawn and the
+ * page says "地図背景なし" (SPEC 1.3), so the kneeboard is still usable offline.
+ */
 async function renderMapPage(
   page: Extract<KneeboardPage, { kind: 'map' }>,
   context: CanvasRenderingContext2D,
@@ -255,23 +295,19 @@ async function renderMapPage(
   const mapTop = 220;
   const mapWidth = BASE_WIDTH - (MARGIN + 40) * 2;
   const mapHeight = 1580;
-  const rendered = await drawMissionMap(context, page.scene, mapLeft, mapTop, mapWidth, mapHeight, {
-    empty: t('kneeboard.noMap'),
-    basemapUnavailable: t('mapRaster.basemapUnavailable'),
-    routes: t('mapRaster.routes'),
-    support: t('mapRaster.support'),
-    threats: t('mapRaster.threats'),
-    zones: t('mapRaster.zones'),
-  });
-  assertMissionMapRendered(page.scene, rendered, t);
+  await drawMissionMap(context, page.scene, mapLeft, mapTop, mapWidth, mapHeight, mapLabels(t));
 }
 
-export function assertMissionMapRendered(
-  scene: MissionMapScene,
-  rendered: boolean,
-  t: KneeboardTranslate,
-): void {
-  if (!rendered && hasMissionMapContent(scene)) throw new Error(t('kneeboard.basemapUnavailable'));
+export function mapLabels(t: KneeboardTranslate): MissionMapLabels {
+  return {
+    empty: t('export:label.mapEmpty'),
+    basemapUnavailable: t('export:label.basemapUnavailable'),
+    routes: t('export:label.mapRoutes'),
+    support: t('export:label.mapSupport'),
+    threats: t('export:label.mapThreats'),
+    zones: t('export:label.mapZones'),
+    skippedAnnotations: t('export:label.mapAnnotationsSkipped'),
+  };
 }
 
 function renderWhiteboardPage(
@@ -316,3 +352,4 @@ function canvasToPng(canvas: HTMLCanvasElement): Promise<Blob> {
     canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('PNG encoding failed')), 'image/png');
   });
 }
+
