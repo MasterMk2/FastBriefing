@@ -1,13 +1,130 @@
-// STUB. Owner: P1 (フライト作業画面). P1 replaces this file's body.
-// Contract: default export, no props. Selected flight: useWorkspace().flightKey (see utils/flightKey.ts).
-//   Read data with useMission(): mission, view, settings, side. Notes write through setNotes.
-// Carried over: FlightsTab({ mission, settings, onNotesChange }) from src/components/FlightsTab.tsx.
-// Also used by P1 later: LineupCard (src/screens/flight/LineupCard.tsx) and WingmanCard (src/screens/flight/WingmanCard.tsx).
-// Removed at integration: FlightsTab.tsx (SPEC 8).
-import FlightsTab from '../components/FlightsTab';
+// Owner: P1 (フライト作業画面). Flight screen (SPEC 1.3 flights, F3, F4). Default export, no props (lazy).
+// The selected flight is useWorkspace().flightKey. Data is read through useMission().view only, so a flight
+// that is not in the displayed view (the opposing side in pilot view) is never shown (D1).
+import { useCallback, useEffect, useState } from 'react';
+import type { ChangeEvent } from 'react';
+import { useTranslation } from 'react-i18next';
+import { EmptyState } from '../shell/EmptyState';
+import { Notice } from '../shell/Notice';
 import { useMission } from '../shell/MissionContext';
+import { useWorkspace } from '../shell/workspace';
+import { MapPanel } from '../map/MapPanel';
+import type { Side } from '../types/mission';
+import { flightKey } from '../utils/flightKey';
+import FlightDetail from './flight/FlightDetail';
+import { findSelectedFlight, isClientFlight } from './flight/flightModel';
+import type { FlightNotesDraft } from './flight/flightModel';
+import { readNoteDrafts, writeNoteDraft } from './flight/noteDrafts';
+import type { NoteDraftMap } from './flight/noteDrafts';
+
+/** The map pane sits beside the flight at this width and wider (SPEC 1.1, 1.3). */
+const WIDE_MAP_QUERY = '(min-width: 1600px)';
 
 export default function FlightScreen() {
-  const { mission, settings, setNotes } = useMission();
-  return <FlightsTab mission={mission} settings={settings} onNotesChange={setNotes} />;
+  const { mission } = useMission();
+  // Unsaved notes belong to the loaded mission: a different mission starts with none.
+  return <FlightScreenBody key={mission.sourceFingerprint} />;
+}
+
+function FlightScreenBody() {
+  const { t } = useTranslation('flight');
+  const { mission, view, side, viewMode } = useMission();
+  const { flightKey: selectedKey, setFlightKey } = useWorkspace();
+  // Unsaved notes drafts by flight key. They live outside this component (noteDrafts.ts), so they survive a change
+  // of flight and a change of screen, which unmounts this component.
+  const fingerprint = mission.sourceFingerprint;
+  const [noteDrafts, setNoteDrafts] = useState<NoteDraftMap>(() => readNoteDrafts(fingerprint));
+  const setNoteDraft = useCallback((key: string, draft: FlightNotesDraft | null) => {
+    setNoteDrafts(writeNoteDraft(fingerprint, key, draft));
+  }, [fingerprint]);
+  const wide = useMediaQuery(WIDE_MAP_QUERY);
+  const selected = findSelectedFlight(view, selectedKey);
+  const ownFlights = view.coalitions[side].flights;
+  const opposing: Side = side === 'blue' ? 'red' : 'blue';
+  const opposingFlights = viewMode === 'creator' ? view.coalitions[opposing].flights : [];
+  const hasClient = ownFlights.some(isClientFlight);
+
+  const choose = (event: ChangeEvent<HTMLSelectElement>) => {
+    setFlightKey(event.target.value === '' ? null : event.target.value);
+  };
+
+  return (
+    <div className="flight-screen">
+      {/* Below 1280px there is no left rail, so the flight is chosen here (SPEC 3, flights). */}
+      <div className="flight-screen-picker">
+        <label htmlFor="flight-screen-select">{t('flight:screen.choose')}</label>
+        <select
+          id="flight-screen-select"
+          value={selected ? flightKey(selected.side, selected.flight.groupId) : ''}
+          onChange={choose}
+        >
+          <option value="">{t('flight:screen.chooseNone')}</option>
+          {ownFlights.length > 0 && (
+            <optgroup label={t(`shell:side.${side}`)}>
+              {ownFlights.map(flight => (
+                <option key={flight.groupId} value={flightKey(side, flight.groupId)}>
+                  {flight.callsign || flight.name} · {flight.type}
+                </option>
+              ))}
+            </optgroup>
+          )}
+          {opposingFlights.length > 0 && (
+            <optgroup label={t(`shell:side.${opposing}`)}>
+              {opposingFlights.map(flight => (
+                <option key={flight.groupId} value={flightKey(opposing, flight.groupId)}>
+                  {flight.callsign || flight.name} · {flight.type}
+                </option>
+              ))}
+            </optgroup>
+          )}
+        </select>
+      </div>
+
+      {ownFlights.length === 0 && (
+        <EmptyState title={t('flight:screen.noFlights')} body={t('flight:screen.noFlightsBody')} />
+      )}
+      {ownFlights.length > 0 && !hasClient && (
+        <Notice tone="info" title={t('flight:screen.noClient')}>{t('flight:screen.noClientBody')}</Notice>
+      )}
+
+      {!selected && ownFlights.length > 0 && (
+        <EmptyState title={t('flight:screen.pickFlight')} body={t('flight:screen.pickFlightBody')} />
+      )}
+
+      {selected && (
+        <div className={`flight-screen-body${wide ? ' is-wide' : ''}`}>
+          <FlightDetail
+            key={flightKey(selected.side, selected.flight.groupId)}
+            side={selected.side}
+            flight={selected.flight}
+            noteDraft={noteDrafts[flightKey(selected.side, selected.flight.groupId)]}
+            onNoteDraftChange={setNoteDraft}
+          />
+          {wide && (
+            <aside className="flight-map-pane" aria-label={t('flight:screen.mapPane')}>
+              <MapPanel height="100%" />
+            </aside>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Tracks a media query. Without matchMedia (for example in a test environment) the query does not match. */
+function useMediaQuery(query: string): boolean {
+  const [matches, setMatches] = useState(() => readMatch(query));
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return undefined;
+    const list = window.matchMedia(query);
+    const update = () => setMatches(list.matches);
+    update();
+    list.addEventListener?.('change', update);
+    return () => list.removeEventListener?.('change', update);
+  }, [query]);
+  return matches;
+}
+
+function readMatch(query: string): boolean {
+  return typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia(query).matches;
 }
