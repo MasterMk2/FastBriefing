@@ -1,7 +1,10 @@
-import type { DisplaySettings, Flight, MissionData, RoutePoint, Side, SupportAsset } from '../types/mission';
+import { isCreatorOnlyIssueCode } from '../core/issues';
+import type { DisplaySettings, Flight, MissionData, MissionMeta, Pylon, RoutePoint, Side, SupportAsset, Unit } from '../types/mission';
 import type { BriefingSection } from '../utils/briefingSections';
 import type { WhiteboardData } from '../types/whiteboard';
 import type { KneeboardMapPin, KneeboardPage, KneeboardSection, KneeboardTranslate } from '../utils/kneeboard';
+import { classifyAircraftProps, sortPylonsByStation } from '../utils/aircraftProps';
+import { getMoonInfo, getSunTimes } from '../utils/astro';
 import { buildMetar } from '../utils/metar';
 import { PROJECTIONS, formatCoordinate, resolveCoordinateFormat } from '../utils/coordinates';
 import { buildMissionMapScene } from '../utils/missionMapRaster';
@@ -77,7 +80,7 @@ function overviewPage(input: PagePlanInput, t: KneeboardTranslate): KneeboardPag
   const lines = [
     meta.sortie || t('export:label.notAvailable'),
     `${t('export:label.theatre')}: ${meta.theatre}`,
-    `${t('export:label.date')}: ${formatDateYMD(local)}`,
+    `${t('export:label.date')}: ${dateText(local, zulu, timeDisplay)}`,
     // The start time follows the time display setting (D6), as the route table does.
     ...(timeDisplay !== 'zulu' ? [`${t('export:label.startLocal')}: ${formatTimeHHMM(local)} (${formatUtcOffset(meta.utcOffset)})`] : []),
     ...(timeDisplay !== 'local' ? [`${t('export:label.startZulu')}: ${formatTimeHHMM(zulu)}Z`] : []),
@@ -91,11 +94,65 @@ function overviewPage(input: PagePlanInput, t: KneeboardTranslate): KneeboardPag
   const ownTask = input.side === 'blue' ? meta.descriptionBlueTask : meta.descriptionRedTask;
   const task = ownTask.trim() || meta.descriptionNeutralTask.trim();
   if (task) sections.push({ heading: t('export:label.task'), lines: task.split(/\r?\n/) });
-  // Warnings of the displayed view. applyViewMode already removed the other side's issues (D1), and
-  // the texts are in the output language, the same as the rest of the page.
-  const warnings = [...new Set(input.view.issues.map(issue => t(`issues:${issue.code}`, { ...issue.params })))];
+  sections.push(astroSection(input, t));
+  // Warnings of the displayed view. applyViewMode already removed the other side's issues and the issues of
+  // hidden groups (D1). Threat issues are creator-only, the same rule as the overview screen (SPEC 5.1, D1).
+  // The texts are in the output language, the same as the rest of the page.
+  const pilot = input.plan.viewMode === 'pilot';
+  const warnings = [...new Set(input.view.issues
+    .filter(issue => !(pilot && isCreatorOnlyIssueCode(issue.code)))
+    .map(issue => t(`issues:${issue.code}`, { ...issue.params })))];
   if (warnings.length > 0) sections.push({ heading: t('export:label.warnings'), lines: warnings });
   return textPage('overview', t('export:sections.overview'), sections);
+}
+
+/** The date follows the time display setting, like the start times next to it (D6). */
+function dateText(local: Date, zulu: Date, timeDisplay: DisplaySettings['timeDisplay']): string {
+  const localText = formatDateYMD(local);
+  const zuluText = formatDateYMD(zulu);
+  if (timeDisplay === 'local') return localText;
+  if (timeDisplay === 'zulu') return `${zuluText}Z`;
+  return localText === zuluText ? localText : `${localText} / ${zuluText}Z`;
+}
+
+/** Mission time `elapsedSeconds` after the start, in the time display setting (D6). */
+function missionTimeText(meta: MissionMeta, elapsedSeconds: number, timeDisplay: DisplaySettings['timeDisplay']): string {
+  if (timeDisplay === 'local') return formatEtaLocal(meta, elapsedSeconds);
+  if (timeDisplay === 'zulu') return `${formatEtaZulu(meta, elapsedSeconds)}Z`;
+  return `${formatEtaLocal(meta, elapsedSeconds)} / ${formatEtaZulu(meta, elapsedSeconds)}Z`;
+}
+
+/**
+ * The output side's bullseye and the sun and moon at it, as on the overview screen. The opposing bullseye
+ * is never resolved in pilot view (D1), and without a resolved bullseye there is no place to compute for.
+ */
+function astroSection(input: PagePlanInput, t: KneeboardTranslate): KneeboardSection {
+  const { meta } = input.view;
+  const { settings } = input;
+  const bullseye = input.view.coalitions[input.side].bullseye;
+  const resolved = bullseye.latlonResolved !== false && Array.isArray(bullseye.latlon)
+    && !(bullseye.latlon[0] === 0 && bullseye.latlon[1] === 0);
+  const na = t('export:label.notAvailable');
+  const lines = [`${t('export:label.bullseye')}: ${coordinateText(bullseye.latlon, resolved, bullseye.xy, null, settings, t)}`];
+  if (resolved) {
+    const zulu = missionZuluDate(meta);
+    const sun = getSunTimes(zulu, bullseye.latlon[0], bullseye.latlon[1]);
+    const moon = getMoonInfo(zulu, bullseye.latlon[0], bullseye.latlon[1]);
+    const at = (date: Date | null | undefined) => (date
+      ? missionTimeText(meta, (date.getTime() - zulu.getTime()) / 1000, settings.timeDisplay)
+      : na);
+    const range = (from: Date | null | undefined, to: Date | null | undefined) => (from && to
+      ? t('export:label.timeRange', { from: at(from), to: at(to) })
+      : na);
+    lines.push(
+      `${t('export:label.sunrise')}: ${at(sun.sunrise)}`,
+      `${t('export:label.sunset')}: ${at(sun.sunset)}`,
+      `${t('export:label.civilTwilight')}: ${range(sun.dawn, sun.dusk)}`,
+      `${t('export:label.nauticalTwilight')}: ${range(sun.nauticalDawn, sun.nauticalDusk)}`,
+      `${t('export:label.moonAge')}: ${t('export:label.moonAgeValue', { days: moon.ageDays.toFixed(1) })}`,
+    );
+  }
+  return { heading: t('export:label.astro'), lines };
 }
 
 function weatherPage(input: PagePlanInput, t: KneeboardTranslate): KneeboardPage {
@@ -114,6 +171,21 @@ function weatherPage(input: PagePlanInput, t: KneeboardTranslate): KneeboardPage
     const direction = windText(wind.from, to, settings.windDisplay, t);
     lines.push(`${t('export:label.wind')} ${level}: ${direction} / ${formatSpeed(wind.speed, settings.speedUnit)}`);
   }
+  // Fog, dust and ground turbulence, as the overview screen and the oral briefing show them.
+  if (weather.fog.enabled) {
+    lines.push(`${t('export:label.fog')}: ${t('export:label.fogDetails', {
+      thickness: formatAltitude(weather.fog.thickness, settings.altitudeUnit),
+      visibility: formatDistance(weather.fog.visibility, settings.distanceUnit),
+    })}`);
+  }
+  if (weather.dust.enabled) {
+    lines.push(`${t('export:label.dust')}: ${t('export:label.dustDensity', { value: weather.dust.density })}`);
+  }
+  const ground = weather.turbulence.ground;
+  const groundText = !Number.isFinite(ground)
+    ? t('export:label.notAvailable')
+    : ground === 0 ? t('export:label.none') : t('export:label.groundTurbulenceValue', { value: ground.toFixed(1) });
+  lines.push(`${t('export:label.groundTurbulence')}: ${groundText}`);
   lines.push(`${t('export:label.metar')}: ${buildMetar(weather, { time: zulu })}`);
   return textPage('weather', t('export:sections.weather'), [{ heading: t('export:sections.weather'), lines }]);
 }
@@ -130,7 +202,7 @@ function flightListPage(input: PagePlanInput, t: KneeboardTranslate): KneeboardP
   if (input.flights.length === 0) {
     return textPage('flights', t('export:sections.flights'), [{ heading: t('export:sections.flights'), lines: [t('export:label.noFlights')] }]);
   }
-  const sections = input.flights.map(({ flight, key }) => {
+  const sections = input.flights.flatMap(({ flight, key }) => {
     const notes = input.view.userNotes.perFlight[key];
     const lines = [
       `${t('export:label.task')}: ${flight.task}`,
@@ -141,9 +213,78 @@ function flightListPage(input: PagePlanInput, t: KneeboardTranslate): KneeboardP
     if (notes?.jokerFuel !== null && notes?.jokerFuel !== undefined) lines.push(`${t('export:label.joker')}: ${notes.jokerFuel} ${t('export:label.fuelUnit')}`);
     if (notes?.bingoFuel !== null && notes?.bingoFuel !== undefined) lines.push(`${t('export:label.bingo')}: ${notes.bingoFuel} ${t('export:label.fuelUnit')}`);
     if (notes?.customNotes) lines.push(`${t('export:label.customNotes')}: ${notes.customNotes}`);
-    return { heading: `${flight.callsign || flight.name} · ${flight.type} ×${flight.units.length}`, lines };
+    const name = flight.callsign || flight.name;
+    return [
+      { heading: `${name} · ${flight.type} ×${flight.units.length}`, lines },
+      rosterSection(flight, name, t),
+      loadoutSection(flight.units[0], name, t),
+      aircraftSettingsSection(flight.units[0], name, t),
+    ].filter((section): section is KneeboardSection => section !== null);
   });
   return textPage('flights', t('export:sections.flights'), sections);
+}
+
+/** Every aircraft of the flight: name, tail number, skill, livery, fuel and countermeasures. */
+function rosterSection(flight: Flight, name: string, t: KneeboardTranslate): KneeboardSection | null {
+  if (flight.units.length === 0) return null;
+  const na = t('export:label.notAvailable');
+  const header = [
+    t('export:label.unitName'),
+    t('export:label.tailNumber'),
+    t('export:label.skill'),
+    t('export:label.livery'),
+    t('export:label.fuelKg'),
+    t('export:label.countermeasures'),
+  ];
+  const rows = flight.units.map(unit => [
+    unit.name || na,
+    unit.tailNumber || na,
+    unit.skill || na,
+    unit.livery || na,
+    String(unit.payload?.fuel ?? 0),
+    `${unit.payload?.chaff ?? 0} / ${unit.payload?.flare ?? 0}`,
+  ]);
+  return { heading: `${t('export:label.roster')}: ${name}`, lines: labeledRows(header, rows), table: { header, rows } };
+}
+
+/** The lead aircraft's payload in station order (the lineup card's table). */
+function loadoutSection(unit: Unit | undefined, name: string, t: KneeboardTranslate): KneeboardSection | null {
+  if (!unit) return null;
+  const pylons = sortPylonsByStation(unit.payload?.pylons ?? []);
+  const heading = `${t('export:label.loadout')}: ${name}`;
+  if (pylons.length === 0) return { heading, lines: [t('export:label.noLoadout')] };
+  const header = [t('export:label.station'), t('export:label.weapon'), t('export:label.count')];
+  const rows = pylons.map(pylon => [pylon.station, weaponName(pylon, t), String(pylon.count)]);
+  return { heading, lines: rows.map(([station, weapon, count]) => `${station}: ${weapon} ×${count}`), table: { header, rows } };
+}
+
+/** A weapon name; one that is not in the reference data gets the "not recorded" mark in the output language. */
+export function weaponName(pylon: Pylon, t: KneeboardTranslate): string {
+  return pylon.unknown ? t('export:label.unknownWeapon', { name: pylon.name }) : pylon.name;
+}
+
+/** The lead aircraft's known settings (laser codes, IFF, ...) and Link16, as the lineup card shows them. */
+function aircraftSettingsSection(unit: Unit | undefined, name: string, t: KneeboardTranslate): KneeboardSection | null {
+  if (!unit) return null;
+  const yesNo = (value: boolean) => t(value ? 'export:label.yes' : 'export:label.no');
+  const settings = classifyAircraftProps(unit.props);
+  const lines = settings.known.map(entry => `${t(entry.labelKey)}: ${entry.value.kind === 'bool' ? yesNo(entry.value.value) : entry.value.text}`);
+  const link16 = unit.datalink?.link16;
+  lines.push(`${t('export:label.link16')}: ${link16
+    ? t('export:label.link16Value', { lead: yesNo(link16.flightLead), team: link16.team })
+    : t('export:label.link16None')}`);
+  return { heading: `${t('export:label.aircraftSettings')}: ${name}`, lines };
+}
+
+/**
+ * Table rows written as labelled lines for the PNG kneeboard, which draws `lines` only: the first cell starts the
+ * row, and each other cell is "label: value". A long row then wraps between cells, and every page keeps its labels.
+ */
+function labeledRows(header: readonly string[], rows: readonly string[][]): string[] {
+  return rows.flatMap(row => [
+    row[0] ?? '',
+    ...row.slice(1).map((cell, index) => `  ${header[index + 1]}: ${cell}`),
+  ]);
 }
 
 /** One nav log page per flight (SPEC F3). The table has the eight default columns. */
@@ -178,7 +319,8 @@ function routePages(input: PagePlanInput, t: KneeboardTranslate): KneeboardPage[
     const sections: KneeboardSection[] = [
       {
         heading: `${flight.callsign || flight.name} · ${flight.type}`,
-        lines: rows.map(row => row.join(' | ')),
+        // The PNG kneeboard draws the lines, not the table, so each point is written with its labels.
+        lines: routeLines(header, rows),
         table: { header, rows },
       },
     ];
@@ -187,13 +329,20 @@ function routePages(input: PagePlanInput, t: KneeboardTranslate): KneeboardPage[
   });
 }
 
+/** Nav log rows as labelled lines: "No. name", then the coordinate, altitude and speed, ETA, and leg. */
+function routeLines(header: readonly string[], rows: readonly string[][]): string[] {
+  return rows.flatMap(([no, name, coordinate, altitude, speed, eta, leg, bearing]) => [
+    `${no}. ${name}`,
+    `  ${header[2]}: ${coordinate}`,
+    `  ${header[3]}: ${altitude} · ${header[4]}: ${speed}`,
+    `  ${header[5]}: ${eta}`,
+    `  ${header[6]}: ${leg} · ${header[7]}: ${bearing}`,
+  ]);
+}
+
 function routeRow(point: RoutePoint, flight: Flight, input: PagePlanInput, t: KneeboardTranslate): string[] {
   const { settings, view } = input;
-  const eta = settings.timeDisplay === 'local'
-    ? formatEtaLocal(view.meta, point.eta)
-    : settings.timeDisplay === 'zulu'
-      ? `${formatEtaZulu(view.meta, point.eta)}Z`
-      : `${formatEtaLocal(view.meta, point.eta)} / ${formatEtaZulu(view.meta, point.eta)}Z`;
+  const eta = missionTimeText(view.meta, point.eta, settings.timeDisplay);
   const altitude = `${formatAltitude(point.alt, settings.altitudeUnit)} ${point.altType === 'RADIO' ? 'AGL' : 'MSL'}`;
   const leg = point.leg;
   const bearing = leg

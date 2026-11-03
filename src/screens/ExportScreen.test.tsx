@@ -326,6 +326,9 @@ describe('export screen actions', { timeout: 60_000 }, () => {
   it('moves focus into the print preview, keeps the screen behind it out of focus, and returns focus when it closes', async () => {
     await renderShell();
     await openExport();
+    // Stands for what App mounts outside the shell (the hidden file inputs, the error band): it is covered too (A11Y-3).
+    const outside = document.createElement('button');
+    document.body.append(outside);
     const previewButton = buttonByText('印刷プレビュー');
     await act(async () => {
       previewButton.click();
@@ -337,13 +340,16 @@ describe('export screen actions', { timeout: 60_000 }, () => {
     expect(container.querySelector('.export-plan')?.hasAttribute('inert')).toBe(true);
     // The bar itself stays usable.
     expect(container.querySelector('.print-preview-bar')?.hasAttribute('inert')).toBe(false);
+    expect(outside.hasAttribute('inert')).toBe(true);
 
     await act(async () => {
       window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
     });
     expect(container.querySelector('.print-preview-bar')).toBeNull();
     expect(container.querySelector('.export-formats')?.hasAttribute('inert')).toBe(false);
+    expect(outside.hasAttribute('inert')).toBe(false);
     expect(document.activeElement).toBe(previewButton);
+    outside.remove();
   });
 
   it('returns focus to the preview button when the close button is used', async () => {

@@ -11,6 +11,7 @@ import { useMission } from '../shell/MissionContext';
 import { EXPORT_FLIGHT_ANCHOR, useWorkspace } from '../shell/workspace';
 import { Field } from '../shell/Field';
 import { Notice } from '../shell/Notice';
+import { inertOutside } from '../shell/inert';
 import { SideMark } from '../shell/SideMark';
 import { Segmented } from '../shell/Segmented';
 import { buildGeospatialExport, toGeoJson, toKml } from '../utils/geospatialExport';
@@ -52,6 +53,10 @@ export default function ExportScreen() {
   const [progress, setProgress] = useState<Progress>(null);
   const [presetName, setPresetName] = useState('');
   const [presetNotice, setPresetNotice] = useState('');
+  // Set when the last setting written from this screen could not be stored in the browser (decision 8): it still
+  // applies on screen, and the warning says it is lost on reload.
+  const [settingUnsaved, setSettingUnsaved] = useState(false);
+  const stored = (saved: boolean) => setSettingUnsaved(!saved);
   const [previewOpen, setPreviewOpen] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const screenRef = useRef<HTMLDivElement>(null);
@@ -109,9 +114,10 @@ export default function ExportScreen() {
     if (previewOpen) root.dataset.printPreview = 'on';
     else delete root.dataset.printPreview;
     if (!previewOpen) return undefined;
-    const behind = Array.from(screenRef.current?.children ?? [])
-      .filter(item => !item.classList.contains('print-preview-bar'));
-    for (const item of behind) item.setAttribute('inert', '');
+    // Everything outside the preview bar and the previewed document is inert: this screen, and also the header, the
+    // left rail, the bottom tabs and the settings drawer, which the preview covers (A11Y-3).
+    const bar = screenRef.current?.querySelector('.print-preview-bar');
+    const restore = bar ? inertOutside(bar, element => element.classList.contains('print-briefing')) : () => {};
     previewPrintRef.current?.focus();
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') setPreviewOpen(false);
@@ -119,7 +125,7 @@ export default function ExportScreen() {
     window.addEventListener('keydown', onKey);
     return () => {
       window.removeEventListener('keydown', onKey);
-      for (const item of behind) item.removeAttribute('inert');
+      restore();
       delete root.dataset.printPreview;
     };
   }, [previewOpen]);
@@ -170,7 +176,7 @@ export default function ExportScreen() {
     const next = selectedSections.includes(section)
       ? selectedSections.filter(item => item !== section)
       : [...selectedSections, section];
-    setBriefingSections(next);
+    stored(setBriefingSections(next));
   };
 
   const moveSection = (section: BriefingSection, offset: -1 | 1) => {
@@ -179,7 +185,7 @@ export default function ExportScreen() {
     if (index < 0 || target < 0 || target >= selectedSections.length) return;
     const next = [...selectedSections];
     [next[index], next[target]] = [next[target], next[index]];
-    setBriefingSections(next);
+    stored(setBriefingSections(next));
   };
 
   const savePreset = () => {
@@ -190,18 +196,19 @@ export default function ExportScreen() {
       setPresetNotice(t('export:ui.presetFull'));
       return;
     }
-    setBriefingPresets([...existing, { name, sections: [...selectedSections] }]);
+    const saved = setBriefingPresets([...existing, { name, sections: [...selectedSections] }]);
     setPresetName('');
-    setPresetNotice(t('export:ui.presetSaved'));
+    // "保存しました" only when the browser kept it (decision 8).
+    setPresetNotice(t(saved ? 'export:ui.presetSaved' : 'export:ui.presetUnsaved'));
   };
 
   const applyPreset = (index: number) => {
     const preset = settings.briefingPresets[index];
-    if (preset) setBriefingSections(preset.sections);
+    if (preset) stored(setBriefingSections(preset.sections));
   };
 
   const deletePreset = (index: number) => {
-    setBriefingPresets(settings.briefingPresets.filter((_, position) => position !== index));
+    stored(setBriefingPresets(settings.briefingPresets.filter((_, position) => position !== index)));
   };
 
   const report = (id: FormatId, tone: 'info' | 'error', text: string) => {
@@ -317,6 +324,7 @@ export default function ExportScreen() {
     <div className="export-screen" ref={screenRef}>
       <aside className="export-plan" aria-label={t('export:ui.title')}>
         <h2 className="export-title">{t('export:ui.title')}</h2>
+        {settingUnsaved && <Notice tone="warning">{t('settings:unsaved')}</Notice>}
 
         <Field label={t('export:ui.target')}>
           {() => (
@@ -439,7 +447,7 @@ export default function ExportScreen() {
             <Segmented<DisplaySettings['outputLanguage']>
               label={t('export:ui.outputLanguage')}
               value={settings.outputLanguage}
-              onChange={value => setOutputLanguage(value)}
+              onChange={value => stored(setOutputLanguage(value))}
               options={[
                 { value: 'ja', label: '日本語' },
                 { value: 'en', label: 'English' },
@@ -453,7 +461,7 @@ export default function ExportScreen() {
             <Segmented<DisplaySettings['viewMode']>
               label={t('export:label.view')}
               value={settings.viewMode}
-              onChange={value => setViewMode(value)}
+              onChange={value => stored(setViewMode(value))}
               options={[
                 { value: 'creator', label: t('export:label.viewCreator') },
                 { value: 'pilot', label: t('export:label.viewPilot') },
@@ -488,7 +496,7 @@ export default function ExportScreen() {
               <Segmented<string>
                 label={t('export:ui.kneeboardWidth')}
                 value={String(settings.kneeboardWidth)}
-                onChange={value => setKneeboardWidth(Number(value) as KneeboardWidth)}
+                onChange={value => stored(setKneeboardWidth(Number(value) as KneeboardWidth))}
                 options={KNEEBOARD_WIDTHS.map(width => ({ value: String(width), label: String(width) }))}
               />
             )}

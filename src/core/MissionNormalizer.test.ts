@@ -151,7 +151,9 @@ describe('MissionNormalizer reference-backed layers', () => {
     expect(normalizedPayload.gun).toBe(510);
     expect(normalizedPayload.pylons[0].name).toContain('AIM-120C');
     expect(normalizedPayload.pylons[1].name).toContain('GBU-38');
-    expect(normalizedPayload.pylons[2].name).toBe('UNLISTED (未収録)');
+    expect(normalizedPayload.pylons[2].name).toBe('UNLISTED');
+    expect(normalizedPayload.pylons[2].unknown).toBe(true);
+    expect(normalizedPayload.pylons[0].unknown).toBeUndefined();
     expect(normalizedPayload.weight).toBeCloseTo(1402.48, 2);
     expect(hasIssue(normalized, 'weapon.unknownClsid', { clsid: '{CLSID_UNLISTED}' })).toBe(true);
   });

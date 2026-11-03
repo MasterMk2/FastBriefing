@@ -164,9 +164,18 @@ body {
   to { transform: rotate(360deg); }
 }
 
+/* Reduced motion stops the spinner; the "読み込み中" text beside it still says that the file is being read. */
 @media (prefers-reduced-motion: reduce) {
   .spinner {
-    animation-duration: 4s;
+    animation: none;
+  }
+}
+
+/* Touch targets on narrow screens for the buttons outside the shell (the error band and the loading overlay). */
+@media (max-width: 767px) {
+  .app-error .btn,
+  .loading-overlay .btn {
+    min-height: var(--target-touch);
   }
 }
 

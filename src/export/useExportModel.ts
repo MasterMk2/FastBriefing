@@ -4,7 +4,7 @@ import { useMission } from '../shell/MissionContext';
 import type { DisplaySettings, MissionData, Side } from '../types/mission';
 import type { WhiteboardData } from '../types/whiteboard';
 import type { KneeboardPage, KneeboardTranslate } from '../utils/kneeboard';
-import { buildExportModel, type ExportModel } from './exportModel';
+import { aircraftTypesOf, buildExportModel, listExportFlights, type ExportModel } from './exportModel';
 import { useExportScope, type ExportScope } from './exportPlan';
 
 export interface ExportModelState {
@@ -22,10 +22,20 @@ const EMPTY_WHITEBOARD: WhiteboardData = { notes: '', strokes: [] };
 /**
  * The scope the output uses. In the pilot view only the displayed side exists, so a stored
  * "side" scope for the other side is read as the displayed side (D1): the screen and the
- * output then show the same choice.
+ * output then show the same choice. A stored aircraft type that the view has no flight of
+ * (for example the other side's type after switching to the pilot view) is read as the first
+ * type the view has, the one the select shows, so the choice is never stuck on an empty target.
  */
-export function effectiveExportScope(scope: ExportScope, viewMode: DisplaySettings['viewMode'], side: Side): ExportScope {
+export function effectiveExportScope(
+  scope: ExportScope,
+  viewMode: DisplaySettings['viewMode'],
+  side: Side,
+  aircraftTypes: readonly string[] = [],
+): ExportScope {
   if (viewMode === 'pilot' && scope.kind === 'side' && scope.side !== side) return { kind: 'side', side };
+  if (scope.kind === 'aircraft' && aircraftTypes.length > 0 && !aircraftTypes.includes(scope.aircraftType)) {
+    return { kind: 'aircraft', aircraftType: aircraftTypes[0] };
+  }
   return scope;
 }
 
@@ -67,9 +77,10 @@ export function useExportModel(): ExportModelState {
   const { mission, view, settings, side, whiteboard } = useMission();
   const storedScope = useExportScope(mission.sourceFingerprint);
   const language = settings.outputLanguage;
+  const aircraftTypes = useMemo(() => aircraftTypesOf(listExportFlights(view)), [view]);
   const scope = useMemo(
-    () => effectiveExportScope(storedScope, settings.viewMode, side),
-    [storedScope, settings.viewMode, side],
+    () => effectiveExportScope(storedScope, settings.viewMode, side, aircraftTypes),
+    [storedScope, settings.viewMode, side, aircraftTypes],
   );
 
   const outT = useMemo<KneeboardTranslate>(

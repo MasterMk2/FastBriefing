@@ -584,7 +584,8 @@
   .shell .btn,
   .shell .segmented-option,
   .shell .flight-row,
-  .shell .workspace-nav-item {
+  .shell .workspace-nav-item,
+  .shell .file-menu-item {
     min-height: var(--target-touch);
   }
 }

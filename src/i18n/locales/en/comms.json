@@ -3,6 +3,7 @@
     "title": "Frequency conflicts",
     "none": "No conflicts",
     "count": "{{count}} conflicts",
+    "count_one": "{{count}} conflict",
     "explanation": "Main frequencies (flight and support frequencies) within {{kilohertz}} kHz with the same modulation (AM/FM), used by different flights or support assets, are counted as conflicts. Matching radio presets (channels) are not counted.",
     "scope": "In creator view, the main frequencies of both sides are compared together. A conflict across both sides is marked neutral. The pre-distribution check L1 uses the same definition."
   },
@@ -19,6 +20,7 @@
   "table": {
     "title": "Frequency list",
     "caption": "{{count}} frequencies",
+    "caption_one": "{{count}} frequency",
     "side": "Side",
     "owner": "Owner",
     "channel": "Channel",

@@ -11,6 +11,8 @@ import { useSettings } from './hooks/useSettings';
 import { useTranslation } from 'react-i18next';
 import { createMissionKey, emptyUserNotes, readStoredNotes, saveStoredNotes } from './utils/notes';
 import { missionLoadErrorTranslationKey } from './utils/missionLoadError';
+import { resetExportScope } from './export/exportPlan';
+import { clearNoteDrafts } from './screens/flight/noteDrafts';
 
 function App() {
   const [missionData, setMissionData] = useState<MissionData | null>(null);
@@ -218,6 +220,10 @@ function App() {
     setSourceFile(null);
     setRevisions(null);
     latestSnapshotRef.current = null;
+    // Shared per-mission state outside React: the export target and the unsaved flight-note drafts. They are keyed
+    // by the file's fingerprint, so without this the same file opened again would come back with them (W5).
+    resetExportScope();
+    clearNoteDrafts();
   }, []);
 
   const bandError = compareError ?? (missionData ? error : null);
@@ -232,6 +238,9 @@ function App() {
         onChange={handleFileSelect}
         id="file-input"
         className="visually-hidden"
+        // Opened from the buttons with click(); hidden inputs take no Tab stop, which would show no focus ring (A11Y-4).
+        tabIndex={-1}
+        aria-hidden="true"
         aria-label={t('shell:app.selectMiz')}
       />
       <input
@@ -241,6 +250,8 @@ function App() {
         onChange={handleCompareSelect}
         id="compare-file-input"
         className="visually-hidden"
+        tabIndex={-1}
+        aria-hidden="true"
         aria-label={t('revision:pickOld')}
       />
 

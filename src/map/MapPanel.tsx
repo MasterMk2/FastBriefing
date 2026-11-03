@@ -8,6 +8,7 @@ import 'leaflet/dist/leaflet.css';
 import type { MapPanelProps } from '../types/screen';
 import type { Drawing, Flight, MapAnnotation, MapPinAnnotation, MapStrokeAnnotation, MissionData, RoutePoint, TriggerZone } from '../types/mission';
 import { useMission } from '../shell/MissionContext';
+import { formatDistance } from '../utils/units';
 import { DEFAULT_MAP_UI, useWorkspace } from '../shell/workspace';
 import type { MapTool, RouteFocus } from '../shell/workspace';
 import { parseFlightKey } from '../utils/flightKey';
@@ -192,11 +193,21 @@ function MapHandle({ target }: { target: { current: LeafletMap | null } }) {
   return null;
 }
 
+/**
+ * True when the user asked the system for less motion. Leaflet animates pans and fits in JavaScript, which the CSS
+ * rule for reduced motion does not reach, so the calls pass animate: false instead (SPEC 4.1, A11Y-9).
+ */
+export function prefersReducedMotion(): boolean {
+  return typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+    && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
 function fitMap(map: LeafletMap, bounds: LatLngBounds | null): void {
+  const animate = !prefersReducedMotion();
   if (bounds && bounds.isValid()) {
-    map.fitBounds(bounds, { padding: [24, 24], maxZoom: 12 });
+    map.fitBounds(bounds, { padding: [24, 24], maxZoom: 12, animate });
   } else {
-    map.setView(DEFAULT_CENTER, DEFAULT_ZOOM);
+    map.setView(DEFAULT_CENTER, DEFAULT_ZOOM, { animate });
   }
 }
 
@@ -209,7 +220,9 @@ function rejectionText(t: TFunction, rejection: AnnotationRejection): string {
 export function MapPanel({ readOnly = false, height = '100%', focusFlightKey }: MapPanelProps) {
   const { t } = useTranslation();
   const { mission, view, settings, side, viewMode, setNotes, storageFailed } = useMission();
-  const { flightKey: selectedKey, setFlightKey, setScreen, mapUi, setMapUi, routeFocus } = useWorkspace();
+  const { flightKey: selectedKey, setFlightKey, setScreen, mapUi, setMapUi, routeFocus: pickedPoint } = useWorkspace();
+  // Threat and detection ranges follow the distance unit of the display settings, as the threats screen does (W7).
+  const distance = (meters: number) => formatDistance(meters, settings.distanceUnit);
   const theatre = view.meta.theatre;
   const supported = isSupportedTheatre(theatre);
   // The solo view belongs to the map screen. The read-only briefing map follows its focus flight instead (Lead decision 4).
@@ -238,6 +251,9 @@ export function MapPanel({ readOnly = false, height = '100%', focusFlightKey }: 
     ? (focusFlightKey ?? null)
     : focusFlightKey === undefined ? selectedKey : focusFlightKey;
   const dimOthers = typeof focusFlightKey === 'string';
+  // The point picked in the route table is an editing aid: the read-only briefing map never draws it (W3). The
+  // workspace drops the pick when another flight is chosen, so it never marks a flight the user left.
+  const routeFocus = readOnly ? null : pickedPoint;
   const isHighlighted = (routeKey: string) => routeKey === focusKey || routeKey === routeFocus?.flightKey;
 
   const [removal, setRemoval] = useState<Removal | null>(null);
@@ -300,9 +316,12 @@ export function MapPanel({ readOnly = false, height = '100%', focusFlightKey }: 
   useEffect(() => {
     if (!editable || tool === 'move') return undefined;
     const onKey = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape' || confirmingClear) return;
+      if (event.key !== 'Escape' || confirmingClear || event.defaultPrevented) return;
       const target = event.target;
       if (target instanceof Element && target.closest('input, textarea, select, [contenteditable="true"]')) return;
+      // An Escape inside a dialog (the settings drawer) or a menu closes that layer, not the map tool (A11Y-7).
+      if (target instanceof Element && target.closest('[role="dialog"], [role="menu"]')) return;
+      event.preventDefault();
       setMapUi(previous => ({ ...previous, tool: 'move' }));
     };
     window.addEventListener('keydown', onKey);
@@ -653,7 +672,7 @@ export function MapPanel({ readOnly = false, height = '100%', focusFlightKey }: 
           if (!position || range === undefined || range <= 0) return null;
           return (
             <Circle key={`threat-${owner}-${index}`} center={position} radius={range} className={`map-range map-range-threat map-range-${owner}`}>
-              <Popup>{t('map:popup.threat', { side: sideLabel(owner), type: item.type, range })}</Popup>
+              <Popup>{t('map:popup.threat', { side: sideLabel(owner), type: item.type, range: distance(range) })}</Popup>
             </Circle>
           );
         })}
@@ -664,7 +683,7 @@ export function MapPanel({ readOnly = false, height = '100%', focusFlightKey }: 
           if (!position || range === undefined || range <= 0) return null;
           return (
             <Circle key={`detect-${owner}-${index}`} center={position} radius={range} className={`map-range map-range-detection map-range-${owner}`}>
-              <Popup>{t('map:popup.detection', { side: sideLabel(owner), type: item.type, range })}</Popup>
+              <Popup>{t('map:popup.detection', { side: sideLabel(owner), type: item.type, range: distance(range) })}</Popup>
             </Circle>
           );
         })}
@@ -906,7 +925,7 @@ function RouteFocusPan({ selection, point }: { selection: RouteFocus | null; poi
   useEffect(() => {
     const target = latest.current;
     if (!selection || !target) return;
-    if (!map.getBounds().contains(target)) map.panTo(target);
+    if (!map.getBounds().contains(target)) map.panTo(target, { animate: !prefersReducedMotion() });
   }, [map, selection]);
   return null;
 }

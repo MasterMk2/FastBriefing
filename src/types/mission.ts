@@ -12,6 +12,18 @@ export interface MissionMeta {
   utcOffset: number;
   meVersion: number;
   images: string[];
+  /**
+   * The same images by the field they came from (pictureFileNameB/R/N/Server). Pilot view keeps only the
+   * displayed side's, the neutral and the server images (D1). Absent in data built by hand.
+   */
+  imagesBySide?: MissionImagesBySide;
+}
+
+export interface MissionImagesBySide {
+  blue: string[];
+  red: string[];
+  neutral: string[];
+  server: string[];
 }
 
 export interface Weather {
@@ -133,7 +145,10 @@ export interface Payload {
 export interface Pylon {
   station: string;
   clsid: string;
+  /** The reference name, or the readable part of the CLSID when `unknown` is set. */
   name: string;
+  /** Set when the CLSID is not in the reference data. Screens and outputs add the translated "not recorded" mark. */
+  unknown?: true;
   /** One entry per source pylon; count is 1 so the UI can address stations directly. */
   count: number;
   weight: number;
@@ -308,6 +323,11 @@ export interface MissionIssue {
   params?: Record<string, string | number>;
   /** Set when the issue comes from one coalition's data; pilot view drops other sides (D1). */
   side?: IssueSide;
+  /**
+   * True when every occurrence comes from a hidden group or flight, or a late-activation AI group.
+   * Pilot view drops it with those groups (D1, G11). Absent when any visible group reported it.
+   */
+  hiddenSource?: true;
 }
 
 export interface MissionData {

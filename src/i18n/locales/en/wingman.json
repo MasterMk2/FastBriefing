@@ -29,7 +29,8 @@
     "currentWingman": "My aircraft on this device",
     "clearWingman": "Clear my aircraft",
     "noMissionKey": "This mission has no identifier, so my aircraft cannot be chosen.",
-    "saveFailed": "Cannot save on this device. The choice lasts only while this page stays open."
+    "saveFailed": "Cannot save on this device. The choice lasts only while this page stays open.",
+    "unknownWeapon": "{{name}} (not recorded)"
   },
   "clearFailed": "The choice could not be cleared on this device. It may come back after a reload.",
   "card": {

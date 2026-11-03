@@ -205,7 +205,13 @@ function normalizeMeta(mission: Record<string, unknown>, dictionary: Record<stri
   const date = getValue(mission, ['date']) as Record<string, unknown> || {};
   const startTime = getNumber(mission, ['start_time']);
   const utcOffset = resolveUtcOffset(mission, theatre, issues);
-  
+  const imagesBySide = {
+    blue: briefingImages(mission, 'pictureFileNameB', mapResource),
+    red: briefingImages(mission, 'pictureFileNameR', mapResource),
+    neutral: briefingImages(mission, 'pictureFileNameN', mapResource),
+    server: briefingImages(mission, 'pictureFileNameServer', mapResource),
+  };
+
   return {
     sortie: resolveDictKey(getString(mission, ['sortie']), dictionary),
     description: resolveDictKey(getString(mission, ['descriptionText']), dictionary),
@@ -221,10 +227,13 @@ function normalizeMeta(mission: Record<string, unknown>, dictionary: Record<stri
     startTime,
     utcOffset,
     meVersion: getNumber(mission, ['version']),
-    images: ['pictureFileNameB', 'pictureFileNameR', 'pictureFileNameN', 'pictureFileNameServer']
-      .flatMap(field => getStringArray(mission, [field]))
-      .map(key => resolveResKey(key, mapResource)),
+    images: [...imagesBySide.blue, ...imagesBySide.red, ...imagesBySide.neutral, ...imagesBySide.server],
+    imagesBySide,
   };
+}
+
+function briefingImages(mission: Record<string, unknown>, field: string, mapResource: Record<string, string>): string[] {
+  return getStringArray(mission, [field]).map(key => resolveResKey(key, mapResource));
 }
 
 function resolveUtcOffset(mission: Record<string, unknown>, theatre: string, issues: MissionIssue[]): number {
@@ -382,7 +391,7 @@ function normalizeCoalition(
     zones,
     drawings,
   };
-  for (const issue of sideIssues) addIssue(issues, issue.code, issue.params, issueSide);
+  for (const issue of sideIssues) addIssue(issues, issue.code, issue.params, issueSide, issue.hiddenSource === true);
   return coalition;
 }
 
@@ -519,6 +528,8 @@ function normalizeFlights(
       const route = getValue(groupData, ['route']) as Record<string, unknown> || {};
       const routePoints = getArrayEntries(route, ['points']);
 
+      const hidden = getValue(groupData, ['hidden']) === true;
+      const groupIssues: MissionIssue[] = [];
       flights.push({
         groupId: getNumber(groupData, ['groupId']),
         name: resolveDictKey(getString(groupData, ['name']), dictionary),
@@ -527,10 +538,12 @@ function normalizeFlights(
         task: resolveDictKey(getString(groupData, ['task']), dictionary),
         frequency: getNumber(groupData, ['frequency']),
         modulation: getNumber(groupData, ['modulation']),
-        hidden: getValue(groupData, ['hidden']) === true,
-        units: normalizeUnits(units, dictionary, theatre, issues),
+        hidden,
+        units: normalizeUnits(units, dictionary, theatre, groupIssues),
         route: normalizeRoutePoints(routePoints, theatre),
       });
+      // Pilot view removes hidden flights (G11), so their issues are marked to go with them (D1).
+      mergeGroupIssues(issues, groupIssues, hidden);
     }
   }
 
@@ -590,6 +603,7 @@ export function normalizePayload(payload: Record<string, unknown>, issues: Missi
         station: key,
         clsid,
         name: reference?.name ?? fallbackWeaponName(clsid),
+        ...(reference ? {} : { unknown: true as const }),
         count: 1,
         weight,
       });
@@ -618,12 +632,13 @@ function findWeaponReference(clsid: string): WeaponReference | undefined {
   return undefined;
 }
 
+/** The readable part of an unknown CLSID. The "not recorded" mark is added where it is shown, in its language. */
 function fallbackWeaponName(clsid: string): string {
   const readable = clsid
     .replace(/^\{/, '')
     .replace(/\}$/, '')
     .replace(/^CLSID[_-]?/i, '');
-  return `${readable || clsid} (未収録)`;
+  return readable || clsid;
 }
 
 function normalizeUnitRadios(unit: Record<string, unknown>): RadioPreset[] {
@@ -1002,7 +1017,12 @@ function normalizeAIGroups(sideData: Record<string, unknown>, _dictionary: Recor
         const coordinate = normalizeLatLon(theatre, x, y);
         const type = getString(unit, ['type']);
         const category = getString(groupData, ['category'], categoryHint);
-        const threatResolution = resolveGroupThreat(units, isThreatCandidateCategory(category), issues);
+        const hidden = getValue(groupData, ['hidden']) === true;
+        const lateActivation = getValue(groupData, ['lateActivation']) === true;
+        const groupIssues: MissionIssue[] = [];
+        const threatResolution = resolveGroupThreat(units, isThreatCandidateCategory(category), groupIssues);
+        // Pilot view removes hidden and late-activation AI groups (G11), so their issues go with them (D1).
+        mergeGroupIssues(issues, groupIssues, hidden || lateActivation);
 
         groups.push({
           category,
@@ -1011,8 +1031,8 @@ function normalizeAIGroups(sideData: Record<string, unknown>, _dictionary: Recor
           position: [x, y],
           ...coordinate,
           ...threatResolution,
-          hidden: getValue(groupData, ['hidden']) === true,
-          lateActivation: getValue(groupData, ['lateActivation']) === true,
+          hidden,
+          lateActivation,
           startTime: getNumber(groupData, ['start_time']),
         });
       }
@@ -1020,6 +1040,11 @@ function normalizeAIGroups(sideData: Record<string, unknown>, _dictionary: Recor
   }
   
   return groups;
+}
+
+/** Adds one group's issues; `fromHiddenGroup` marks them as hiddenSource (see addIssue). */
+function mergeGroupIssues(issues: MissionIssue[], groupIssues: readonly MissionIssue[], fromHiddenGroup: boolean): void {
+  for (const issue of groupIssues) addIssue(issues, issue.code, issue.params, issue.side, fromHiddenGroup);
 }
 
 interface ThreatResolution {

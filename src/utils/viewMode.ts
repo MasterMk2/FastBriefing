@@ -1,4 +1,4 @@
-import type { Coalition, DisplaySettings, Drawing, Flight, MissionData, MissionMeta, Side } from '../types/mission';
+import type { Coalition, DisplaySettings, Drawing, Flight, MissionData, MissionImagesBySide, MissionMeta, Side } from '../types/mission';
 
 type ViewMode = DisplaySettings['viewMode'];
 
@@ -27,8 +27,11 @@ export function resolveSide(mission: MissionData, side?: Side | null): Side {
  * Pilot view (D1) keeps only the displayed side's flights, support and AI
  * groups. The opposing coalition and the neutral coalition lose their
  * flights, support, AI groups and navigation points; the opposing bullseye is
- * replaced by an unresolved position; enemy airbases are removed; the opposing
- * side's mission task text is cleared (D1). The neutral task text is kept.
+ * replaced by an unresolved position; enemy airbases are removed, and the
+ * opposing coalition's airbase list is emptied (it is built from that side's
+ * group waypoints, so it would show where the enemy flies from); the opposing
+ * side's mission task text and briefing images are cleared (D1). The neutral
+ * task text, the neutral images and the server images are kept.
  * Hidden items and late-activation AI groups are removed everywhere (G11, FR-70).
  *
  * Zones and ME drawings are mission-level data: the normalizer gives every
@@ -40,7 +43,9 @@ export function resolveSide(mission: MissionData, side?: Side | null): Side {
  * unknown name are removed (D1).
  *
  * Issues that carry a `side` are kept only for the displayed side (D1). Issues
- * without a side describe the whole mission and are kept.
+ * without a side describe the whole mission and are kept. Issues that only
+ * hidden or late-activation groups reported (`hiddenSource`) are removed with
+ * those groups (D1, G11).
  */
 export function applyViewMode(mission: MissionData, viewMode: ViewMode, side?: Side | null): MissionData {
   if (viewMode === 'creator') return mission;
@@ -55,7 +60,7 @@ export function applyViewMode(mission: MissionData, viewMode: ViewMode, side?: S
   return {
     ...mission,
     meta: withoutOpposingTask(mission.meta, opposing),
-    issues: mission.issues.filter(issue => issue.side === undefined || issue.side === shown),
+    issues: mission.issues.filter(issue => !issue.hiddenSource && (issue.side === undefined || issue.side === shown)),
     coalitions: {
       blue: pilotCoalition(mission.coalitions.blue, { keepTacticalData: shown === 'blue', opposingOwner, isOpposing: opposing === 'blue', keepDrawing }),
       red: pilotCoalition(mission.coalitions.red, { keepTacticalData: shown === 'red', opposingOwner, isOpposing: opposing === 'red', keepDrawing }),
@@ -64,11 +69,22 @@ export function applyViewMode(mission: MissionData, viewMode: ViewMode, side?: S
   };
 }
 
-/** Clear the mission task text of the opposing side (D1). The shared neutral text is not touched. */
+/**
+ * Clear the mission task text and the briefing images of the opposing side (D1). The shared neutral
+ * text is not touched. Without the per-side image lists the origin of an image is unknown, so pilot
+ * view keeps none (fail closed).
+ */
 function withoutOpposingTask(meta: MissionMeta, opposing: Side): MissionMeta {
-  return opposing === 'blue'
-    ? { ...meta, descriptionBlueTask: '' }
-    : { ...meta, descriptionRedTask: '' };
+  const task = opposing === 'blue' ? { descriptionBlueTask: '' } : { descriptionRedTask: '' };
+  const bySide = meta.imagesBySide;
+  if (!bySide) return { ...meta, ...task, images: [] };
+  const imagesBySide: MissionImagesBySide = { ...bySide, [opposing]: [] };
+  return {
+    ...meta,
+    ...task,
+    images: [...imagesBySide.blue, ...imagesBySide.red, ...imagesBySide.neutral, ...imagesBySide.server],
+    imagesBySide,
+  };
 }
 
 interface PilotOptions {
@@ -84,7 +100,10 @@ interface PilotOptions {
 
 function pilotCoalition(coalition: Coalition, options: PilotOptions): Coalition {
   const { keepTacticalData, opposingOwner, isOpposing, keepDrawing } = options;
-  const airbases = (coalition.airbases ?? []).filter(airbase => (airbase.owner ?? '').toUpperCase() !== opposingOwner);
+  // The opposing coalition's list comes from its own groups' waypoints (hidden ones too), so none of it is kept.
+  const airbases = isOpposing
+    ? []
+    : (coalition.airbases ?? []).filter(airbase => (airbase.owner ?? '').toUpperCase() !== opposingOwner);
 
   if (!keepTacticalData) {
     return {

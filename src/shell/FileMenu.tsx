@@ -27,7 +27,9 @@ export default function FileMenu({ hasMission, onOpen, onCompare, onClose }: Fil
     if (!open) return;
     menuRef.current?.querySelector<HTMLButtonElement>(ENABLED_ITEM)?.focus();
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return;
+      if (event.key !== 'Escape' || event.defaultPrevented) return;
+      // One Escape closes one layer: the settings drawer and the map tools check defaultPrevented (A11Y-7).
+      event.preventDefault();
       setOpen(false);
       triggerRef.current?.focus();
     };

@@ -445,6 +445,33 @@ describe('flight screen: notes', () => {
     expect(fuelInputs()[0].value).toBe('12');
   });
 
+  it('keeps an unsaved field and shows a field saved elsewhere for the same flight, and saves both (W1)', async () => {
+    const { blue, red } = makeFlights();
+    const controls: Controls = { updateNotes: null };
+    const saved: UserNotes[] = [];
+    await render({
+      initial: makeMission(blue, red),
+      viewMode: 'creator',
+      selectedKey: 'blue:1',
+      controls,
+      onNotesChange: notes => saved.push(notes),
+    });
+
+    await click(buttonByText(flightJa.subview.notes));
+    await typeInto(fuelInputs()[0], '12');
+    await act(async () => {
+      controls.updateNotes?.(notes => ({
+        ...notes,
+        perFlight: { ...notes.perFlight, 'blue:1': { ...EMPTY_NOTE, customNotes: 'Saved elsewhere' } },
+      }));
+    });
+
+    expect(fuelInputs()[0].value).toBe('12');
+    expect(container.querySelector<HTMLTextAreaElement>('textarea')?.value).toBe('Saved elsewhere');
+    await click(buttonByText(flightJa.notes.save));
+    expect(saved.at(-1)?.perFlight['blue:1']).toMatchObject({ jokerFuel: 12, customNotes: 'Saved elsewhere' });
+  });
+
   it('keeps an unsaved draft when the selection moves to another flight and back', async () => {
     const { blue, red } = makeFlights();
     await render({ initial: makeMission(blue, red), viewMode: 'creator', selectedKey: 'blue:1' });

@@ -5,8 +5,11 @@
   "L4": "TACAN channel is duplicated: {{channel}} {{mode}} ({{count}} assets)",
   "L5": "Route airbase is owned by neither the own side nor neutral: {{airbase}} ({{owner}})",
   "L6": "Possible ETA mismatch ({{count}} legs; first at point {{point}}). Calculation method unverified",
+  "L6_one": "Possible ETA mismatch ({{count}} leg; first at point {{point}}). Calculation method unverified",
   "L7": "{{count}} positions could not be resolved",
+  "L7_one": "{{count}} position could not be resolved",
   "L8": "{{count}} ground or naval groups have no recorded threat range",
+  "L8_one": "{{count}} ground or naval group has no recorded threat range",
   "L9": "Laser code is not four digits: {{callsign}} {{code}}",
   "L10": "The own side has no Client flight"
 }

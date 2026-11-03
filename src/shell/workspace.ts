@@ -209,6 +209,12 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     setRouteFocusState(current => (current !== null && !hasFlight(view, current.flightKey) ? null : current));
   }, [view]);
 
+  // The route pick belongs to the flight it was made on: choosing another flight drops it, so the map does not keep
+  // highlighting the flight that was left (W3). A pick made for the new flight in the same commit is kept.
+  useEffect(() => {
+    setRouteFocusState(current => (current !== null && current.flightKey !== flightKey ? null : current));
+  }, [flightKey]);
+
   // A second file opens the revision comparison (F10).
   useEffect(() => {
     if (revisions) navigate('revision', null);

@@ -8,6 +8,7 @@
     "note": "Ranges are theoretical horizontal distances (metres from the reference table). Terrain, detection and engagement decisions are not modelled.",
     "groupNote": "A group that also has an unrecorded unit is judged by its reference range (the largest known). The range of the unrecorded unit is not used.",
     "unrecordedNote": "{{count}} threats with no recorded range are not included in the crossings.",
+    "unrecordedNote_one": "{{count}} threat with no recorded range is not included in the crossings.",
     "noThreats": "No threat can be used for crossings (only threats with a range in the reference table are used).",
     "noFlights": "No flights on the own side.",
     "noRoute": "No route points",

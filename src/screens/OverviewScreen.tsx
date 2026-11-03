@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { checkedLintRuleCount, isCreatorOnlyLintRule, lintMissionForSide } from '../analysis/lint';
 import { buildTot } from '../analysis/tot';
 import { isResolvedLatLon, taskTextFor, weatherConditionPairs, type Translate } from '../briefing/slides';
+import { isCreatorOnlyIssueCode } from '../core/issues';
 import { issueText, issueTextList } from '../core/issueText';
 import { Notice } from '../shell/Notice';
 import { SideMark } from '../shell/SideMark';
@@ -29,11 +30,6 @@ const MS_PER_DAY = 86400000;
 
 function sortFindings(findings: readonly LintFinding[]): LintFinding[] {
   return [...findings].sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity]);
-}
-
-/** Threat issues are creator-only (SPEC 5.1, D1). In pilot view they are not listed. */
-function isCreatorOnlyIssueCode(code: string): boolean {
-  return code.startsWith('threat.');
 }
 
 interface LoadNotice {

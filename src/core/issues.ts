@@ -36,9 +36,31 @@ export function issueKey(issue: MissionIssue): string {
   return `${issue.code}|${issue.side ?? ''}|${params}`;
 }
 
-/** Append an issue unless an identical one (same code, side and params) is already present. */
-export function addIssue(issues: MissionIssue[], code: IssueCode, params?: Record<string, string | number>, side?: IssueSide): void {
+/**
+ * Append an issue unless an identical one (same code, side and params) is already present.
+ * `hiddenSource` marks an issue that came from a hidden or late-activation group. An identical issue
+ * from a visible group clears the mark, and a hidden copy never adds it to a visible one, so the
+ * pilot view keeps every issue that a visible group reported (D1, G11).
+ */
+export function addIssue(
+  issues: MissionIssue[],
+  code: IssueCode,
+  params?: Record<string, string | number>,
+  side?: IssueSide,
+  hiddenSource = false,
+): void {
   const issue = createIssue(code, params, side);
   const key = issueKey(issue);
-  if (!issues.some(existing => issueKey(existing) === key)) issues.push(issue);
+  const existing = issues.find(item => issueKey(item) === key);
+  if (existing) {
+    if (!hiddenSource) delete existing.hiddenSource;
+    return;
+  }
+  if (hiddenSource) issue.hiddenSource = true;
+  issues.push(issue);
+}
+
+/** Threat issues are creator-only (SPEC 5.1, D1): pilot view lists them neither on screen nor in the output. */
+export function isCreatorOnlyIssueCode(code: string): boolean {
+  return code.startsWith('threat.');
 }

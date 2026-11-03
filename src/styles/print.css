@@ -3,7 +3,8 @@
    still lays out and draws. Its height is 0 with overflow hidden, so the
    off-screen copy adds no scrollable height to the page. Printing brings it into the flow.
    The print preview (html[data-print-preview="on"]) shows the same copy full screen.
-   Colours use the system keywords CanvasText and Canvas, which print in black on white. */
+   Colours use the system keywords CanvasText and Canvas with color-scheme: light, so they are black on white
+   even when the app theme is dark (the FFS and night themes set color-scheme: dark on :root). */
 
 .print-briefing {
   display: block;
@@ -13,6 +14,7 @@
   width: 180mm;
   height: 0;
   overflow: hidden;
+  color-scheme: light;
   color: CanvasText;
   background: Canvas;
 }
@@ -119,16 +121,23 @@ html[data-print-preview="on"] .print-document {
 
   html,
   body {
+    color-scheme: light;
     background: Canvas;
     color: CanvasText;
   }
 
-  .print-briefing {
+  /* The preview selector is listed too: its fixed, scrolling box would otherwise win (higher specificity) and the
+     print would be one clipped screen repeated on every page when "印刷" is pressed from the preview. */
+  .print-briefing,
+  html[data-print-preview="on"] .print-briefing {
     position: static;
+    inset: auto;
     left: auto;
     width: auto;
     height: auto;
     overflow: visible;
+    padding: 0;
+    z-index: auto;
   }
 
   .print-page {

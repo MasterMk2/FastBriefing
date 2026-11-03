@@ -211,7 +211,7 @@ function makeMission(options: { theatre?: string; annotations?: MapAnnotation[] 
 
 function setContext(
   mission: MissionData,
-  options: { viewMode?: 'creator' | 'pilot'; side?: 'blue' | 'red'; mapBackground?: boolean } = {},
+  options: { viewMode?: 'creator' | 'pilot'; side?: 'blue' | 'red'; mapBackground?: boolean; distanceUnit?: 'nm' | 'km' } = {},
 ): void {
   const viewMode = options.viewMode ?? 'creator';
   const side = options.side ?? 'blue';
@@ -223,6 +223,7 @@ function setContext(
     viewMode,
     side,
     mapBackground: options.mapBackground ?? true,
+    distanceUnit: options.distanceUnit ?? 'km',
     briefingSections: [],
     language: 'ja',
   };
@@ -242,6 +243,7 @@ function WorkspaceControls() {
   return (
     <>
       <button type="button" onClick={() => setFlightKey(null)}>選択なし</button>
+      <button type="button" onClick={() => setFlightKey('red:2')}>赤を選ぶ</button>
       <button type="button" onClick={() => setRouteFocus({ flightKey: 'blue:1', routeIndex: 1 })}>経路点を選ぶ</button>
       <button type="button" onClick={() => setRouteFocus({ flightKey: 'red:2', routeIndex: 1 })}>赤の経路点を選ぶ</button>
       <button type="button" onClick={() => setMapUi(previous => ({ ...previous, soloFlightKey: 'blue:1' }))}>この機だけ</button>
@@ -398,7 +400,7 @@ describe('map panel state and screen changes', () => {
     await render();
     await act(async () => buttonByText('経路点を選ぶ')?.click());
     expect(mocks.panTo).toHaveBeenCalledTimes(1);
-    expect(mocks.panTo).toHaveBeenCalledWith([42.1, 42.1]);
+    expect(mocks.panTo).toHaveBeenCalledWith([42.1, 42.1], { animate: true });
     expect(mocks.fitBounds).toHaveBeenCalledTimes(1);
   });
 
@@ -498,6 +500,42 @@ describe('map panel state and screen changes', () => {
     expect(host.querySelector('.is-dim')).toBeNull();
   });
 
+  it('drops the route pick when another flight is chosen, so the left flight is neither marked nor ringed (W3)', async () => {
+    setContext(missionWithBlueRoute([point(1, [42, 42]), point(2, [42.1, 42.1]), point(3, [42.2, 42.2])]));
+    await render();
+    await act(async () => buttonByText('経路点を選ぶ')?.click());
+    expect(host.querySelectorAll('.map-icon-focus')).toHaveLength(1);
+    await act(async () => buttonByText('赤を選ぶ')?.click());
+    expect(host.querySelectorAll('.map-icon-focus')).toHaveLength(0);
+    expect(host.querySelector('[data-testid="polyline"].map-route-blue.is-selected')).toBeNull();
+    expect(host.querySelector('[data-testid="polyline"].map-route-red.is-selected')).not.toBeNull();
+  });
+
+  it('never draws the route pick on the read-only briefing map, and does not undim its flight (W3)', async () => {
+    setContext(missionWithBlueRoute([point(1, [42, 42]), point(2, [42.1, 42.1]), point(3, [42.2, 42.2])]));
+    await render(<Harness readOnly focusFlightKey="red:2" />);
+    await act(async () => buttonByText('経路点を選ぶ')?.click());
+    expect(host.querySelectorAll('.map-icon-focus')).toHaveLength(0);
+    expect(host.querySelector('[data-testid="polyline"].map-route-blue.is-selected')).toBeNull();
+  });
+
+  it('pans without animation when the system asks for reduced motion (A11Y-9)', async () => {
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      matches: query.includes('prefers-reduced-motion'),
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+    }));
+    setContext(missionWithBlueRoute([point(1, [42, 42]), point(2, [42.1, 42.1]), point(3, [42.2, 42.2])]));
+    mocks.inView = false;
+    await render();
+    await act(async () => buttonByText('経路点を選ぶ')?.click());
+    expect(mocks.panTo).toHaveBeenLastCalledWith([42.1, 42.1], { animate: false });
+    expect(mocks.fitBounds.mock.calls.every(call => (call[1] as { animate?: boolean }).animate === false)).toBe(true);
+  });
+
   it('picking the same route row again pans to its point again when that point is still out of view', async () => {
     setContext(missionWithBlueRoute([point(1, [42, 42]), point(2, [42.1, 42.1]), point(3, [42.2, 42.2])]));
     mocks.inView = false;
@@ -506,7 +544,7 @@ describe('map panel state and screen changes', () => {
     expect(mocks.panTo).toHaveBeenCalledTimes(1);
     await act(async () => buttonByText('経路点を選ぶ')?.click());
     expect(mocks.panTo).toHaveBeenCalledTimes(2);
-    expect(mocks.panTo).toHaveBeenLastCalledWith([42.1, 42.1]);
+    expect(mocks.panTo).toHaveBeenLastCalledWith([42.1, 42.1], { animate: true });
     expect(mocks.fitBounds).toHaveBeenCalledTimes(1);
   });
 });
@@ -754,6 +792,14 @@ describe('pilot and creator data', () => {
     await render();
     expect(circles().join('|')).toContain('BLUE-SAM');
     expect(circles().join('|')).not.toContain('RED-SAM');
+  });
+
+  it('writes the threat range in the distance unit of the display settings, not in raw metres (W7)', async () => {
+    setContext(makeMission(), { viewMode: 'creator', side: 'blue', distanceUnit: 'nm' });
+    await render();
+    const text = [...document.querySelectorAll('.map-range-threat')].map(node => node.textContent ?? '').join('|');
+    expect(text).toContain('16.2 nm');
+    expect(text).not.toContain('30000');
   });
 });
 

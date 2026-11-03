@@ -5,12 +5,21 @@ import { i18nReady } from '../i18n';
 import { makeCoalition, makeFlight, makeMission, makeSupport, makeUnit } from '../__tests__/testMission';
 import CommsScreen from './CommsScreen';
 import { mountScreen, type MountedScreen } from '../__tests__/testRender';
-import { useWorkspace } from '../shell/workspace';
+import { supportAnchor, useWorkspace } from '../shell/workspace';
 
 vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
 
 const client = (overrides: Parameters<typeof makeUnit>[0] = {}) => makeUnit({ skill: 'Client', ...overrides });
 const preset = (frequencyHz: number, modulation = 0) => ({ channel: 1, frequency: frequencyHz, modulation, name: 'Tactical' });
+
+/** Records every anchor the workspace is given (this test keeps the comms screen mounted, and it clears anchors). */
+function AnchorLog({ log }: { log: string[] }) {
+  const { focusAnchor } = useWorkspace();
+  useEffect(() => {
+    if (focusAnchor !== null) log.push(focusAnchor);
+  }, [focusAnchor, log]);
+  return null;
+}
 
 /** Jumps to an anchor once when it mounts, as the overview's "この箇所へ" does. */
 function JumpTo({ anchor }: { anchor: string }) {
@@ -96,11 +105,14 @@ describe('CommsScreen (P5)', () => {
   });
 
   it('opens the support screen from a support owner row', async () => {
-    screen = await mountScreen(<CommsScreen />, makeCommsMission(), 'pilot');
+    const anchors: string[] = [];
+    screen = await mountScreen(<><AnchorLog log={anchors} /><CommsScreen /></>, makeCommsMission(), 'pilot');
 
     await screen.click('給油機 Texaco');
 
     expect(screen.workspace()?.screen).toBe('support');
+    // The anchor names the asset, so the support screen highlights it and opens a folded list (W4).
+    expect(anchors).toContain(supportAnchor('blue', 0));
   });
 
   it('filters the table by modulation and says how many rows are shown', async () => {

@@ -128,9 +128,15 @@ export default function BriefingMode() {
   // Leaving the screen (or the mission) also leaves full screen.
   useEffect(() => () => exitFullscreen(), []);
 
+  // The start screen takes the focus: the button that opened it is now under the inert shell (A11Y-1).
+  const startRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (!deck) startRef.current?.focus();
+  }, [deck]);
+
   if (!deck) {
     return (
-      <section className="briefing-start" aria-labelledby="briefing-start-title">
+      <section ref={startRef} tabIndex={-1} className="briefing-start" aria-labelledby="briefing-start-title">
         <h2 id="briefing-start-title">{t('briefing:start.title')}</h2>
         <p className="briefing-start-view">
           {t('briefing:start.view')}: <strong>{viewLabel}</strong>
@@ -218,6 +224,18 @@ function BriefingSlides({ deck, index, onIndex, onExit, viewLabel }: BriefingSli
   const regionRef = useFocusOnMount<HTMLDivElement>();
   const current = deck[index];
   const total = deck.length;
+  // "前へ" on the first slide and "次へ" on the last are disabled. A button that is disabled while it has the focus
+  // would drop the focus to the document, so the focus moves to the briefing region instead (A11Y-1).
+  const refocusRegion = useRef(false);
+  useEffect(() => {
+    if (!refocusRegion.current) return;
+    refocusRegion.current = false;
+    regionRef.current?.focus();
+  }, [index, regionRef]);
+  const step = (next: number) => {
+    if (next <= 0 || next >= total - 1) refocusRegion.current = true;
+    onIndex(next);
+  };
 
   // Contents entries: one per run of slides that share a section (route slides repeat per flight).
   const groups: { section: string; first: number }[] = [];
@@ -266,7 +284,7 @@ function BriefingSlides({ deck, index, onIndex, onExit, viewLabel }: BriefingSli
           type="button"
           className="briefing-button"
           disabled={index === 0}
-          onClick={() => onIndex(Math.max(index - 1, 0))}
+          onClick={() => step(Math.max(index - 1, 0))}
         >
           {t('briefing:nav.prev')}
         </button>
@@ -274,7 +292,7 @@ function BriefingSlides({ deck, index, onIndex, onExit, viewLabel }: BriefingSli
           type="button"
           className="briefing-button is-primary"
           disabled={index >= total - 1}
-          onClick={() => onIndex(Math.min(index + 1, total - 1))}
+          onClick={() => step(Math.min(index + 1, total - 1))}
         >
           {t('briefing:nav.next')}
         </button>

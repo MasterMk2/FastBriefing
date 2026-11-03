@@ -331,7 +331,8 @@
     gap: 2px;
   }
 
-  .briefing-start-actions .briefing-button {
+  .briefing-start-actions .briefing-button,
+  .briefing-check {
     min-height: var(--target-touch);
   }
 }

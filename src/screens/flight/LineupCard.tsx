@@ -103,7 +103,7 @@ export default function LineupCard({ flight, unit }: LineupCardProps) {
                 {pylons.map((pylon, index) => (
                   <tr key={`${pylon.station}:${index}`}>
                     <td className="num">{pylon.station}</td>
-                    <td>{pylon.name}</td>
+                    <td>{pylon.unknown ? t('wingman:lineup.unknownWeapon', { name: pylon.name }) : pylon.name}</td>
                     <td className="num">{pylon.count}</td>
                   </tr>
                 ))}

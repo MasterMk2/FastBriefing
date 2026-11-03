@@ -4,7 +4,8 @@ import type { DisplaySettings, MissionData } from '../types/mission';
 import { applyViewMode } from '../utils/viewMode';
 import { buildGeospatialExport } from '../utils/geospatialExport';
 import { effectiveExportScope } from './useExportModel';
-import { buildExportModel } from './exportModel';
+import { buildExportModel, resolveExportSide } from './exportModel';
+import type { ExportScope } from './exportPlan';
 import { fixtureMission } from './__tests__/fixture';
 
 // Identity translator: every label is its key, so tests can check which label was used.
@@ -106,10 +107,70 @@ describe('warnings follow the view (D1, migrated from PrintView.test)', () => {
     expect(text).toContain('issues:map.unsupported');
   });
 
+  it('leaves the own threat issues out of the pilot output, as the overview screen does (TI-1)', () => {
+    const mission = missionWithIssues();
+    mission.issues.push({ code: 'threat.rangeUnrecorded', severity: 'info', params: { type: 'OWN-SAM' }, side: 'blue' });
+    const build = (mode: 'creator' | 'pilot') => allPageText(buildExportModel({
+      view: applyViewMode(mission, mode, 'blue'),
+      settings: settings({ viewMode: mode, side: 'blue', briefingSections: ['overview'] }),
+      side: 'blue',
+      scope: { kind: 'mission' },
+      whiteboard: { notes: '', strokes: [] },
+    }, withParams).pages);
+    expect(build('pilot')).not.toContain('issues:threat.rangeUnrecorded');
+    expect(build('creator')).toContain('issues:threat.rangeUnrecorded');
+  });
+
   it('prints the red issue and hides the blue one when red is displayed in pilot view', () => {
     const text = warningsOf('pilot', 'red');
     expect(text).toContain('SECRET-RED-SAM');
     expect(text).not.toContain('OWN-UNKNOWN');
+  });
+});
+
+describe('the output side follows the target (PE-4)', () => {
+  function redHandout(scope: ExportScope): string {
+    const mission = fixtureMission();
+    mission.meta.descriptionBlueTask = 'BLUE TASK';
+    mission.meta.descriptionRedTask = 'RED TASK';
+    const model = buildExportModel({
+      view: applyViewMode(mission, 'creator', 'blue'),
+      settings: settings({ viewMode: 'creator', side: 'blue', briefingSections: ['overview', 'threats'] }),
+      side: 'blue',
+      scope,
+      whiteboard: { notes: '', strokes: [] },
+    }, t);
+    return allPageText(model.pages);
+  }
+
+  it('writes a red-side handout from red: the red task, and no red group as a threat', () => {
+    const scopes: ExportScope[] = [{ kind: 'side', side: 'red' }, { kind: 'flights', flightKeys: ['red:3'] }, { kind: 'aircraft', aircraftType: 'MiG-29S' }];
+    for (const scope of scopes) {
+      const text = redHandout(scope);
+      expect(text, scope.kind).toContain('RED TASK');
+      expect(text, scope.kind).not.toContain('BLUE TASK');
+      expect(text, scope.kind).not.toContain('SA-10');
+    }
+  });
+
+  it('keeps the displayed side for the whole mission and for a mixed selection', () => {
+    expect(redHandout({ kind: 'mission' })).toContain('SA-10');
+    const flights = fixtureMission();
+    const all = [
+      { key: 'blue:1', side: 'blue' as const, flight: flights.coalitions.blue.flights[0] },
+      { key: 'red:3', side: 'red' as const, flight: flights.coalitions.red.flights[0] },
+    ];
+    expect(resolveExportSide({ kind: 'flights', flightKeys: ['blue:1', 'red:3'] }, all, 'blue')).toBe('blue');
+    expect(resolveExportSide({ kind: 'flights', flightKeys: ['red:3'] }, all.slice(1), 'blue')).toBe('red');
+  });
+});
+
+describe('a stored aircraft type the view does not have (PE-9)', () => {
+  it('is read as the first type of the view, the one the select shows', () => {
+    expect(effectiveExportScope({ kind: 'aircraft', aircraftType: 'Su-27' }, 'pilot', 'blue', ['F-16C_50', 'FA-18C_hornet']))
+      .toEqual({ kind: 'aircraft', aircraftType: 'F-16C_50' });
+    const known = { kind: 'aircraft' as const, aircraftType: 'FA-18C_hornet' };
+    expect(effectiveExportScope(known, 'pilot', 'blue', ['F-16C_50', 'FA-18C_hornet'])).toBe(known);
   });
 });
 

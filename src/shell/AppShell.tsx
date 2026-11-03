@@ -21,6 +21,7 @@ import SettingsDrawer from './SettingsDrawer';
 import { Segmented } from './Segmented';
 import { WorkspaceNav } from './WorkspaceNav';
 import { WorkspaceProvider, useWorkspace } from './workspace';
+import { inertOutside } from './inert';
 
 export interface AppShellProps {
   mission: MissionData | null;
@@ -157,6 +158,9 @@ function InitialShell({ loading, isDragging, onPickFiles, onCompare, onCloseMiss
   );
 }
 
+/** The header button that opens the oral briefing; the focus returns to it when the briefing ends. */
+const BRIEFING_TRIGGER_ID = 'shell-briefing-trigger';
+
 function MissionShell({ onPickFiles, onCompare, onCloseMission }: {
   onPickFiles: () => void;
   onCompare: () => void;
@@ -167,14 +171,26 @@ function MissionShell({ onPickFiles, onCompare, onCloseMission }: {
   const headerRef = useRef<HTMLElement>(null);
   const frameRef = useRef<HTMLDivElement>(null);
   const tabsRef = useRef<HTMLElement>(null);
+  const layerRef = useRef<HTMLDivElement>(null);
+  const wasBriefingOpen = useRef(false);
 
-  // The attribute is set on the elements themselves (React 18 has no typed inert prop). The briefing is not
-  // inside these elements, so it is not made inert with them.
+  // While the briefing covers the page, everything outside its layer is inert: the shell chrome, and also the
+  // hidden file inputs, the error band, the bottom sheet and the settings drawer (A11Y-1). The attribute is set on
+  // the elements themselves (React 18 has no typed inert prop). The settings drawer is closed, since it would stay
+  // hidden under the layer. When the briefing ends, the focus goes back to the button that opened it (A11Y-2).
   useLayoutEffect(() => {
-    for (const element of [headerRef.current, frameRef.current, tabsRef.current]) {
-      element?.toggleAttribute('inert', briefingOpen);
+    if (!briefingOpen) {
+      if (wasBriefingOpen.current) {
+        wasBriefingOpen.current = false;
+        document.getElementById(BRIEFING_TRIGGER_ID)?.focus();
+      }
+      return undefined;
     }
-  }, [briefingOpen]);
+    wasBriefingOpen.current = true;
+    setSettingsOpen(false);
+    const layer = layerRef.current;
+    return layer ? inertOutside(layer) : undefined;
+  }, [briefingOpen, setSettingsOpen]);
 
   const closeSettings = () => {
     setSettingsOpen(false);
@@ -199,7 +215,7 @@ function MissionShell({ onPickFiles, onCompare, onCloseMission }: {
         </main>
       </div>
       {briefingOpen && (
-        <div className="shell-briefing-layer" style={BRIEFING_LAYER_STYLE}>
+        <div className="shell-briefing-layer" style={BRIEFING_LAYER_STYLE} ref={layerRef}>
           <ScreenHost />
         </div>
       )}
@@ -265,7 +281,7 @@ function ShellHeader({ headerRef, onPickFiles, onCompare, onCloseMission }: {
           onCompare={onCompare}
           onClose={onCloseMission}
         />
-        <button type="button" className="btn btn-primary" onClick={() => setScreen('briefing')}>
+        <button id={BRIEFING_TRIGGER_ID} type="button" className="btn btn-primary" onClick={() => setScreen('briefing')}>
           {t('shell:header.start')}
         </button>
         <button

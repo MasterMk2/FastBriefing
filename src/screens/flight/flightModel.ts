@@ -91,6 +91,13 @@ export interface FlightNotesDraft {
   customNotes: string;
 }
 
+/**
+ * Unsaved edits of the flight notes form: only the fields the user changed. They are laid over the saved values on
+ * every render, so a field changed elsewhere (the notes screen, an import, "前の記入を読み込む") shows its new saved
+ * value and is not written back with an old one on 保存 (W1).
+ */
+export type FlightNotesDraftEdits = Partial<FlightNotesDraft>;
+
 export function draftFromFlightNotes(notes: FlightNotes): FlightNotesDraft {
   return {
     joker: notes.jokerFuel === null ? '' : String(notes.jokerFuel),

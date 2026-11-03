@@ -303,6 +303,15 @@
     grid-template-columns: 1fr;
     gap: 0;
   }
+
+  /* Touch targets on narrow screens (SPEC 4.1: 44px). */
+  .comms-select,
+  .comms-button,
+  .comms-link,
+  .support-link,
+  .comms-screen summary {
+    min-height: var(--target-touch);
+  }
 }
 
 /* A row named by an "この箇所へ" jump: an outline in the accent token, plus the focus ring the browser draws. */

@@ -59,6 +59,21 @@ export function selectExportFlights(view: MissionData, scope: ExportScope): Expo
   }
 }
 
+/**
+ * The coalition the output is written for. A side scope is that side; a flight or aircraft selection whose
+ * flights all belong to one coalition is that coalition; anything else is the displayed side. The task text,
+ * the threat section and the map threats are taken from it, so a red handout never lists red's own SAMs as
+ * threats (P3).
+ */
+export function resolveExportSide(scope: ExportScope, flights: readonly ExportFlight[], displayed: Side): Side {
+  if (scope.kind === 'side') return scope.side;
+  if (scope.kind === 'mission' || flights.length === 0) return displayed;
+  const sides = new Set(flights.map(item => item.side));
+  if (sides.size !== 1) return displayed;
+  const [only] = sides;
+  return only === 'neutral' ? displayed : only;
+}
+
 export function aircraftTypesOf(flights: readonly ExportFlight[]): string[] {
   return [...new Set(flights.map(item => item.flight.type).filter(type => /^[A-Za-z0-9_-]+$/.test(type)))].sort();
 }
@@ -82,7 +97,7 @@ export function buildExportModel(input: ExportModelInput, t: KneeboardTranslate)
       view: input.view,
       settings: input.settings,
       plan,
-      side: input.side,
+      side: resolveExportSide(input.scope, flights, input.side),
       flights,
       whiteboard: input.whiteboard,
     }, t);

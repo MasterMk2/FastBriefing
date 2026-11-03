@@ -12,7 +12,7 @@ import RouteTable from './RouteTable';
 import type { OptionalRouteColumn, RouteFocusRequest } from './RouteTable';
 import { CommsView, FlightNotesView, LineupView } from './FlightSubviews';
 import { formatMegahertz, formatModulation, isClientFlight } from './flightModel';
-import type { FlightNotesDraft } from './flightModel';
+import type { FlightNotesDraftEdits } from './flightModel';
 import { SoloMapMenu } from './SoloMapMenu';
 import WingmanCard from './WingmanCard';
 import { flightKey } from '../../utils/flightKey';
@@ -23,8 +23,8 @@ interface FlightDetailProps {
   side: Side;
   flight: Flight;
   /** Unsaved notes of this flight, held by the flight screen. */
-  noteDraft: FlightNotesDraft | undefined;
-  onNoteDraftChange: (key: string, draft: FlightNotesDraft | null) => void;
+  noteDraft: FlightNotesDraftEdits | undefined;
+  onNoteDraftChange: (key: string, draft: FlightNotesDraftEdits | null) => void;
 }
 
 export default function FlightDetail({ side, flight, noteDraft, onNoteDraftChange }: FlightDetailProps) {

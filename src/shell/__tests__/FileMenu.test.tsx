@@ -108,3 +108,25 @@ describe('file menu', () => {
     expect(onCompare).not.toHaveBeenCalled();
   });
 });
+
+describe('file menu Escape (A11Y-7)', () => {
+  const escape = () => new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+
+  it('marks the Escape as handled, so no other layer closes on the same press', async () => {
+    await renderMenu();
+    await open();
+    const event = escape();
+    await act(async () => { document.dispatchEvent(event); });
+    expect(container.querySelector('[role="menu"]')).toBeNull();
+    expect(event.defaultPrevented).toBe(true);
+  });
+
+  it('leaves an Escape that another layer has already handled', async () => {
+    await renderMenu();
+    await open();
+    const event = escape();
+    event.preventDefault();
+    await act(async () => { document.dispatchEvent(event); });
+    expect(container.querySelector('[role="menu"]')).not.toBeNull();
+  });
+});

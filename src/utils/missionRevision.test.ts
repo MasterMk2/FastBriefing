@@ -113,6 +113,23 @@ describe('mission revision matching and changes', () => {
     expect(compareMissionRevisions(b, a, 'pilot', 'blue').changes).toEqual([]);
     expect(compare(a, b).changes).not.toHaveLength(0);
   });
+  it('leaves out a late-activation AI group in pilot mode, but keeps a late-activation client flight (G11)', () => {
+    const lateAi = (x: number) => ({
+      ...group(), lateActivation: true,
+      route: { points: [point('START', x), point('IP', 100), point('LAND', 200)] },
+    });
+    const pilotDiff = compareMissionRevisions(snapshot([lateAi(0)]), snapshot([lateAi(999)]), 'pilot', 'blue');
+    expect(pilotDiff.changes).toEqual([]);
+    expect(pilotDiff.routes).toEqual([]);
+    expect(compare(snapshot([lateAi(0)]), snapshot([lateAi(999)])).changes).not.toHaveLength(0);
+
+    const lateClient = (x: number) => {
+      const flight = lateAi(x);
+      return { ...flight, units: [{ ...flight.units[0], skill: 'Client' }] };
+    };
+    expect(compareMissionRevisions(snapshot([lateClient(0)]), snapshot([lateClient(999)]), 'pilot', 'blue').changes)
+      .not.toHaveLength(0);
+  });
   it('compares only the displayed side in pilot view and never lists the opposing flights (D1)', () => {
     const build = (enemyX: number, withEnemy = true) => {
       const own = group(1, 'Own');

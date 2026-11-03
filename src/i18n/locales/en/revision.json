@@ -10,6 +10,7 @@
   "filter": "Show",
   "all": "All changes",
   "count": "{{count}} changes",
+  "count_one": "{{count}} change",
   "unchanged": "No differences",
   "retryCompare": "Choose the older file again",
   "dismissCompare": "Close",

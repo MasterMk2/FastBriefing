@@ -83,6 +83,7 @@
     "open": "View this flight",
     "empty": "No waypoints with a time",
     "zeroEta": "{{count}} points at time 0 are left out of this list",
+    "zeroEta_one": "{{count}} point at time 0 is left out of this list",
     "showAll": "Show all ({{count}} rows)",
     "showLess": "Back to the first 10 rows"
   }

@@ -10,6 +10,7 @@
   "filter": "表示",
   "all": "すべての変更",
   "count": "変更 {{count}} 件",
+  "count_one": "変更 {{count}} 件",
   "unchanged": "差分はありません",
   "retryCompare": "旧版を選び直す",
   "dismissCompare": "閉じる",

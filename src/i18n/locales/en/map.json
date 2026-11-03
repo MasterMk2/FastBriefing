@@ -53,9 +53,11 @@
     },
     "clearAll": "Clear all annotations",
     "clearConfirm": "Clear all {{count}} annotations? Restore brings them back in one step.",
+    "clearConfirm_one": "Clear the {{count}} annotation? Restore brings it back in one step.",
     "clearYes": "Clear",
     "clearNo": "Keep",
-    "removedAll": "Cleared {{count}} annotations. Use Restore to put them back."
+    "removedAll": "Cleared {{count}} annotations. Use Restore to put them back.",
+    "removedAll_one": "Cleared {{count}} annotation. Use Restore to put it back."
   },
   "annotations": {
     "defaultPin": "Pin {{count}}",
@@ -124,8 +126,8 @@
   },
   "popup": {
     "openFlight": "Open this flight's navlog",
-    "threat": "{{side}} {{type}}: threat range {{range}} m",
-    "detection": "{{side}} {{type}}: detection range {{range}} m",
+    "threat": "{{side}} {{type}}: threat range {{range}}",
+    "detection": "{{side}} {{type}}: detection range {{range}}",
     "enemy": "{{side}}: {{type}} ({{count}})",
     "zone": "Trigger zone: {{name}}"
   },

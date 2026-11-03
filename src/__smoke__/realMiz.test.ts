@@ -153,10 +153,10 @@ describe.skipIf(!smokeDirectory)('real .miz smoke test', () => {
         const pilot = applyViewMode(normalized, 'pilot', side);
         const own = normalized.coalitions[side];
         const shown = pilot.coalitions[side];
-        const ownHidden = own.flights.filter(hasHiddenFlag).length
-          + own.support.filter(hasHiddenFlag).length
-          + own.aiGroups.filter(hasHiddenFlag).length;
-        if (ownHidden > 0) reducedHere = true;
+        // Counted from the view itself, so a view that stops removing the hidden entities is not counted (TI-6).
+        const ownCount = own.flights.length + own.support.length + own.aiGroups.length;
+        const shownCount = shown.flights.length + shown.support.length + shown.aiGroups.length;
+        if (shownCount < ownCount) reducedHere = true;
         expect.soft(hiddenEntityCount(pilot), `${name}: ${side} pilot view keeps a hidden entity`).toBe(0);
         expect.soft(shown.flights.length, `${name}: ${side} pilot flights`)
           .toBe(own.flights.filter(item => !hasHiddenFlag(item)).length);
@@ -165,6 +165,16 @@ describe.skipIf(!smokeDirectory)('real .miz smoke test', () => {
         expect.soft(shown.aiGroups.length, `${name}: ${side} pilot AI groups`)
           .toBe(own.aiGroups.filter(item => !hasHiddenFlag(item) && !item.lateActivation).length);
         expect.soft(pilot.coalitions[opposing].flights.length, `${name}: ${opposing} flights in ${side} pilot view`).toBe(0);
+        // Nothing else of the opposing side stays either (D1): support, AI groups, navigation points and the
+        // airbase list built from its waypoints. Issues of the other side or of hidden groups are gone too.
+        expect.soft(pilot.coalitions[opposing].support.length, `${name}: ${opposing} support in ${side} pilot view`).toBe(0);
+        expect.soft(pilot.coalitions[opposing].aiGroups.length, `${name}: ${opposing} AI groups in ${side} pilot view`).toBe(0);
+        expect.soft(pilot.coalitions[opposing].navPoints.length, `${name}: ${opposing} nav points in ${side} pilot view`).toBe(0);
+        expect.soft(pilot.coalitions[opposing].airbases.length,`${name}: ${opposing} airbases in ${side} pilot view`).toBe(0);
+        expect.soft(
+          pilot.issues.filter(issue => issue.hiddenSource || (issue.side !== undefined && issue.side !== side)).length,
+          `${name}: issues of the other side or of hidden groups in ${side} pilot view`,
+        ).toBe(0);
       }
       if (reducedHere) reducedPilotMissionCount += 1;
 

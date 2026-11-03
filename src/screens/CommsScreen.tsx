@@ -20,7 +20,7 @@ import { Notice } from '../shell/Notice';
 import { Segmented, type SegmentedOption } from '../shell/Segmented';
 import { SideMark } from '../shell/SideMark';
 import { useMission } from '../shell/MissionContext';
-import { useWorkspace } from '../shell/workspace';
+import { supportAnchor, useWorkspace } from '../shell/workspace';
 import { flightKey } from '../utils/flightKey';
 
 type SideFilter = 'all' | 'blue' | 'red';
@@ -44,7 +44,7 @@ const GUARD_FREQUENCIES = [
 export default function CommsScreen() {
   const { t } = useTranslation();
   const { view, viewMode } = useMission();
-  const { focusAnchor, clearFocusAnchor, setFlightKey, setScreen } = useWorkspace();
+  const { focusAnchor, clearFocusAnchor, setFlightKey, setScreen, jumpTo } = useWorkspace();
   const rootRef = useRef<HTMLDivElement>(null);
   const [highlighted, setHighlighted] = useState<string | null>(null);
   const [filter, setFilter] = useState<RowFilter>(EMPTY_FILTER);
@@ -83,6 +83,11 @@ export default function CommsScreen() {
     if (entry.source === 'flight' && entry.flightId !== undefined) {
       setFlightKey(flightKey(entry.side, entry.flightId));
       setScreen('flights');
+      return;
+    }
+    // The anchor opens the folded opposing list and highlights the asset on the support screen (W4).
+    if (entry.supportIndex !== undefined) {
+      jumpTo('support', { anchor: supportAnchor(entry.side, entry.supportIndex) });
       return;
     }
     setScreen('support');

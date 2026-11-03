@@ -53,9 +53,11 @@
     },
     "clearAll": "注釈をすべて消す",
     "clearConfirm": "注釈 {{count}} 件をすべて消します。「元に戻す」で一度に戻せます。",
+    "clearConfirm_one": "注釈 {{count}} 件をすべて消します。「元に戻す」で一度に戻せます。",
     "clearYes": "消す",
     "clearNo": "やめる",
-    "removedAll": "注釈 {{count}} 件をすべて消しました。「元に戻す」で戻せます。"
+    "removedAll": "注釈 {{count}} 件をすべて消しました。「元に戻す」で戻せます。",
+    "removedAll_one": "注釈 {{count}} 件をすべて消しました。「元に戻す」で戻せます。"
   },
   "annotations": {
     "defaultPin": "ピン {{count}}",
@@ -124,8 +126,8 @@
   },
   "popup": {
     "openFlight": "この機のナビログを開く",
-    "threat": "{{side}} {{type}}: 脅威の圏 {{range}} m",
-    "detection": "{{side}} {{type}}: 探知の圏 {{range}} m",
+    "threat": "{{side}} {{type}}: 脅威の圏 {{range}}",
+    "detection": "{{side}} {{type}}: 探知の圏 {{range}}",
     "enemy": "{{side}}: {{type}}（{{count}}）",
     "zone": "トリガーゾーン: {{name}}"
   },

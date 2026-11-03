@@ -158,6 +158,13 @@ describe('i18n resources', () => {
     expect(i18n.t('issues:map.unsupported', { lng: 'ja', theatre: 'Test' })).toContain('Test');
   });
 
+  it('writes the English singular for a count of one, and the same text in Japanese (i18n-state-5)', async () => {
+    await i18nReady;
+    expect(i18n.t('revision:count', { lng: 'en', count: 1 })).toBe('1 change');
+    expect(i18n.t('revision:count', { lng: 'en', count: 2 })).toBe('2 changes');
+    expect(i18n.t('revision:count', { lng: 'ja', count: 1 })).toBe('変更 1 件');
+  });
+
   it('keeps a valid language while every readable settings version migrates to the current schema', () => {
     expect(READABLE_SETTINGS_VERSIONS).toEqual([1, 2, 3, 4, SETTINGS_VERSION]);
     for (const settingsVersion of READABLE_SETTINGS_VERSIONS) {

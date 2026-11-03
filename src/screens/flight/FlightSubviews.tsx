@@ -11,7 +11,7 @@ import type { Flight, FlightNotes, Side } from '../../types/mission';
 import { updateFlightNotes, emptyFlightNotes } from '../../utils/notes';
 import { flightKey } from '../../utils/flightKey';
 import { MAX_FLIGHT_SHORT_TEXT_LENGTH, MAX_FLIGHT_TEXT_LENGTH, draftFromFlightNotes, flightNotesFromDraft, formatMegahertz, formatModulation, link16DiffersFromLead, radioDiffersFromLead } from './flightModel';
-import type { FlightNotesDraft, FuelParseResult } from './flightModel';
+import type { FlightNotesDraft, FlightNotesDraftEdits, FuelParseResult } from './flightModel';
 import LineupCard from './LineupCard';
 
 /** Radios of each aircraft. A radio that differs from the lead on the same channel is marked (SPEC 1.3). */
@@ -157,10 +157,10 @@ function sameDraft(a: FlightNotesDraft, b: FlightNotesDraft): boolean {
 export interface FlightNotesViewProps {
   side: Side;
   flight: Flight;
-  /** Unsaved edits for this flight, held by the flight screen. Undefined means the saved values are shown. */
-  draft: FlightNotesDraft | undefined;
+  /** Unsaved edits for this flight (changed fields only), held by the flight screen. Undefined means none. */
+  draft: FlightNotesDraftEdits | undefined;
   /** Sets or clears (null) the unsaved edits of a flight key. */
-  onDraftChange: (key: string, draft: FlightNotesDraft | null) => void;
+  onDraftChange: (key: string, draft: FlightNotesDraftEdits | null) => void;
 }
 
 /**
@@ -174,14 +174,17 @@ export function FlightNotesView({ side, flight, draft, onDraftChange }: FlightNo
   const key = flightKey(side, flight.groupId);
   const saved = notes.perFlight[key] ?? EMPTY_FLIGHT_NOTES;
   const savedDraft = draftFromFlightNotes(saved);
-  const current = draft ?? savedDraft;
+  // The edits are laid over the saved values: a field the user did not change always shows the saved value (W1).
+  const current: FlightNotesDraft = { ...savedDraft, ...draft };
   const [status, setStatus] = useState<'idle' | 'saved' | 'limit'>('idle');
 
   const update = (field: keyof FlightNotesDraft, value: string) => {
     setStatus('idle');
     const next: FlightNotesDraft = { ...current, [field]: value };
-    // A draft that equals the saved values is not kept, so a later change of the saved values is not hidden by it.
-    onDraftChange(key, sameDraft(next, savedDraft) ? null : next);
+    // Only the fields that differ from the saved values are kept, so a later change of another field is not hidden.
+    const edits: FlightNotesDraftEdits = {};
+    for (const name of DRAFT_FIELDS) if (next[name] !== savedDraft[name]) edits[name] = next[name];
+    onDraftChange(key, Object.keys(edits).length === 0 ? null : edits);
   };
 
   const parsed = flightNotesFromDraft(current);

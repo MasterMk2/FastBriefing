@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_SETTINGS } from '../hooks/useSettings';
-import type { DisplaySettings, MissionData, SupportAsset } from '../types/mission';
+import type { DisplaySettings, MissionData, SupportAsset, Unit } from '../types/mission';
 import type { KneeboardPage, KneeboardTranslate } from '../utils/kneeboard';
 import { applyViewMode } from '../utils/viewMode';
 import { buildExportModel } from './exportModel';
+import { alignedTableLines, displayWidth, renderMarkdown } from './markdown';
 import { fixtureMission } from './__tests__/fixture';
 
 /** Keeps the option values in the text, so a test can see which time or wind form was chosen. */
@@ -102,5 +103,119 @@ describe('export map pages follow the basemap setting (decision 6)', () => {
     for (const page of maps) {
       expect(page.kind === 'map' && page.scene.basemap).toBe(true);
     }
+  });
+});
+
+describe('the overview date follows the time display (PE-6, D6)', () => {
+  // The fixture starts at 01:00 local on 2026-09-21 with UTC+3, so the Zulu date is 2026-09-20.
+  const dateLine = (timeDisplay: DisplaySettings['timeDisplay']) => textLines(
+    pagesWith({ briefingSections: ['overview'], timeDisplay }), 'overview',
+  ).find(line => line.startsWith('export:label.date'));
+
+  it('writes the Zulu date when the time display is Zulu', () => {
+    expect(dateLine('zulu')).toBe('export:label.date: 2026-09-20Z');
+  });
+
+  it('writes the local date when the time display is local', () => {
+    expect(dateLine('local')).toBe('export:label.date: 2026-09-21');
+  });
+
+  it('writes both dates when they differ and the time display is both', () => {
+    expect(dateLine('both')).toBe('export:label.date: 2026-09-21 / 2026-09-20Z');
+  });
+});
+
+describe('the PNG nav log has its labels (PE-8)', () => {
+  it('writes every route point as labelled lines, not as cells joined with bars', () => {
+    const pages = pagesWith({ briefingSections: ['route'] });
+    const route = pages.find(page => page.kind === 'text' && page.section === 'route');
+    const section = route?.kind === 'text' ? route.sections[0] : undefined;
+    expect(section?.table?.header).toContain('export:label.coordinate');
+    expect(section?.lines.some(line => line.includes(' | '))).toBe(false);
+    for (const label of ['export:label.coordinate', 'export:label.altitude', 'export:label.speed', 'export:label.eta', 'export:label.legDistance', 'export:label.bearing']) {
+      expect(section?.lines.some(line => line.includes(`${label}: `)), label).toBe(true);
+    }
+  });
+});
+
+describe('the flight pages carry the lineup (TI-4)', () => {
+  const lead: Unit = {
+    unitId: 11,
+    name: 'Viper 1-1',
+    tailNumber: '401',
+    skill: 'Client',
+    livery: 'jasdf',
+    payload: {
+      pylons: [
+        { station: '3', clsid: '{AIM-120C}', name: 'AIM-120C', count: 1, weight: 0 },
+        { station: '1', clsid: '{ZZZ}', name: 'ZZZ', unknown: true, count: 1, weight: 0 },
+      ],
+      fuel: 3200, chaff: 60, flare: 30, gun: 510, weight: 0,
+    },
+    radios: [],
+    props: { STN_L16: '00201' },
+    datalink: { link16: { flightLead: true, team: 2 } },
+  } as unknown as Unit;
+  const withLead = (view: MissionData) => {
+    view.coalitions.blue.flights[0].units = [lead, { ...lead, unitId: 12, name: 'Viper 1-2', tailNumber: '402' }];
+  };
+
+  it('lists the lead loadout in station order, every aircraft, and the Link16 setting', () => {
+    const lines = textLines(pagesWith({ briefingSections: ['flights'] }, withLead), 'flights');
+    const text = lines.join('\n');
+    expect(lines.indexOf('1: export:label.unknownWeapon{"name":"ZZZ"} ×1')).toBeGreaterThanOrEqual(0);
+    expect(lines.indexOf('1: export:label.unknownWeapon{"name":"ZZZ"} ×1')).toBeLessThan(lines.indexOf('3: AIM-120C ×1'));
+    expect(text).toContain('export:label.tailNumber: 402');
+    expect(text).toContain('export:label.fuelKg: 3200');
+    expect(text).toContain('export:label.countermeasures: 60 / 30');
+    expect(text).toContain('export:label.link16Value');
+  });
+
+  it('gives the print and Markdown a loadout table', () => {
+    const pages = pagesWith({ briefingSections: ['flights'] }, withLead);
+    const flights = pages.find(page => page.kind === 'text' && page.section === 'flights');
+    const tables = flights?.kind === 'text' ? flights.sections.flatMap(section => (section.table ? [section.table] : [])) : [];
+    expect(tables.some(table => table.header.includes('export:label.weapon') && table.rows.some(row => row.includes('AIM-120C')))).toBe(true);
+  });
+});
+
+describe('weather and sun in the output (TI-5)', () => {
+  it('writes fog, dust and ground turbulence on the weather page', () => {
+    const lines = textLines(pagesWith({ briefingSections: ['weather'] }, view => {
+      view.weather.fog = { thickness: 300, visibility: 800, enabled: true };
+      view.weather.dust = { density: 2, enabled: true };
+      view.weather.turbulence = { ground: 3 };
+    }), 'weather');
+    expect(lines.some(line => line.startsWith('export:label.fog: '))).toBe(true);
+    expect(lines.some(line => line.startsWith('export:label.dust: '))).toBe(true);
+    expect(lines.some(line => line.startsWith('export:label.groundTurbulence: '))).toBe(true);
+  });
+
+  it('writes the own bullseye with sunrise, sunset, twilight and moon age on the overview', () => {
+    const lines = textLines(pagesWith({ briefingSections: ['overview'] }, view => {
+      view.coalitions.blue.bullseye = { xy: [0, 0], latlon: [42, 43], latlonResolved: true };
+    }), 'overview');
+    for (const label of ['bullseye', 'sunrise', 'sunset', 'civilTwilight', 'nauticalTwilight', 'moonAge']) {
+      expect(lines.some(line => line.startsWith(`export:label.${label}: `)), label).toBe(true);
+    }
+  });
+});
+
+describe('Markdown code blocks line the table columns up (PE-7)', () => {
+  it('pads every cell to its column width, counting wide characters as two', () => {
+    const lines = alignedTableLines(['No', '名前', 'Alt'], [['1', '離陸', '300 m'], ['12', 'IP-LONGNAME', '6000 m']]);
+    // The last column starts where the line minus its last cell ends; it is the same on every line when aligned.
+    const starts = lines.map(line => {
+      const cells = line.split(/ {2,}/);
+      return displayWidth(line) - displayWidth(cells[cells.length - 1]);
+    });
+    expect(new Set(starts).size).toBe(1);
+    expect(displayWidth('名前')).toBe(4);
+  });
+
+  it('uses the aligned lines in the code style output', () => {
+    const pages = pagesWith({ briefingSections: ['route'] });
+    const markdown = renderMarkdown(pages, { title: 'T', viewLabel: 'V', style: 'code' }, t);
+    expect(markdown).toContain('export:label.navNo  export:label.name');
   });
 });

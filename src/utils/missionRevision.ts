@@ -11,6 +11,10 @@ export interface RevisionFlight {
   side: string;
   category: string;
   hidden: boolean;
+  /** Late activation of the group. With `client` false it is a late-activation AI group, which pilot view leaves out (G11). */
+  lateActivation?: boolean;
+  /** True when a unit of the group is a Client or Player slot. */
+  client?: boolean;
   route: RevisionPoint[];
   units: RevisionUnit[];
   radio: RevisionValue;
@@ -85,6 +89,12 @@ function resolveName(value: unknown, dictionary: Record<string, string>): string
   return Object.prototype.hasOwnProperty.call(dictionary, name) ? dictionary[name] : name;
 }
 
+/** Hidden flights and late-activation AI groups are not in the pilot view (G11). */
+function withheldFromPilot(flight: RevisionFlight | undefined): boolean {
+  if (!flight) return false;
+  return flight.hidden || (flight.lateActivation === true && flight.client !== true);
+}
+
 /** Compare source values, before display defaults erase missing-vs-zero differences. */
 export function createMissionRevision(parsed: Pick<ParsedMissionFile, 'mission' | 'theatre' | 'dictionary'>): MissionRevision {
   const mission = record(parsed.mission);
@@ -112,9 +122,15 @@ export function createMissionRevision(parsed: Pick<ParsedMissionFile, 'mission' 
             radio: sourceRadios(unit),
           };
         });
+        const client = entries(source.units).some(([, item]) => {
+          const skill = text(record(item).skill);
+          return skill === 'Client' || skill === 'Player';
+        });
         flights.push({
           id: id(source.groupId), name: resolveName(source.name, parsed.dictionary), side, category,
           hidden: source.hidden === true,
+          lateActivation: source.lateActivation === true,
+          client,
           radio: { ...pick(source, ['modulation', 'communication'], true),
             ...(source.frequency !== undefined ? { frequency: frequency(source.frequency)! } : {}) },
           route: entries(record(source.route).points).map(([key, item]) => {
@@ -217,7 +233,8 @@ function pointPairs(before: RevisionPoint[], after: RevisionPoint[]) {
  * neutral flights are left out before matching, so their added, removed or
  * changed fields never appear, the same rule applyViewMode applies to the
  * mission. A pilot comparison without a side lists no flights (fail closed).
- * Hidden flights are also left out in pilot view (G11).
+ * Hidden flights and late-activation AI groups are also left out in pilot view
+ * (G11), the same as applyViewMode. A late-activation client flight is kept.
  */
 export function compareMissionRevisions(before: MissionRevision, after: MissionRevision, viewMode: DisplaySettings['viewMode'], side?: Side): MissionRevisionDiff {
   const visibleFlights = (flights: RevisionFlight[]) => viewMode === 'creator'
@@ -246,7 +263,7 @@ export function compareMissionRevisions(before: MissionRevision, after: MissionR
     f => f.name ? `${f.side}:${f.category}:${f.name}` : undefined,
   ]);
   for (const [a, b] of pairs) {
-    if (viewMode === 'pilot' && (a?.hidden || b?.hidden)) continue;
+    if (viewMode === 'pilot' && (withheldFromPilot(a) || withheldFromPilot(b))) continue;
     const flight = b ?? a!;
     const label = `${flight.side} / ${flight.name || `#${flight.id ?? '?'}`}`;
     diff('mission', label, 'flight', a ? a.name : undefined, b ? b.name : undefined);

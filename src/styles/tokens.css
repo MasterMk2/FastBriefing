@@ -125,11 +125,12 @@
   --side-red-text: #ff8a80;
   --side-neutral: #d4574b;
   --side-neutral-text: #d4574b;
-  /* Inks step in lightness (adjacent contrast about 1.5 to 2.2) so the four stay apart on black. */
+  /* Inks step in lightness (adjacent contrast about 1.5 to 2.2) so the four stay apart on black. The darkest still
+     keeps 3:1 against the map ground (surface-1), the WCAG 1.4.11 level for marks (A11Y-10). */
   --ink-1: #ffb3ab;
   --ink-2: #ff7a70;
   --ink-3: #e0463b;
-  --ink-4: #a8281f;
+  --ink-4: #b32d22;
 }
 
 /* Shared, theme-independent tokens. */
