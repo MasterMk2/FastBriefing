@@ -1,6 +1,6 @@
 // Owner: P1 (フライト作業画面). Navigation log (SPEC 1.3, F3): the route table, its column menu and
 // the waypoint note panel. Data comes from useMission().view (pilot-safe). Notes are saved through setNotes.
-import { Fragment } from 'react';
+import { Fragment, useEffect, useRef } from 'react';
 import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
 import { Notice } from '../../shell/Notice';
@@ -8,27 +8,42 @@ import { Unresolved } from '../../shell/Unresolved';
 import { useMission } from '../../shell/MissionContext';
 import { useUnits } from '../../shell/units';
 import type { Units } from '../../shell/units';
+import { routeAnchor } from '../../shell/workspace';
 import { useSettings } from '../../hooks/useSettings';
 import type { Flight, RoutePoint, Side, UserNotes } from '../../types/mission';
 import WaypointAnnotationEditor from '../../components/WaypointAnnotationEditor';
 import { formatLegDuration } from '../../utils/routeLegs';
 import { resolveCoordinateFormat } from '../../utils/coordinates';
+import { flightKey } from '../../utils/flightKey';
 import { waypointAnnotationKey } from '../../utils/waypointAnnotations';
 import { annotationFieldCount, isResolvedPoint } from './flightModel';
 
 /** Columns shown by default (SPEC 1.3: 8 columns). */
 export const DEFAULT_ROUTE_COLUMNS = ['no', 'name', 'coord', 'alt', 'speed', 'eta', 'leg', 'bearing'] as const;
-/** Columns the column menu can add (SPEC 1.3). */
-export const OPTIONAL_ROUTE_COLUMNS = ['cumDistance', 'cumTime', 'trueBearing', 'annotations'] as const;
+/**
+ * Columns the column menu can add (SPEC 1.3). The leg time is hidden by default (Lead decision 9).
+ * Its position in this list is the position of the column after the default ones.
+ */
+export const OPTIONAL_ROUTE_COLUMNS = ['legTime', 'cumDistance', 'cumTime', 'trueBearing', 'annotations'] as const;
 
 export type RouteColumn = typeof DEFAULT_ROUTE_COLUMNS[number] | typeof OPTIONAL_ROUTE_COLUMNS[number];
 export type OptionalRouteColumn = typeof OPTIONAL_ROUTE_COLUMNS[number];
 
+/** A request to bring a route row into view and focus it (from an anchor). Compared by identity. */
+export interface RouteFocusRequest {
+  /** Position in the flight's route array. */
+  routeIndex: number;
+}
+
 interface RouteTableProps {
   side: Side;
   flight: Flight;
+  /** Position in the route array of the selected point, or null. Held by the workspace (routeFocus). */
   selectedIndex: number | null;
   onSelectIndex: (routeIndex: number | null) => void;
+  focusRequest: RouteFocusRequest | null;
+  /** Called once a focus request has been applied (or found no row), so a later remount does not repeat it. */
+  onFocusRequestDone: () => void;
   optionalColumns: ReadonlySet<OptionalRouteColumn>;
   onOptionalColumnsChange: (next: ReadonlySet<OptionalRouteColumn>) => void;
 }
@@ -38,6 +53,8 @@ export default function RouteTable({
   flight,
   selectedIndex,
   onSelectIndex,
+  focusRequest,
+  onFocusRequestDone,
   optionalColumns,
   onOptionalColumnsChange,
 }: RouteTableProps) {
@@ -46,11 +63,22 @@ export default function RouteTable({
   const { settings } = useSettings();
   const units = useUnits();
   const route = flight.route;
+  const key = flightKey(side, flight.groupId);
+  const rootRef = useRef<HTMLDivElement>(null);
   const columns: RouteColumn[] = [
     ...DEFAULT_ROUTE_COLUMNS,
     ...OPTIONAL_ROUTE_COLUMNS.filter(column => optionalColumns.has(column)),
   ];
   const selectedPoint = selectedIndex === null ? undefined : route[selectedIndex];
+
+  // An anchor (or a jump from another screen) asks for one row: it is scrolled into view and its No. button is focused.
+  useEffect(() => {
+    if (!focusRequest) return;
+    const row = rootRef.current?.querySelector<HTMLTableRowElement>(`tr[data-route-index="${focusRequest.routeIndex}"]`);
+    row?.scrollIntoView?.({ block: 'center' });
+    row?.querySelector<HTMLButtonElement>('.route-select')?.focus();
+    onFocusRequestDone();
+  }, [focusRequest, onFocusRequestDone]);
 
   const toggleColumn = (column: OptionalRouteColumn, checked: boolean) => {
     const next = new Set(optionalColumns);
@@ -59,7 +87,7 @@ export default function RouteTable({
   };
 
   return (
-    <div className="route-layout">
+    <div className="route-layout" ref={rootRef}>
       <div className="route-main">
         <details className="route-columns">
           <summary>{t('flight:route.columns')}</summary>
@@ -109,6 +137,8 @@ export default function RouteTable({
                     key={`${point.index}:${routeIndex}`}
                     role="row"
                     className={selectedIndex === routeIndex ? 'is-selected' : undefined}
+                    data-route-index={routeIndex}
+                    data-anchor={routeAnchor(key, point.index)}
                     onClick={() => onSelectIndex(selectedIndex === routeIndex ? null : routeIndex)}
                   >
                     {columns.map(column => (
@@ -223,6 +253,8 @@ function renderRouteCell({ column, point, routeIndex, selected, flight, side, no
         return t('flight:route.trueOnly', { bearing: Math.round(leg.trueBearing) });
       }
       return `${Math.round(leg.magneticBearing)}°`;
+    case 'legTime':
+      return formatLegDuration(leg?.time);
     case 'cumDistance':
       return leg ? units.distance(leg.cumulativeDistance) : '-';
     case 'cumTime':

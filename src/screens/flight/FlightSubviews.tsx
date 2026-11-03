@@ -102,7 +102,7 @@ export function LineupView({ flight }: { flight: Flight }) {
       <div className="flight-lineup-actions">
         <button
           type="button"
-          className="btn btn-secondary"
+          className="flight-button"
           aria-expanded={showRoster}
           onClick={() => setShowRoster(open => !open)}
         >
@@ -265,7 +265,7 @@ export function FlightNotesView({ side, flight, draft, onDraftChange }: FlightNo
         )}
       </Field>
       <div className="flight-notes-actions">
-        <button type="submit" className="btn btn-primary" disabled={!canSave}>{t('flight:notes.save')}</button>
+        <button type="submit" className="flight-button flight-button-primary" disabled={!canSave}>{t('flight:notes.save')}</button>
         {disabledReason && <span className="field-reason">{disabledReason}</span>}
       </div>
       {status === 'saved' && !storageFailed && <Notice tone="success">{t('flight:notes.saved')}</Notice>}

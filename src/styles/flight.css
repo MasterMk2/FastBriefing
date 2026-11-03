@@ -67,9 +67,7 @@
 }
 
 /* Header: identity on the left, facts under it, the export action on the right. */
-/* The flight pane is a size container, so the layout of its route table follows the room the pane has (see below). */
 .flight-detail {
-  container: flight-detail / inline-size;
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -141,8 +139,51 @@
   overflow-wrap: anywhere;
 }
 
+/* Buttons of this screen. They do not use the index.css .btn rules, which are removed at integration (SPEC 8). */
+.flight-button {
+  min-height: var(--target-desktop);
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-0);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--fs-note);
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.flight-button:hover:not(:disabled) {
+  background: var(--surface-2);
+}
+
+.flight-button-primary {
+  background: var(--primary-bg);
+  border-color: var(--primary-bg);
+  color: var(--primary-text);
+}
+
+/* Same specificity as the secondary hover rule and later in the file, so the primary background wins on hover too. */
+.flight-button-primary:hover:not(:disabled) {
+  background: var(--primary-bg);
+  opacity: 0.9;
+}
+
+.flight-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .flight-export {
   white-space: nowrap;
+}
+
+/* The header's actions sit on one row; the map action comes first, then the export (SPEC 1.3). */
+.flight-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 8px;
 }
 
 /* Empty when the card renders nothing (no wingman chosen on this device), so no frame is left behind. */
@@ -265,6 +306,7 @@
 .route-col-eta { width: 170px; }
 .route-col-leg { width: 100px; }
 .route-col-bearing { width: 120px; }
+.route-col-legTime,
 .route-col-cumDistance,
 .route-col-cumTime,
 .route-col-trueBearing,
@@ -304,27 +346,24 @@
 }
 
 /*
- * Waypoint notes sit under the table at every width. Beside it the 8-column table would need 920px + 16px + 340px
- * of pane width, and from 1600px the map pane already takes about 40% of the flight pane (SPEC 1.3, 7.3 conflict:
- * see the report). The notes do not squeeze the table.
+ * Waypoint notes sit under the table at every width (Lead decision 9), so they never squeeze the table.
  */
 .route-annotation {
   max-width: 720px;
   min-width: 0;
 }
 
-/* A narrow pane (beside the map from 1600px) takes narrower columns, so the eight default columns fit without a
-   horizontal scroll inside the table (about 896px in total). The wrap still scrolls below that. */
-@container flight-detail (max-width: 1100px) {
-  .route-col-no { width: 56px; }
-  .route-col-name { width: 170px; }
-  .route-col-coord { width: 170px; }
-  .route-col-alt { width: 96px; }
-  .route-col-speed { width: 80px; }
-  .route-col-eta { width: 140px; }
-  .route-col-leg { width: 84px; }
-  .route-col-bearing { width: 100px; }
-}
+/* Beside the map pane (1600px and wider only) the flight pane is narrower, so the default columns take narrower
+   widths. The table still scrolls inside its wrap when the room is smaller than the columns. Without the map pane the
+   widths above apply (Lead decision 9). */
+.flight-screen-body.is-wide .route-col-no { width: 56px; }
+.flight-screen-body.is-wide .route-col-name { width: 170px; }
+.flight-screen-body.is-wide .route-col-coord { width: 170px; }
+.flight-screen-body.is-wide .route-col-alt { width: 96px; }
+.flight-screen-body.is-wide .route-col-speed { width: 80px; }
+.flight-screen-body.is-wide .route-col-eta { width: 140px; }
+.flight-screen-body.is-wide .route-col-leg { width: 84px; }
+.flight-screen-body.is-wide .route-col-bearing { width: 100px; }
 
 .route-annotation-title {
   margin: 0 0 8px;
@@ -589,6 +628,79 @@
   text-overflow: clip;
   white-space: normal;
   overflow-wrap: anywhere;
+}
+
+/* Rail row with its row menu beside it. The select button keeps the row look; the menu button sits at its right. */
+.flight-row-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 4px;
+  min-width: 0;
+}
+
+.flight-row-wrap > .flight-row {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+/* "この機だけ地図に" (T12): one disclosure button, its single action under it. */
+.solo-map-menu {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 0;
+}
+
+.flight-row-menu-toggle {
+  min-width: var(--target-desktop);
+  min-height: var(--target-desktop);
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+.flight-row-menu-toggle:hover,
+.flight-row-menu-toggle[aria-expanded="true"] {
+  border-color: var(--border);
+  color: var(--text);
+}
+
+.solo-map-panel {
+  display: flex;
+  flex-basis: 100%;
+}
+
+.solo-map-action {
+  min-height: var(--target-desktop);
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-0);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--fs-note);
+  cursor: pointer;
+}
+
+.solo-map-action:focus-visible,
+.flight-row-menu-toggle:focus-visible,
+.flight-map-toggle:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+}
+
+@media (max-width: 767px) {
+  .flight-row-menu-toggle,
+  .solo-map-action,
+  .flight-button {
+    min-height: var(--target-touch);
+  }
 }
 
 /* Focus ring for the flight screen's controls (SPEC 4.1). Same form as shell.css. */

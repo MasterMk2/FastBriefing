@@ -175,15 +175,20 @@
   overflow-wrap: anywhere;
 }
 
+/* The summary keeps its list-item display, so the open and close marker shows (display:flex removes it). */
 .wingman-card-summary {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px 12px;
+  display: list-item;
   min-height: var(--target-touch);
   padding: 8px 14px;
   cursor: pointer;
   list-style-position: inside;
+}
+
+.wingman-card-summary-inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
 }
 
 .wingman-card-label {

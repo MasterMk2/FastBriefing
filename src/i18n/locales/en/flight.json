@@ -1,6 +1,9 @@
 {
   "row": {
-    "type": "{{type}} × {{count}}"
+    "type": "{{type}} × {{count}}",
+    "menuButton": "Menu",
+    "menu": "Menu for {{callsign}}",
+    "soloMap": "Show only this aircraft on the map"
   },
   "screen": {
     "choose": "Choose a flight",
@@ -9,7 +12,6 @@
     "noFlightsBody": "This mission has no flights for this side.",
     "noClient": "No client aircraft",
     "noClientBody": "This side has no Client or Player aircraft. The route and comms can still be viewed.",
-    "pickFlight": "Choose a flight",
     "pickFlightBody": "Choose one from the list on the left (or the picker above on narrow screens) to show its route, comms and notes.",
     "mapPane": "Map"
   },
@@ -21,7 +23,8 @@
     "task": "Task",
     "frequency": "Main frequency",
     "firstEta": "First ETA",
-    "export": "Make this material"
+    "export": "Make this material",
+    "mapMenu": "Map actions"
   },
   "subview": {
     "label": "Flight view",
@@ -51,6 +54,7 @@
       "eta": "ETA",
       "leg": "Leg distance",
       "bearing": "Magnetic bearing",
+      "legTime": "Leg time",
       "cumDistance": "Cumulative distance",
       "cumTime": "Cumulative time",
       "trueBearing": "True bearing",

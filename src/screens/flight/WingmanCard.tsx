@@ -8,6 +8,7 @@ import { useUnits } from '../../shell/units';
 import { useWorkspace } from '../../shell/workspace';
 import type { Flight, LegInfo, MissionData, RoutePoint, Side, Unit } from '../../types/mission';
 import { formatLegDuration } from '../../utils/routeLegs';
+import { flightKey } from '../../utils/flightKey';
 import { isWingmanUnit, sideOfFlight, useWingmanSlot, writeWingmanSlot, type WingmanSlot } from '../../utils/wingmanSlot';
 
 // The aircraft chosen as "自機" on this device (F4). On the flight that holds it, the
@@ -22,17 +23,33 @@ export interface WingmanCardProps {
 /** Outcome of the last "clear" press. The card is removed by a clear, so this line carries the result and the focus. */
 type ClearResult = 'none' | 'cleared' | 'failed';
 
+/** A clear result with the flight it was made on. The result is shown only on that flight. */
+interface ClearOutcome {
+  flightId: string;
+  result: ClearResult;
+}
+
+const NO_OUTCOME: ClearOutcome = { flightId: '', result: 'none' };
+
 export default function WingmanCard({ flight }: WingmanCardProps) {
   const { t } = useTranslation('wingman');
   const { view } = useMission();
   const slot = useWingmanSlot();
   // Kept here, not in WingmanDetail: a refused clear removes the card, and the result must stay.
-  const [clearResult, setClearResult] = useState<ClearResult>('none');
+  const [clearOutcome, setClearOutcome] = useState<ClearOutcome>(NO_OUTCOME);
   const resultRef = useRef<HTMLDivElement>(null);
+
+  // Pilot view (D1): a flight of the other side is absent from `view`, so it finds no side and stays hidden.
+  const side = sideOfFlight(view, flight);
+  const flightId = side === null ? '' : flightKey(side, flight.groupId);
+  // The result is read as "none" on any other flight. A result that belongs to another flight is also dropped while
+  // rendering (the React pattern for state that follows a prop), so returning to its flight does not bring it back.
+  const clearResult: ClearResult = clearOutcome.flightId === flightId ? clearOutcome.result : 'none';
+  if (clearOutcome.flightId !== flightId && clearOutcome.result !== 'none') setClearOutcome(NO_OUTCOME);
 
   // A new choice ends the clear result (it refers to the choice that was cleared or could not be cleared).
   useEffect(() => {
-    if (slot !== null) setClearResult('none');
+    if (slot !== null) setClearOutcome(NO_OUTCOME);
   }, [slot]);
 
   // The card that held the focus is gone after a clear, so the result line takes it.
@@ -41,13 +58,10 @@ export default function WingmanCard({ flight }: WingmanCardProps) {
   }, [clearResult]);
 
   const missionKey = view.userNotes.missionKey;
-
-  // Pilot view (D1): a flight of the other side is absent from `view`, so it finds no side and stays hidden.
-  const side = sideOfFlight(view, flight);
   if (side === null) return null;
 
   const unit = flight.units.find(candidate => isWingmanUnit(slot, missionKey, side, flight, candidate.unitId));
-  const clearChoice = () => setClearResult(writeWingmanSlot(null) ? 'cleared' : 'failed');
+  const clearChoice = () => setClearOutcome({ flightId, result: writeWingmanSlot(null) ? 'cleared' : 'failed' });
 
   return (
     <>
@@ -132,9 +146,12 @@ function WingmanDetail({ flight, unit, onClear }: WingmanDetailProps) {
   return (
     <details className="wingman-card" open={open} onToggle={event => setOpen(event.currentTarget.open)}>
       <summary className="wingman-card-summary">
-        <span className="wingman-card-label">{t('wingman:card.title')}</span>
-        <span className="wingman-card-name">{flight.callsign} · {unit.name}</span>
-        {unit.tailNumber && <span className="wingman-card-tail num">{unit.tailNumber}</span>}
+        {/* The inner box is flex; the summary itself stays a list item so the disclosure marker is kept. */}
+        <span className="wingman-card-summary-inner">
+          <span className="wingman-card-label">{t('wingman:card.title')}</span>
+          <span className="wingman-card-name">{flight.callsign} · {unit.name}</span>
+          {unit.tailNumber && <span className="wingman-card-tail num">{unit.tailNumber}</span>}
+        </span>
       </summary>
 
       <div className="wingman-card-body">

@@ -1,16 +1,18 @@
 // @vitest-environment jsdom
 import { act, useEffect, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SettingsProvider, useSettings } from '../../hooks/useSettings';
 import { i18nReady } from '../../i18n';
 import flightJa from '../../i18n/locales/ja/flight.json';
 import { MissionProvider } from '../../shell/MissionContext';
-import { WorkspaceProvider, useWorkspace } from '../../shell/workspace';
+import { WorkspaceProvider, routeAnchor, useWorkspace } from '../../shell/workspace';
 import type { WorkspaceValue } from '../../shell/workspace';
 import type { Coalition, Flight, MissionData, RoutePoint, Unit, UserNotes } from '../../types/mission';
-import { calculateRouteLegs } from '../../utils/routeLegs';
+import { calculateRouteLegs, formatLegDuration } from '../../utils/routeLegs';
 import { emptyUserNotes, updateFlightNotes } from '../../utils/notes';
+import { writeWingmanSlot } from '../../utils/wingmanSlot';
 import FlightScreen from '../FlightScreen';
 import FlightRow from './FlightRow';
 
@@ -150,8 +152,11 @@ function makeMission(blue: Flight[], red: Flight[]): MissionData {
   };
 }
 
-/** Sets the view mode and the selected flight once mounted, the way the shell and the rail do. */
-function Setup({ viewMode, selectedKey, probe }: { viewMode: ViewMode; selectedKey: string | null; probe?: Probe }) {
+/**
+ * Sets the view mode and the selected flight once mounted, the way the shell and the rail do. An undefined
+ * selectedKey is not applied at all, so the workspace's default selection (T7) is what the screen shows.
+ */
+function Setup({ viewMode, selectedKey, probe }: { viewMode: ViewMode; selectedKey: string | null | undefined; probe?: Probe }) {
   const { setViewMode } = useSettings();
   const workspace = useWorkspace();
   const { setFlightKey } = workspace;
@@ -161,7 +166,7 @@ function Setup({ viewMode, selectedKey, probe }: { viewMode: ViewMode; selectedK
     if (applied.current) return;
     applied.current = true;
     setViewMode(viewMode);
-    setFlightKey(selectedKey);
+    if (selectedKey !== undefined) setFlightKey(selectedKey);
   }, [selectedKey, setFlightKey, setViewMode, viewMode]);
   useEffect(() => {
     if (probe) probe.current = workspace;
@@ -177,17 +182,20 @@ type Controls = { updateNotes: ((update: (notes: UserNotes) => UserNotes) => voi
 interface HarnessProps {
   initial: MissionData;
   viewMode: ViewMode;
-  selectedKey: string | null;
+  /** undefined leaves the selection to the workspace's default (T7). */
+  selectedKey?: string | null;
   onNotesChange?: (notes: UserNotes) => void;
   storageFailed?: boolean;
   controls?: Controls;
   probe?: Probe;
   /** False unmounts the flight screen while the providers stay mounted, as a change of screen does. */
   showScreen?: boolean;
+  /** Rendered inside the providers beside the screen (for example the rail row). */
+  extra?: ReactNode;
 }
 
 /** Keeps the mission in state so a saved note is read back through the provider, as the app does. */
-function Harness({ initial, viewMode, selectedKey, onNotesChange, storageFailed = false, controls, probe, showScreen = true }: HarnessProps) {
+function Harness({ initial, viewMode, selectedKey, onNotesChange, storageFailed = false, controls, probe, showScreen = true, extra }: HarnessProps) {
   const [mission, setMission] = useState(initial);
   useEffect(() => {
     if (controls) {
@@ -210,6 +218,7 @@ function Harness({ initial, viewMode, selectedKey, onNotesChange, storageFailed 
         <WorkspaceProvider>
           <Setup viewMode={viewMode} selectedKey={selectedKey} probe={probe} />
           {showScreen && <FlightScreen />}
+          {extra}
         </WorkspaceProvider>
       </MissionProvider>
     </SettingsProvider>
@@ -323,6 +332,20 @@ describe('flight screen: navigation log (F3)', () => {
       checkbox?.click();
     });
     expect(headerCount()).toBe(9);
+  });
+
+  it('offers the leg time as an optional column, hidden by default', async () => {
+    const { blue, red } = makeFlights();
+    await render({ initial: makeMission(blue, red), viewMode: 'creator', selectedKey: 'blue:1' });
+    expect(container.querySelector('.route-col-legTime')).toBeNull();
+
+    const legTimeOption = Array.from(container.querySelectorAll<HTMLLabelElement>('.route-columns-option'))
+      .find(label => label.textContent?.trim() === flightJa.route.col.legTime);
+    await click(legTimeOption!.querySelector('input')!);
+
+    expect(container.querySelector('.route-col-legTime')).not.toBeNull();
+    // The leg that arrives at the second point takes 300 s in the fixture: the cell shows it as a duration.
+    expect(container.querySelector('.route-table tbody tr:nth-child(2) .route-col-legTime')?.textContent).toBe(formatLegDuration(300));
   });
 
   it('selects a route point and saves its waypoint note through setNotes', async () => {
@@ -530,6 +553,8 @@ describe('flight screen: notes', () => {
 
     expect(probe.current?.screen).toBe('export');
     expect(probe.current?.flightKey).toBe('blue:1');
+    // The export screen reads this anchor to take the selected flight as its target (the flight screen leaves it alone).
+    expect(probe.current?.focusAnchor).toBe('export:flight');
   });
 
   it('never shows a hidden own flight in pilot view', async () => {
@@ -538,7 +563,8 @@ describe('flight screen: notes', () => {
     await render({ initial: makeMission(hidden, red), viewMode: 'pilot', selectedKey: null });
 
     expect(container.textContent).not.toContain('Ghost11');
-    expect(container.querySelector('#flight-screen-select')?.textContent).not.toContain('Ghost11');
+    // The hidden flights are gone from the view, so nothing can be chosen and no picker is drawn.
+    expect(container.querySelector('#flight-screen-select')).toBeNull();
   });
 });
 
@@ -609,10 +635,11 @@ describe('flight screen: displayed side (D1)', () => {
     const { blue, red } = makeFlights();
     await render({ initial: makeMission(blue, red), viewMode: 'pilot', selectedKey: 'red:2' });
 
+    // The opposing key is no longer in the view, so the selection is chosen again (the own side's first flight).
     expect(container.textContent).not.toContain('Bandit21');
     expect(container.textContent).not.toContain('Su-27');
-    expect(container.querySelector('.route-table')).toBeNull();
-    expect(container.textContent).toContain(flightJa.screen.pickFlight);
+    expect(container.querySelector('.route-table')).not.toBeNull();
+    expect(container.textContent).toContain('Enfield11');
   });
 
   it('shows an opposing flight in creator view', async () => {
@@ -666,9 +693,13 @@ describe('flight screen: states', () => {
 
 describe('flight row (rail)', () => {
   it('shows the callsign, type and main frequency in MHz, and reports its pressed state', async () => {
-    const { blue } = makeFlights();
-    await act(async () => {
-      root.render(<FlightRow flight={blue[0]} side="blue" selected onSelect={() => {}} />);
+    const { blue, red } = makeFlights();
+    await render({
+      initial: makeMission(blue, red),
+      viewMode: 'creator',
+      selectedKey: null,
+      showScreen: false,
+      extra: <FlightRow flight={blue[0]} side="blue" selected onSelect={() => {}} />,
     });
 
     const row = container.querySelector<HTMLButtonElement>('.flight-row');
@@ -678,11 +709,264 @@ describe('flight row (rail)', () => {
   });
 
   it('shows the side name beside the mark, not only the shape', async () => {
-    const { blue } = makeFlights();
-    await act(async () => {
-      root.render(<FlightRow flight={blue[0]} side="blue" selected={false} onSelect={() => {}} />);
+    const { blue, red } = makeFlights();
+    await render({
+      initial: makeMission(blue, red),
+      viewMode: 'creator',
+      selectedKey: null,
+      showScreen: false,
+      extra: <FlightRow flight={blue[0]} side="blue" selected={false} onSelect={() => {}} />,
     });
 
     expect(container.querySelector('.flight-row .side-mark-label')?.textContent).toBe('青');
+  });
+});
+
+describe('flight screen: default selection and the wingman card (T7)', () => {
+  afterEach(() => {
+    // The chosen aircraft is kept in memory by the wingman store: clear it so the next test starts without one.
+    writeWingmanSlot(null);
+  });
+
+  it('opens on the saved wingman flight, with its card, without any click', async () => {
+    const { blue, red } = makeFlights();
+    const mission = makeMission(blue, red);
+    // The card is found by the flight object of the view, so the saved choice must point at this mission.
+    writeWingmanSlot({ missionKey: mission.userNotes.missionKey, flightKey: 'blue:1', unitId: 2 });
+    await render({ initial: mission, viewMode: 'pilot' });
+
+    expect(container.querySelector('.wingman-card')).not.toBeNull();
+    expect(container.querySelector('.wingman-card')?.textContent).toContain('Enfield11');
+    expect(container.querySelector('.route-table')).not.toBeNull();
+  });
+
+  it('opens on the first flight of the displayed side when no aircraft is chosen', async () => {
+    const { blue, red } = makeFlights();
+    await render({ initial: makeMission(blue, red), viewMode: 'creator' });
+
+    expect(container.querySelector('.wingman-card')).toBeNull();
+    expect(container.textContent).toContain('Enfield11');
+  });
+
+  it('keeps "none" chosen by the user, and says so with a hint instead of an empty state', async () => {
+    const { blue, red } = makeFlights();
+    await render({ initial: makeMission(blue, red), viewMode: 'creator', selectedKey: null });
+
+    expect(container.querySelector('.route-table')).toBeNull();
+    expect(container.textContent).toContain(flightJa.screen.pickFlightBody);
+    expect(container.textContent).not.toContain(flightJa.screen.noFlights);
+  });
+});
+
+describe('flight screen: anchors and jumps', () => {
+  it('moves to a route point named by an anchor: selects it, shows the navigation log and clears the anchor', async () => {
+    const { blue, red } = makeFlights();
+    const probe: Probe = { current: null };
+    await render({ initial: makeMission(blue, red), viewMode: 'creator', selectedKey: 'blue:1', probe });
+    await click(buttonByText(flightJa.subview.comms));
+
+    // The anchor carries the DCS point index (2 = "Ingress"), which is the second row of the table.
+    await act(async () => {
+      probe.current?.jumpTo('flights', { anchor: routeAnchor('blue:1', 2) });
+    });
+    await settle();
+
+    expect(container.querySelector('.route-table')).not.toBeNull();
+    const row = container.querySelector<HTMLTableRowElement>('.route-table tbody tr[data-route-index="1"]');
+    expect(row?.classList.contains('is-selected')).toBe(true);
+    expect(row?.getAttribute('data-anchor')).toBe('route:blue:1:2');
+    expect(document.activeElement).toBe(row?.querySelector('.route-select'));
+    expect(probe.current?.focusAnchor).toBeNull();
+  });
+
+  it('ignores a route anchor for another flight, and still clears it', async () => {
+    const { blue, red } = makeFlights();
+    const probe: Probe = { current: null };
+    await render({ initial: makeMission(blue, red), viewMode: 'creator', selectedKey: 'blue:1', probe });
+
+    await act(async () => {
+      probe.current?.jumpTo('flights', { anchor: routeAnchor('red:2', 1) });
+    });
+    await settle();
+
+    expect(container.querySelector('.route-table tbody tr.is-selected')).toBeNull();
+    expect(probe.current?.focusAnchor).toBeNull();
+  });
+
+  it('does not take the focus back to the row when the subview is left and shown again', async () => {
+    const { blue, red } = makeFlights();
+    const probe: Probe = { current: null };
+    await render({ initial: makeMission(blue, red), viewMode: 'creator', selectedKey: 'blue:1', probe });
+
+    await act(async () => {
+      probe.current?.jumpTo('flights', { anchor: routeAnchor('blue:1', 2) });
+    });
+    await settle();
+    expect(document.activeElement).toBe(container.querySelector('.route-table tbody tr[data-route-index="1"] .route-select'));
+
+    await click(buttonByText(flightJa.subview.comms));
+    const navButton = buttonByText(flightJa.subview.nav);
+    navButton.focus();
+    await click(navButton);
+    await settle();
+
+    expect(document.activeElement).toBe(navButton);
+    expect(container.querySelector('.route-table tbody tr[data-route-index="1"]')?.classList.contains('is-selected')).toBe(true);
+  });
+});
+
+describe('flight screen: wingman clear result (F4)', () => {
+  afterEach(() => {
+    writeWingmanSlot(null);
+  });
+
+  it('removes the clear result when the selection moves to another flight', async () => {
+    const { blue, red } = makeFlights();
+    const second: Flight = { ...blue[0], groupId: 3, name: 'Enfield 1-2', callsign: 'Enfield12' };
+    const mission = makeMission([blue[0], second], red);
+    writeWingmanSlot({ missionKey: mission.userNotes.missionKey, flightKey: 'blue:1', unitId: 2 });
+    const probe: Probe = { current: null };
+    await render({ initial: mission, viewMode: 'creator', selectedKey: 'blue:1', probe });
+
+    await click(container.querySelector<HTMLButtonElement>('.wingman-clear')!);
+    expect(container.querySelector('.wingman-save-notice')).not.toBeNull();
+
+    await act(async () => {
+      probe.current?.setFlightKey('blue:3');
+    });
+    await settle();
+
+    expect(container.textContent).toContain('Enfield12');
+    expect(container.querySelector('.wingman-save-notice')).toBeNull();
+  });
+});
+
+describe('flight screen: row menu "この機だけ地図に" (T12)', () => {
+  it('from the flight header: limits the map to this flight and shows the map', async () => {
+    const { blue, red } = makeFlights();
+    const probe: Probe = { current: null };
+    await render({ initial: makeMission(blue, red), viewMode: 'creator', selectedKey: 'blue:1', probe });
+
+    await click(buttonByText(flightJa.header.mapMenu));
+    expect(buttonByText(flightJa.header.mapMenu).getAttribute('aria-expanded')).toBe('true');
+    await click(buttonByText(flightJa.row.soloMap));
+
+    expect(probe.current?.screen).toBe('map');
+    expect(probe.current?.mapUi.soloFlightKey).toBe('blue:1');
+    expect(probe.current?.flightKey).toBe('blue:1');
+  });
+
+  it('from the rail row: opens with the disclosure, closes with Escape and returns the focus', async () => {
+    const { blue, red } = makeFlights();
+    const probe: Probe = { current: null };
+    await render({
+      initial: makeMission(blue, red),
+      viewMode: 'creator',
+      selectedKey: null,
+      showScreen: false,
+      probe,
+      extra: <FlightRow flight={blue[0]} side="blue" selected={false} onSelect={() => {}} />,
+    });
+    const toggle = () => container.querySelector<HTMLButtonElement>('.flight-row-menu-toggle')!;
+
+    await click(toggle());
+    expect(toggle().getAttribute('aria-expanded')).toBe('true');
+    expect(container.querySelector('.solo-map-action')).not.toBeNull();
+
+    await act(async () => {
+      container.querySelector('.solo-map-menu')?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    });
+    expect(toggle().getAttribute('aria-expanded')).toBe('false');
+    expect(document.activeElement).toBe(toggle());
+    expect(probe.current?.screen).toBe('overview');
+
+    await click(toggle());
+    await click(container.querySelector<HTMLButtonElement>('.solo-map-action')!);
+    expect(probe.current?.screen).toBe('map');
+    expect(probe.current?.mapUi.soloFlightKey).toBe('blue:1');
+  });
+});
+
+describe('flight screen: row menu closes outside (T12)', () => {
+  async function renderRailRow(probe: Probe) {
+    const { blue, red } = makeFlights();
+    await render({
+      initial: makeMission(blue, red),
+      viewMode: 'creator',
+      selectedKey: null,
+      showScreen: false,
+      probe,
+      extra: <FlightRow flight={blue[0]} side="blue" selected={false} onSelect={() => {}} />,
+    });
+  }
+  const toggle = () => container.querySelector<HTMLButtonElement>('.flight-row-menu-toggle')!;
+
+  it('gives the row menu button an accessible name that contains its visible text (label in name)', async () => {
+    await renderRailRow({ current: null });
+
+    const visibleText = toggle().textContent?.trim() ?? '';
+    const accessibleName = toggle().getAttribute('aria-label') ?? toggle().textContent ?? '';
+    expect(visibleText).not.toBe('');
+    expect(accessibleName).toContain(visibleText);
+  });
+
+  it('closes when the pointer goes down outside the menu, and does not change the screen', async () => {
+    const probe: Probe = { current: null };
+    await renderRailRow(probe);
+    await click(toggle());
+    expect(container.querySelector('.solo-map-action')).not.toBeNull();
+
+    await act(async () => {
+      document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+    });
+
+    expect(container.querySelector('.solo-map-action')).toBeNull();
+    expect(toggle().getAttribute('aria-expanded')).toBe('false');
+    expect(probe.current?.screen).toBe('overview');
+  });
+
+  it('closes when the focus moves to a control outside the menu', async () => {
+    const probe: Probe = { current: null };
+    await renderRailRow(probe);
+    await click(toggle());
+    const outside = document.createElement('button');
+    document.body.append(outside);
+    try {
+      await act(async () => {
+        outside.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
+      });
+
+      expect(container.querySelector('.solo-map-action')).toBeNull();
+      expect(toggle().getAttribute('aria-expanded')).toBe('false');
+    } finally {
+      outside.remove();
+    }
+  });
+
+  it('stays open for a press on its own action, so the action still runs', async () => {
+    const probe: Probe = { current: null };
+    await renderRailRow(probe);
+    await click(toggle());
+    const action = container.querySelector<HTMLButtonElement>('.solo-map-action')!;
+
+    await act(async () => {
+      action.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+    });
+    expect(container.querySelector('.solo-map-action')).toBe(action);
+
+    await click(action);
+    expect(probe.current?.screen).toBe('map');
+    expect(probe.current?.mapUi.soloFlightKey).toBe('blue:1');
+  });
+});
+
+describe('flight screen: one thing at a time (empty states)', () => {
+  it('does not show the no-flight state next to an opposing flight that was chosen', async () => {
+    const { red } = makeFlights();
+    await render({ initial: makeMission([], red), viewMode: 'creator', selectedKey: 'red:2' });
+
+    expect(container.querySelector('.route-table')).not.toBeNull();
+    expect(container.textContent).toContain('Bandit21');
+    expect(container.textContent).not.toContain(flightJa.screen.noFlights);
   });
 });

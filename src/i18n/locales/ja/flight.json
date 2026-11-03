@@ -1,6 +1,9 @@
 {
   "row": {
-    "type": "{{type}} × {{count}}"
+    "type": "{{type}} × {{count}}",
+    "menuButton": "メニュー",
+    "menu": "{{callsign}} の行メニュー",
+    "soloMap": "この機だけ地図に"
   },
   "screen": {
     "choose": "フライトを選ぶ",
@@ -9,7 +12,6 @@
     "noFlightsBody": "このミッションには、この陣営のフライトがありません。",
     "noClient": "クライアント機がありません",
     "noClientBody": "この陣営に Client または Player の機がありません。経路と通信は見られます。",
-    "pickFlight": "フライトを選ぶ",
     "pickFlightBody": "左の一覧（幅が狭いときは上の選択欄）から選ぶと、経路・通信・注記を表示します。",
     "mapPane": "地図"
   },
@@ -21,7 +23,8 @@
     "task": "任務",
     "frequency": "主要周波数",
     "firstEta": "先頭 ETA",
-    "export": "この資料を作る"
+    "export": "この資料を作る",
+    "mapMenu": "地図の操作"
   },
   "subview": {
     "label": "フライトの表示内容",
@@ -51,6 +54,7 @@
       "eta": "ETA",
       "leg": "区間距離",
       "bearing": "磁方位",
+      "legTime": "区間時間",
       "cumDistance": "累積距離",
       "cumTime": "累積時間",
       "trueBearing": "真方位",

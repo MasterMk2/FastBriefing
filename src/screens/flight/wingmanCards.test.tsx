@@ -447,6 +447,21 @@ describe('WingmanCard', () => {
     expect(container.querySelector('.wingman-save-notice')?.textContent).toContain('この端末で自機の選択を消せませんでした');
   });
 
+  it('keeps a clear result on its own flight: another flight shows none, and coming back does not bring it back', async () => {
+    const chosen = blueFlight();
+    const other: Flight = { ...blueFlight(), groupId: 6, name: 'Other', callsign: 'Other', units: [{ ...leadUnit(), unitId: 31 }] };
+    writeWingmanSlot(SLOT);
+    await render(makeMission([chosen, other]), <WingmanCard flight={chosen} />);
+    await click(container.querySelector<HTMLButtonElement>('.wingman-clear') as HTMLButtonElement);
+    expect(container.querySelector('.wingman-save-notice')).not.toBeNull();
+
+    // The same card instance (no remount, no key): another flight is shown, then the first one again.
+    await render(makeMission([chosen, other]), <WingmanCard flight={other} />);
+    expect(container.querySelector('.wingman-save-notice')).toBeNull();
+    await render(makeMission([chosen, other]), <WingmanCard flight={chosen} />);
+    expect(container.querySelector('.wingman-save-notice')).toBeNull();
+  });
+
   it('opens the card by default on a phone width and leaves it closed on a wider screen (SPEC F4)', async () => {
     const flight = blueFlight();
     writeWingmanSlot(SLOT);

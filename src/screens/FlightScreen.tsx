@@ -43,6 +43,8 @@ function FlightScreenBody() {
   const opposing: Side = side === 'blue' ? 'red' : 'blue';
   const opposingFlights = viewMode === 'creator' ? view.coalitions[opposing].flights : [];
   const hasClient = ownFlights.some(isClientFlight);
+  // Empty guidance is shown only when no flight can be chosen at all (the flight screen opens on a selection, T7).
+  const selectableCount = ownFlights.length + opposingFlights.length;
 
   const choose = (event: ChangeEvent<HTMLSelectElement>) => {
     setFlightKey(event.target.value === '' ? null : event.target.value);
@@ -51,46 +53,50 @@ function FlightScreenBody() {
   return (
     <div className="flight-screen">
       {/* Below 1280px there is no left rail, so the flight is chosen here (SPEC 3, flights). */}
-      <div className="flight-screen-picker">
-        <label htmlFor="flight-screen-select">{t('flight:screen.choose')}</label>
-        <select
-          id="flight-screen-select"
-          value={selected ? flightKey(selected.side, selected.flight.groupId) : ''}
-          onChange={choose}
-        >
-          <option value="">{t('flight:screen.chooseNone')}</option>
-          {ownFlights.length > 0 && (
-            <optgroup label={t(`shell:side.${side}`)}>
-              {ownFlights.map(flight => (
-                <option key={flight.groupId} value={flightKey(side, flight.groupId)}>
-                  {flight.callsign || flight.name} · {flight.type}
-                </option>
-              ))}
-            </optgroup>
-          )}
-          {opposingFlights.length > 0 && (
-            <optgroup label={t(`shell:side.${opposing}`)}>
-              {opposingFlights.map(flight => (
-                <option key={flight.groupId} value={flightKey(opposing, flight.groupId)}>
-                  {flight.callsign || flight.name} · {flight.type}
-                </option>
-              ))}
-            </optgroup>
-          )}
-        </select>
-      </div>
+      {selectableCount > 0 && (
+        <div className="flight-screen-picker">
+          <label htmlFor="flight-screen-select">{t('flight:screen.choose')}</label>
+          <select
+            id="flight-screen-select"
+            value={selected ? flightKey(selected.side, selected.flight.groupId) : ''}
+            onChange={choose}
+          >
+            <option value="">{t('flight:screen.chooseNone')}</option>
+            {ownFlights.length > 0 && (
+              <optgroup label={t(`shell:side.${side}`)}>
+                {ownFlights.map(flight => (
+                  <option key={flight.groupId} value={flightKey(side, flight.groupId)}>
+                    {flight.callsign || flight.name} · {flight.type}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+            {opposingFlights.length > 0 && (
+              <optgroup label={t(`shell:side.${opposing}`)}>
+                {opposingFlights.map(flight => (
+                  <option key={flight.groupId} value={flightKey(opposing, flight.groupId)}>
+                    {flight.callsign || flight.name} · {flight.type}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+          </select>
+        </div>
+      )}
 
-      {ownFlights.length === 0 && (
+      {selectableCount === 0 && (
         <EmptyState title={t('flight:screen.noFlights')} body={t('flight:screen.noFlightsBody')} />
       )}
       {ownFlights.length > 0 && !hasClient && (
         <Notice tone="info" title={t('flight:screen.noClient')}>{t('flight:screen.noClientBody')}</Notice>
       )}
 
-      {!selected && ownFlights.length > 0 && (
-        <EmptyState title={t('flight:screen.pickFlight')} body={t('flight:screen.pickFlightBody')} />
+      {/* Nothing chosen (the user chose "none") while flights can be chosen: a hint, not an empty state. */}
+      {selectableCount > 0 && !selected && (
+        <p className="hint flight-screen-hint">{t('flight:screen.pickFlightBody')}</p>
       )}
 
+      {/* One thing at a time: the empty state above and the flight detail are never shown together. */}
       {selected && (
         <div className={`flight-screen-body${wide ? ' is-wide' : ''}`}>
           <FlightDetail
