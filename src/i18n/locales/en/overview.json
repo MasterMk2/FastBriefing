@@ -1,1 +1,90 @@
-{}
+{
+  "untitled": "(untitled)",
+  "notAvailable": "Not set",
+  "theatre": "Map",
+  "meVersion": "Mission Editor version",
+  "flightCount": "{{count}}",
+  "actions": {
+    "label": "Next actions",
+    "flights": "Choose a flight",
+    "briefing": "Start briefing",
+    "export": "Export"
+  },
+  "task": {
+    "title": "Task",
+    "none": "No task text"
+  },
+  "lint": {
+    "title": "Pre-distribution check",
+    "none": "No problems (to confirm: {{count}})",
+    "notChecked": "The pre-distribution check is not implemented yet, so problems have not been checked",
+    "goto": "Go to this place",
+    "severity": {
+      "error": "Error",
+      "warning": "Warning",
+      "info": "Info"
+    }
+  },
+  "load": {
+    "title": "Loading notes",
+    "none": "No loading notes"
+  },
+  "weather": {
+    "title": "Weather",
+    "temperature": "Temperature",
+    "qnh": "QNH",
+    "visibility": "Visibility",
+    "clouds": "Clouds",
+    "cloudBase": "base {{value}}",
+    "fog": "Fog",
+    "fogDetails": "Thickness {{thickness}}, visibility {{visibility}}",
+    "dust": "Dust",
+    "dustDensity": "Density {{value}}",
+    "groundTurbulence": "Ground turbulence",
+    "groundTurbulenceValue": "{{value}} m/s",
+    "none": "None",
+    "wind": "Wind",
+    "windLevelHeader": "Altitude",
+    "windDirection": "Wind direction (from → to)",
+    "windSpeed": "Wind speed",
+    "windLevel": {
+      "ground": "Ground",
+      "2000": "2000 m",
+      "8000": "8000 m"
+    },
+    "metar": "METAR",
+    "copyMetar": "Copy METAR",
+    "copied": "METAR copied",
+    "copyFailed": "Cannot copy. Select the METAR text and copy it by hand."
+  },
+  "astro": {
+    "title": "Astronomy",
+    "bullseye": "Bullseye (own side)",
+    "sunrise": "Sunrise",
+    "sunset": "Sunset",
+    "civilTwilight": "Civil twilight",
+    "nauticalTwilight": "Nautical twilight",
+    "moonAge": "Moon age",
+    "moonAgeValue": "{{days}} days",
+    "range": "{{from}} – {{to}}"
+  },
+  "defaults": {
+    "title": "Items using default values",
+    "none": "No items use default values"
+  },
+  "tot": {
+    "title": "Time over target (TOT)",
+    "time": "Time",
+    "callsign": "Callsign",
+    "point": "Waypoint",
+    "position": "Position",
+    "near": "Near",
+    "nearRule": "Near means points of different flights within 60 seconds and 1000 m of each other.",
+    "dayShift": "+{{count}} d",
+    "open": "View this flight",
+    "empty": "No waypoints with a time",
+    "zeroEta": "{{count}} points at time 0 are left out of this list",
+    "showAll": "Show all ({{count}} rows)",
+    "showLess": "Back to the first 10 rows"
+  }
+}

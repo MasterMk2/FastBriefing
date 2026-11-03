@@ -1,1 +1,132 @@
-{}
+{
+  "title": "Briefing",
+  "notAvailable": "Not set",
+  "continued": " (cont.)",
+  "start": {
+    "title": "Before starting the briefing",
+    "view": "View",
+    "include": "Include",
+    "hint": "The view (creator or pilot) can be changed in the header. Only the items chosen here are shown in full screen, in order.",
+    "threatsPilotHidden": "Threats are not included in the pilot view",
+    "begin": "Start",
+    "cancel": "Back"
+  },
+  "nav": {
+    "prev": "Previous",
+    "next": "Next",
+    "exit": "Exit (Esc)",
+    "contents": "Contents",
+    "counter": "{{current}} / {{total}}"
+  },
+  "empty": {
+    "title": "Nothing to show",
+    "body": "Choose the items to include in the briefing in the start check or on the export screen.",
+    "flights": "No flights",
+    "comms": "No frequencies",
+    "support": "No support assets",
+    "threats": "No threats are registered"
+  },
+  "section": {
+    "overview": "Overview",
+    "weather": "Weather",
+    "flights": "Flight list",
+    "route": "Navlog",
+    "comms": "Comms",
+    "support": "Support",
+    "threats": "Threats",
+    "map": "Map",
+    "notes": "Notes"
+  },
+  "overview": {
+    "mission": "Mission name",
+    "theatre": "Map",
+    "date": "Date",
+    "start": "Start time",
+    "flightCount": "{{side}} flights",
+    "task": "Task"
+  },
+  "weather": {
+    "temperature": "Temperature",
+    "qnh": "QNH",
+    "visibility": "Visibility",
+    "clouds": "Clouds",
+    "cloudBase": "base {{value}}",
+    "fog": "Fog",
+    "fogDetails": "Thickness {{thickness}}, visibility {{visibility}}",
+    "dust": "Dust",
+    "dustDensity": "Density {{value}}",
+    "groundTurbulence": "Ground turbulence",
+    "groundTurbulenceValue": "{{value}} m/s",
+    "none": "None",
+    "windLevelHeader": "Altitude",
+    "windDirection": "Wind direction (from → to)",
+    "windSpeed": "Wind speed",
+    "windLevel": {
+      "ground": "Ground",
+      "2000": "2000 m",
+      "8000": "8000 m"
+    },
+    "metar": "METAR"
+  },
+  "flights": {
+    "side": "Side",
+    "callsign": "Callsign",
+    "type": "Type",
+    "units": "Units",
+    "firstEta": "First time"
+  },
+  "route": {
+    "title": "Navlog: {{callsign}}",
+    "trueOnly": "true only",
+    "col": {
+      "no": "No",
+      "name": "Name",
+      "coord": "Position",
+      "alt": "Altitude",
+      "speed": "Speed",
+      "eta": "Time",
+      "leg": "Leg distance",
+      "magvar": "Magnetic bearing"
+    }
+  },
+  "alt": {
+    "BARO": "baro",
+    "RADIO": "radio"
+  },
+  "comms": {
+    "name": "Name",
+    "channel": "Channel",
+    "frequency": "Frequency",
+    "modulation": "Modulation"
+  },
+  "support": {
+    "kind": "Kind",
+    "callsign": "Callsign",
+    "frequency": "Frequency",
+    "tacan": "TACAN",
+    "position": "Position",
+    "kinds": {
+      "tanker": "Tanker",
+      "awacs": "AWACS",
+      "carrier": "Carrier",
+      "jtac": "JTAC"
+    }
+  },
+  "threats": {
+    "side": "Side",
+    "type": "Type",
+    "count": "Count",
+    "range": "Range",
+    "unrecorded": "Not recorded (range unknown)"
+  },
+  "map": {
+    "all": "All flights"
+  },
+  "smeac": {
+    "situation": "Situation",
+    "mission": "Mission",
+    "execution": "Execution",
+    "adminLogistics": "Admin and logistics",
+    "commandSignal": "Command and signal"
+  }
+}
