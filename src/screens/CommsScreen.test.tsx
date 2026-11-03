@@ -1,25 +1,36 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { useEffect } from 'react';
 import { i18nReady } from '../i18n';
 import { makeCoalition, makeFlight, makeMission, makeSupport, makeUnit } from '../__tests__/testMission';
 import CommsScreen from './CommsScreen';
 import { mountScreen, type MountedScreen } from '../__tests__/testRender';
+import { useWorkspace } from '../shell/workspace';
 
 vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
 
 const client = (overrides: Parameters<typeof makeUnit>[0] = {}) => makeUnit({ skill: 'Client', ...overrides });
 const preset = (frequencyHz: number, modulation = 0) => ({ channel: 1, frequency: frequencyHz, modulation, name: 'Tactical' });
 
+/** Jumps to an anchor once when it mounts, as the overview's "この箇所へ" does. */
+function JumpTo({ anchor }: { anchor: string }) {
+  const { jumpTo } = useWorkspace();
+  useEffect(() => {
+    jumpTo('comms', { anchor });
+  }, [anchor, jumpTo]);
+  return null;
+}
+
 /**
- * Blue: two flights sharing 251.000 MHz AM (a conflict) and one FM preset.
+ * Blue: two flights whose main frequency is 251.000 MHz AM (a conflict), with presets on 251 and 260.
  * Red: an opposing flight (Ford 9-9) and an opposing AWACS (Darkstar), both must stay out of pilot view.
  */
 function makeCommsMission() {
   return makeMission({
     blue: makeCoalition({
       flights: [
-        makeFlight({ groupId: 1, callsign: 'Viper 1-1', name: 'Viper', units: [client({ radios: [preset(251000000)] })] }),
-        makeFlight({ groupId: 2, callsign: 'Viper 2-1', name: 'Vanguard', units: [client({ unitId: 2, radios: [preset(251000000), preset(260000000, 1)] })] }),
+        makeFlight({ groupId: 1, callsign: 'Viper 1-1', name: 'Viper', frequency: 251000000, units: [client({ radios: [preset(251000000)] })] }),
+        makeFlight({ groupId: 2, callsign: 'Viper 2-1', name: 'Vanguard', frequency: 251000000, units: [client({ unitId: 2, radios: [preset(251000000), preset(260000000, 1)] })] }),
       ],
       support: [makeSupport({ kind: 'tanker', callsign: 'Texaco', frequency: 305000000, tacan: { channel: '37', mode: 'X' } })],
     }),
@@ -141,13 +152,41 @@ describe('CommsScreen (P5)', () => {
     expect(owners).toEqual(['Viper 2-1', 'Viper 10-1']);
   });
 
-  it('anchors the conflict and its two table rows at the lint L1 anchor', async () => {
+  it('anchors exactly one element, the conflict item, at the lint L1 anchor', async () => {
     screen = await mountScreen(<CommsScreen />, makeCommsMission(), 'creator');
 
-    // One conflict item and the two rows that use 251.000 MHz AM; the FM row and the 270 MHz pair are not in it.
     const anchored = screen.container.querySelectorAll('[data-anchor="comms:conflict:AM:251.000"]');
-    expect(anchored).toHaveLength(3);
+    expect(anchored).toHaveLength(1);
     expect(anchored[0].classList.contains('comms-conflict')).toBe(true);
+  });
+
+  it('does not count two presets on one frequency as a conflict, but still lists them', async () => {
+    const mission = makeMission({
+      blue: makeCoalition({
+        flights: [
+          makeFlight({ groupId: 1, callsign: 'Viper 1-1', units: [client({ radios: [preset(251000000)] })] }),
+          makeFlight({ groupId: 2, callsign: 'Viper 2-1', units: [client({ unitId: 2, radios: [preset(251000000)] })] }),
+        ],
+      }),
+    });
+    screen = await mountScreen(<CommsScreen />, mission, 'pilot');
+
+    expect(screen.text()).toContain('衝突はありません');
+    expect(frequencyRows(screen)).toHaveLength(2);
+  });
+
+  it('moves focus to the conflict named by the anchor and clears the anchor', async () => {
+    screen = await mountScreen(
+      <><JumpTo anchor="comms:conflict:AM:251.000" /><CommsScreen /></>,
+      makeCommsMission(),
+      'creator',
+    );
+
+    const target = screen.container.querySelector<HTMLElement>('[data-anchor="comms:conflict:AM:251.000"]');
+    expect(target).not.toBeNull();
+    expect(document.activeElement).toBe(target);
+    expect(target?.classList.contains('is-target')).toBe(true);
+    expect(screen.workspace()?.focusAnchor).toBeNull();
   });
 
   it('shows the no-conflict note and the empty frequency state when no flight or support has a frequency', async () => {
@@ -176,6 +215,6 @@ describe('CommsScreen (P5)', () => {
   it('says in creator view that the comparison covers both sides', async () => {
     screen = await mountScreen(<CommsScreen />, makeCommsMission(), 'creator');
 
-    expect(screen.text()).toContain('両陣営の周波数をまとめて比べます');
+    expect(screen.text()).toContain('両陣営の主周波数をまとめて比べます');
   });
 });

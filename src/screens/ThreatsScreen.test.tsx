@@ -11,8 +11,19 @@ import {
 } from '../__tests__/testMission';
 import ThreatsScreen from './ThreatsScreen';
 import { mountScreen, type MountedScreen } from '../__tests__/testRender';
+import { useWorkspace } from '../shell/workspace';
+import { useEffect } from 'react';
 
 vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
+
+/** Jumps to an anchor when it mounts, as the overview's "この箇所へ" does. */
+function JumpTo({ anchor }: { anchor: string }) {
+  const { jumpTo } = useWorkspace();
+  useEffect(() => {
+    jumpTo('threats', { anchor });
+  }, [anchor, jumpTo]);
+  return null;
+}
 
 /** Blue flight flies x = 0 to 20000 m along y = 0. Red SAM at (15000, 0), range 18000 m: both legs inside. */
 function makeThreatMission() {
@@ -151,5 +162,18 @@ describe('ThreatsScreen (P5)', () => {
 
     expect(screen.container.querySelector('[data-anchor="threats:red:0"]')?.textContent).toContain('SA-2');
     expect(screen.container.querySelector('[data-anchor="threats:red:1"]')?.textContent).toContain('Mystery');
+  });
+
+  it('focuses the row an L8 anchor names, and clears the anchor', async () => {
+    screen = await mountScreen(
+      <><JumpTo anchor="threats:red:1" /><ThreatsScreen /></>,
+      makeThreatMission(),
+      'creator',
+    );
+
+    const row = screen.container.querySelector<HTMLElement>('[data-anchor="threats:red:1"]');
+    expect(document.activeElement).toBe(row);
+    expect(row?.classList.contains('is-target')).toBe(true);
+    expect(screen.workspace()?.focusAnchor).toBeNull();
   });
 });

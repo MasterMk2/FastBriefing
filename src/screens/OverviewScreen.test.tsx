@@ -2,23 +2,28 @@
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { lintMission } from '../analysis/lint';
+import i18n from '../i18n';
 import { DEFAULT_SETTINGS, SETTINGS_STORAGE_KEY, SETTINGS_VERSION, SettingsProvider } from '../hooks/useSettings';
 import { i18nReady } from '../i18n';
+import { makeAIGroup, makeSupport, makeUnit } from '../__tests__/testMission';
 import { MissionProvider } from '../shell/MissionContext';
 import { useWorkspace, WorkspaceProvider } from '../shell/workspace';
-import type { DisplaySettings, Flight, MissionData, RoutePoint } from '../types/mission';
+import type { AIGroup, DisplaySettings, Flight, MissionData, RoutePoint, SupportAsset } from '../types/mission';
 import type { LintFinding } from '../types/lint';
 import OverviewScreen from './OverviewScreen';
 
-// The readiness flag belongs to lint.ts (P5); the test switches it through this state.
-const lintState = vi.hoisted(() => ({ ready: false }));
-vi.mock('../analysis/lint', () => ({
-  lintMission: vi.fn(() => []),
-  get LINT_RULES_READY() {
-    return lintState.ready;
-  },
-}));
+// The check runs the real rules. A test can replace its findings to show that the screen guards
+// its own pilot rule (a threat finding routed to another screen); otherwise the real rules run.
+const lintOverride = vi.hoisted(() => ({ findings: null as LintFinding[] | null }));
+vi.mock('../analysis/lint', async importOriginal => {
+  const actual = await importOriginal<typeof import('../analysis/lint')>();
+  return {
+    ...actual,
+    lintMissionForSide: (...args: Parameters<typeof actual.lintMissionForSide>) => (
+      lintOverride.findings ?? actual.lintMissionForSide(...args)
+    ),
+  };
+});
 
 let container: HTMLDivElement;
 let root: ReturnType<typeof createRoot>;
@@ -39,6 +44,7 @@ function point(index: number, eta: number, xy: [number, number]): RoutePoint {
   };
 }
 
+/** A flight with one Client unit (so L10 does not fire) and no main frequency (so L1 does not fire). */
 function flight(groupId: number, callsign: string, route: RoutePoint[]): Flight {
   return {
     groupId,
@@ -46,22 +52,30 @@ function flight(groupId: number, callsign: string, route: RoutePoint[]): Flight 
     callsign,
     type: 'FA-18C_hornet',
     task: 'CAP',
-    frequency: 251,
+    frequency: 0,
     modulation: 0,
     hidden: false,
-    units: [],
+    units: [makeUnit({ skill: 'Client' })],
     route,
   };
 }
 
-function makeMission(options: { blueFlights?: Flight[]; redFlights?: Flight[]; blueBullseyeResolved?: boolean } = {}): MissionData {
-  const coalition = (flights: Flight[], resolved = true) => ({
+interface FixtureOptions {
+  blueFlights?: Flight[];
+  redFlights?: Flight[];
+  blueBullseyeResolved?: boolean;
+  blueSupport?: SupportAsset[];
+  blueAiGroups?: AIGroup[];
+}
+
+function makeMission(options: FixtureOptions = {}): MissionData {
+  const coalition = (flights: Flight[], resolved = true, support: SupportAsset[] = [], aiGroups: AIGroup[] = []) => ({
     bullseye: { xy: [1000, 2000] as [number, number], latlon: [42, 42] as [number, number], latlonResolved: resolved },
     navPoints: [],
     airbases: [],
     flights,
-    support: [],
-    aiGroups: [],
+    support,
+    aiGroups,
     zones: [],
     drawings: [],
   });
@@ -91,7 +105,12 @@ function makeMission(options: { blueFlights?: Flight[]; redFlights?: Flight[]; b
       turbulence: { ground: 0 },
     },
     coalitions: {
-      blue: coalition(options.blueFlights ?? [], options.blueBullseyeResolved ?? true),
+      blue: coalition(
+        options.blueFlights ?? [],
+        options.blueBullseyeResolved ?? true,
+        options.blueSupport ?? [],
+        options.blueAiGroups ?? [],
+      ),
       red: coalition(options.redFlights ?? []),
       neutral: coalition([]),
     },
@@ -107,13 +126,17 @@ function makeMission(options: { blueFlights?: Flight[]; redFlights?: Flight[]; b
 }
 
 function Probe() {
-  const { screen, flightKey } = useWorkspace();
-  return <output data-testid="workspace" data-screen={screen} data-flight={flightKey ?? ''} />;
+  const { screen, flightKey, focusAnchor } = useWorkspace();
+  return <output data-testid="workspace" data-screen={screen} data-flight={flightKey ?? ''} data-anchor={focusAnchor ?? ''} />;
 }
 
-function workspaceState(): { screen: string; flight: string } {
+function workspaceState(): { screen: string; flight: string; anchor: string } {
   const probe = container.querySelector('[data-testid="workspace"]');
-  return { screen: probe?.getAttribute('data-screen') ?? '', flight: probe?.getAttribute('data-flight') ?? '' };
+  return {
+    screen: probe?.getAttribute('data-screen') ?? '',
+    flight: probe?.getAttribute('data-flight') ?? '',
+    anchor: probe?.getAttribute('data-anchor') ?? '',
+  };
 }
 
 async function renderOverview(mission: MissionData, settings: Partial<DisplaySettings> = {}) {
@@ -156,11 +179,13 @@ async function click(element: HTMLElement) {
   await act(async () => { element.click(); });
 }
 
+/** Laser code 12 is not four digits: lint L9 only (an AWACS needs no TACAN). */
+const badLaserAwacs = () => makeSupport({ kind: 'awacs', callsign: 'Darkstar', laserCode: '12' });
+
 beforeEach(async () => {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
   localStorage.clear();
-  vi.mocked(lintMission).mockReturnValue([]);
-  lintState.ready = false;
+  lintOverride.findings = null;
   await i18nReady;
   container = document.createElement('div');
   document.body.append(container);
@@ -172,6 +197,7 @@ afterEach(async () => {
   container.remove();
   vi.unstubAllGlobals();
   localStorage.clear();
+  lintOverride.findings = null;
 });
 
 describe('OverviewScreen task text (D1)', () => {
@@ -251,112 +277,132 @@ describe('OverviewScreen bullseye and counts', () => {
   });
 });
 
-describe('OverviewScreen pre-distribution check (F5 list)', () => {
-  it('says the check has not run instead of a false all-clear while the rules are not ready', async () => {
-    await renderOverview(makeMission(), { viewMode: 'creator', side: 'blue' });
+describe('OverviewScreen pre-distribution check (F5 list, the real rules)', () => {
+  it('says there are no problems and counts the rules it checked in creator view', async () => {
+    await renderOverview(makeMission({ blueFlights: [flight(1, 'Viper 1', [point(1, 600, [0, 0])])] }), { viewMode: 'creator', side: 'blue' });
 
-    expect(container.textContent).toContain('配布前チェックはまだ実装されていないため');
-    expect(container.textContent).not.toContain('問題はありません');
-  });
-
-  it('says there are no problems only when the rules are ready and find nothing', async () => {
-    lintState.ready = true;
-
-    await renderOverview(makeMission(), { viewMode: 'creator', side: 'blue' });
-
-    expect(container.textContent).toContain('問題はありません');
-    expect(container.textContent).not.toContain('まだ実装');
-  });
-
-  it('shows a finding instead of the all-clear when the rules are ready and find something', async () => {
-    lintState.ready = true;
-    const finding: LintFinding = { id: 'L9-4', code: 'L9', severity: 'warning', side: 'blue', screen: 'comms', params: {} };
-    vi.mocked(lintMission).mockReturnValue([finding]);
-
-    await renderOverview(makeMission(), { viewMode: 'creator', side: 'blue' });
-
-    expect(container.querySelector('.overview-lint-text')?.textContent).toBe('L9');
-    expect(container.textContent).not.toContain('問題はありません');
-  });
-
-  it('hides the threat checks from the pilot list, and keeps them in creator view', async () => {
-    lintState.ready = true;
-    const finding: LintFinding = { id: 'L8-2', code: 'L8', severity: 'info', side: 'neutral', screen: 'threats', params: {} };
-    vi.mocked(lintMission).mockReturnValue([finding]);
-
-    await renderOverview(makeMission(), { viewMode: 'pilot', side: 'blue' });
+    expect(container.textContent).toContain('問題はありません（確認した規則 10 件）');
     expect(container.querySelector('.overview-lint-list')).toBeNull();
-    expect(container.textContent).not.toContain('L8');
-    expect(container.textContent).toContain('問題はありません');
-
-    await act(async () => root.unmount());
-    root = createRoot(container);
-    await renderOverview(makeMission(), { viewMode: 'creator', side: 'blue' });
-    expect(container.querySelector('.overview-lint-text')?.textContent).toBe('L8');
   });
 
-  it('hides the L8 threat-range check in pilot view even when it is routed to another screen', async () => {
-    lintState.ready = true;
-    const finding: LintFinding = { id: 'L8-3', code: 'L8', severity: 'info', side: 'blue', screen: 'overview', params: {} };
-    vi.mocked(lintMission).mockReturnValue([finding]);
+  it('counts the nine rules of pilot view, which has no threat rule', async () => {
+    await renderOverview(makeMission({ blueFlights: [flight(1, 'Viper 1', [point(1, 600, [0, 0])])] }), { viewMode: 'pilot', side: 'blue' });
 
-    await renderOverview(makeMission(), { viewMode: 'pilot', side: 'blue' });
+    expect(container.textContent).toContain('問題はありません（確認した規則 9 件）');
+  });
 
-    expect(container.querySelector('.overview-lint-list')).toBeNull();
-    expect(container.textContent).toContain('問題はありません');
+  it('shows a real finding with its parameters filled in, never a raw placeholder', async () => {
+    const mission = makeMission({
+      blueFlights: [flight(1, 'Viper 1', [point(1, 600, [0, 0])])],
+      blueSupport: [badLaserAwacs()],
+    });
+
+    await renderOverview(mission, { viewMode: 'creator', side: 'blue' });
+
+    const text = container.querySelector('.overview-lint-text')?.textContent ?? '';
+    expect(text).toBe('レーザーコードが 4 桁の数字ではありません: Darkstar の 12');
+    expect(container.querySelector('#overview-lint-title')?.parentElement?.textContent ?? '').not.toContain('{{');
+    expect(container.textContent).not.toContain('問題はありません');
   });
 
   it('shows the rule code when a finding has no message yet, not a raw i18n key', async () => {
-    const finding: LintFinding = { id: 'L9-2', code: 'L9', severity: 'warning', side: 'blue', screen: 'comms', params: {} };
-    vi.mocked(lintMission).mockReturnValue([finding]);
+    lintOverride.findings = [{ id: 'L99-1', code: 'L99', severity: 'warning', side: 'blue', screen: 'comms', params: {} }];
 
-    await renderOverview(makeMission(), { viewMode: 'creator', side: 'blue' });
+    await renderOverview(makeMission({ blueFlights: [flight(1, 'Viper 1', [point(1, 600, [0, 0])])] }), { viewMode: 'creator', side: 'blue' });
 
-    expect(container.querySelector('.overview-lint-text')?.textContent).toBe('L9');
-    expect(container.textContent).not.toContain('lint:L9');
+    expect(container.querySelector('.overview-lint-text')?.textContent).toBe('L99');
+    expect(buttonByText('この箇所へ').getAttribute('aria-label')).toBe('この箇所へ（L99）');
+    expect(container.textContent).not.toContain('lint:L99');
+    expect(container.textContent).not.toContain('{{');
+  });
+
+  it('hides the threat checks from the pilot list, and keeps them in creator view', async () => {
+    const mission = makeMission({
+      blueFlights: [flight(1, 'Viper 1', [point(1, 600, [0, 0])])],
+      blueAiGroups: [makeAIGroup({ type: 'Mystery', threatRangeSource: 'unknown' })],
+    });
+
+    await renderOverview(mission, { viewMode: 'pilot', side: 'blue' });
+    expect(container.querySelector('.overview-lint-list')).toBeNull();
+    expect(container.textContent).not.toContain('脅威範囲が未収録');
+    expect(container.textContent).toContain('問題はありません（確認した規則 9 件）');
+
+    await act(async () => root.unmount());
+    root = createRoot(container);
+    await renderOverview(mission, { viewMode: 'creator', side: 'blue' });
+    expect(container.querySelector('.overview-lint-text')?.textContent)
+      .toBe('脅威範囲が未収録の地上・艦艇のグループが 1 件あります');
+  });
+
+  it('hides a threat finding in pilot view even when a rule routed it to another screen', async () => {
+    lintOverride.findings = [{ id: 'L8-3', code: 'L8', severity: 'info', side: 'blue', screen: 'overview', params: { count: 1 } }];
+
+    await renderOverview(makeMission({ blueFlights: [flight(1, 'Viper 1', [point(1, 600, [0, 0])])] }), { viewMode: 'pilot', side: 'blue' });
+
+    expect(container.querySelector('.overview-lint-list')).toBeNull();
+    expect(container.textContent).toContain('問題はありません');
   });
 
   it('gives each jump button its place in the accessible name', async () => {
-    const finding: LintFinding = { id: 'L9-3', code: 'L9', severity: 'warning', side: 'blue', screen: 'comms', params: {} };
-    vi.mocked(lintMission).mockReturnValue([finding]);
+    const mission = makeMission({
+      blueFlights: [flight(1, 'Viper 1', [point(1, 600, [0, 0])])],
+      blueSupport: [badLaserAwacs()],
+    });
 
-    await renderOverview(makeMission(), { viewMode: 'creator', side: 'blue' });
+    await renderOverview(mission, { viewMode: 'creator', side: 'blue' });
 
-    expect(buttonByText('この箇所へ').getAttribute('aria-label')).toBe('この箇所へ（L9）');
+    expect(buttonByText('この箇所へ').getAttribute('aria-label'))
+      .toBe('この箇所へ（レーザーコードが 4 桁の数字ではありません: Darkstar の 12）');
   });
 
-  it('moves to the place of a finding with its screen and flight key', async () => {
-    const finding: LintFinding = {
-      id: 'L9-1',
-      code: 'L9',
-      severity: 'warning',
-      side: 'blue',
-      screen: 'comms',
-      flightKey: 'blue:1',
-      params: {},
-    };
-    vi.mocked(lintMission).mockReturnValue([finding]);
+  it('moves to the support screen and the anchor of a support finding (L9)', async () => {
+    const mission = makeMission({
+      blueFlights: [flight(1, 'Viper 1', [point(1, 600, [0, 0])])],
+      blueSupport: [badLaserAwacs()],
+    });
 
-    await renderOverview(makeMission(), { viewMode: 'creator', side: 'blue' });
+    await renderOverview(mission, { viewMode: 'creator', side: 'blue' });
     await click(buttonByText('この箇所へ'));
 
-    expect(workspaceState()).toEqual({ screen: 'comms', flight: 'blue:1' });
+    expect(workspaceState()).toEqual({ screen: 'support', flight: 'blue:1', anchor: 'support:blue:0' });
+  });
+
+  it('opens the flight screen on the side\'s first flight for the Client check (L10)', async () => {
+    const aiFlight = { ...flight(3, 'Viper 3-1', [point(1, 600, [0, 0])]), units: [makeUnit({ skill: 'AI' })] };
+    const mission = makeMission({ blueFlights: [aiFlight] });
+
+    await renderOverview(mission, { viewMode: 'creator', side: 'blue' });
+    await click(buttonByText('この箇所へ'));
+
+    expect(workspaceState()).toEqual({ screen: 'flights', flight: 'blue:3', anchor: '' });
   });
 
   it('does not offer a jump to the threat screen in pilot view', async () => {
-    const finding: LintFinding = {
-      id: 'L8-1',
-      code: 'L8',
-      severity: 'info',
-      side: 'neutral',
-      screen: 'threats',
-      params: {},
-    };
-    vi.mocked(lintMission).mockReturnValue([finding]);
+    const mission = makeMission({
+      blueFlights: [flight(1, 'Viper 1', [point(1, 600, [0, 0])])],
+      blueAiGroups: [makeAIGroup({ type: 'Mystery', threatRangeSource: 'unknown' })],
+    });
 
-    await renderOverview(makeMission(), { viewMode: 'pilot', side: 'blue' });
+    await renderOverview(mission, { viewMode: 'pilot', side: 'blue' });
 
     expect(Array.from(container.querySelectorAll('button')).some(button => button.textContent === 'この箇所へ')).toBe(false);
+  });
+
+  it('reads the defaults list in the current UI language, and goes back to Japanese', async () => {
+    const mission = makeMission();
+    mission.issues = [{ code: 'unit.unknownType', severity: 'info', params: { type: 'UNKNOWN-X' } }];
+
+    await renderOverview(mission, { viewMode: 'creator', side: 'blue' });
+    const defaults = () => container.querySelector('#overview-defaults-title')?.parentElement?.textContent ?? '';
+    expect(defaults()).toContain('参照データに未収録のユニット: UNKNOWN-X');
+
+    try {
+      await act(async () => { await i18n.changeLanguage('en'); });
+      expect(defaults()).toContain('Unit not in reference data: UNKNOWN-X');
+      expect(defaults()).not.toContain('参照データ');
+    } finally {
+      await act(async () => { await i18n.changeLanguage('ja'); });
+    }
   });
 });
 
@@ -412,6 +458,12 @@ describe('OverviewScreen weather', () => {
     expect(weatherDetails).not.toContain('砂塵');
   });
 
+  it('labels the wind column neutrally, so a "from" or "to" setting does not contradict the header', async () => {
+    await renderOverview(makeMission(), { viewMode: 'creator', side: 'blue' });
+    expect(container.querySelector('.overview-table thead')?.textContent).toContain('風向');
+    expect(container.querySelector('.overview-table thead')?.textContent).not.toContain('吹いてくる');
+  });
+
   it('shows the Mission Editor version in the header', async () => {
     await renderOverview(makeMission(), { viewMode: 'creator', side: 'blue' });
 
@@ -425,6 +477,21 @@ describe('OverviewScreen weather', () => {
     await renderOverview(mission, { viewMode: 'creator', side: 'blue' });
 
     expect(container.querySelector('.overview-table tbody')?.textContent).toContain('未設定');
+  });
+
+  it('shows the date of the zulu clock when only zulu is displayed (D6)', async () => {
+    // Local clock 02:00 on 1 January at UTC+9 is 17:00 on 31 December Zulu.
+    const mission = makeMission();
+    mission.meta.utcOffset = 9;
+    mission.meta.startTime = 7200;
+
+    await renderOverview(mission, { viewMode: 'creator', side: 'blue', timeDisplay: 'zulu' });
+    expect(container.querySelector('.overview-meta')?.textContent).toContain('2025-12-31');
+
+    await act(async () => root.unmount());
+    root = createRoot(container);
+    await renderOverview(mission, { viewMode: 'creator', side: 'blue', timeDisplay: 'local' });
+    expect(container.querySelector('.overview-meta')?.textContent).toContain('2026-01-01');
   });
 });
 

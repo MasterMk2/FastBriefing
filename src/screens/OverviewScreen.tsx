@@ -4,7 +4,7 @@
 // side's task text, flights, bullseye or threat screen (D1); the displayed mission is `view`.
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { lintMission } from '../analysis/lint';
+import { checkedLintRuleCount, isCreatorOnlyLintRule, lintMissionForSide } from '../analysis/lint';
 import { buildTot } from '../analysis/tot';
 import { isResolvedLatLon, taskTextFor, weatherConditionPairs, type Translate } from '../briefing/slides';
 import { issueText, issueTextList } from '../core/issueText';
@@ -16,11 +16,9 @@ import { useUnits } from '../shell/units';
 import { useWorkspace } from '../shell/workspace';
 import type { LintFinding } from '../types/lint';
 import type { IssueSeverity, MissionData, Side } from '../types/mission';
-import { CREATOR_ONLY_SCREENS } from '../types/screen';
 import { getMoonInfo, getSunTimes } from '../utils/astro';
 import { buildMetar } from '../utils/metar';
 import { formatDateYMD, formatUtcOffset, missionLocalDate, missionZuluDate } from '../utils/time';
-import { lintRulesReady } from './overviewStatus';
 
 const SEVERITY_ORDER: Record<IssueSeverity, number> = { error: 0, warning: 1, info: 2 };
 const SEVERITY_SYMBOL: Record<IssueSeverity, string> = { error: '×', warning: '▲', info: 'i' };
@@ -33,19 +31,9 @@ function sortFindings(findings: readonly LintFinding[]): LintFinding[] {
   return [...findings].sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity]);
 }
 
-/**
- * Threat items are creator-only (SPEC 5.1, D1). In pilot view neither their checks nor their
- * issues are shown, so the overview hides them there. A check is a threat check when its screen
- * is creator-only or its rule is L8 (unrecorded threat range, SPEC 5.1 F5), wherever P5 routes it.
- */
-const THREAT_LINT_CODES: ReadonlySet<string> = new Set(['L8']);
-
+/** Threat issues are creator-only (SPEC 5.1, D1). In pilot view they are not listed. */
 function isCreatorOnlyIssueCode(code: string): boolean {
   return code.startsWith('threat.');
-}
-
-function isCreatorOnlyFinding(finding: LintFinding): boolean {
-  return CREATOR_ONLY_SCREENS.includes(finding.screen) || THREAT_LINT_CODES.has(finding.code);
 }
 
 interface LoadNotice {
@@ -87,7 +75,7 @@ function dayShift(date: Date, reference: Date): number {
 export default function OverviewScreen() {
   const { t } = useTranslation(['overview', 'shell', 'lint']);
   const { view, side, viewMode, settings } = useMission();
-  const { setScreen, setFlightKey } = useWorkspace();
+  const { setScreen, jumpTo } = useWorkspace();
   const units = useUnits();
   const [totExpanded, setTotExpanded] = useState(false);
   const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle');
@@ -104,22 +92,23 @@ export default function OverviewScreen() {
   const taskText = taskTextFor(meta, side);
   const countSides: readonly Side[] = viewMode === 'creator' ? ['blue', 'red'] : [side];
   const pilot = viewMode === 'pilot';
-  const lintReady = lintRulesReady();
+  // The date follows the time display setting, like the times next to it (D6).
+  const shownDate = settings.timeDisplay === 'zulu' ? zuluDate : localDate;
 
-  // Pilot view drops the threat checks and threat issues (SPEC 5.1, D1); the rest of the list stays.
+  // The check of the displayed side and view (lint L10 uses the side). Pilot view runs no threat rule (D1);
+  // the same rule table hides a threat finding here too, should one arrive without it.
   const findings = useMemo(
-    () => sortFindings(lintMission(view)).filter(finding => !pilot || !isCreatorOnlyFinding(finding)),
-    [view, pilot],
+    () => sortFindings(lintMissionForSide(view, side, viewMode)).filter(finding => !pilot || !isCreatorOnlyLintRule(finding.code)),
+    [view, side, viewMode, pilot],
   );
   const tot = useMemo(() => buildTot(view, side), [view, side]);
-  const notices = useMemo(() => loadNotices(view.issues, pilot), [view.issues, pilot]);
-  const defaultTexts = useMemo(() => issueTextList(
+  // Issue texts are read in the current UI language on every render (the translation hook re-renders on change).
+  const notices = loadNotices(view.issues, pilot);
+  const defaultTexts = issueTextList(
     view.issues.filter(issue => (issue.severity === 'info' || DEFAULTED_CODES.has(issue.code))
       && !(pilot && isCreatorOnlyIssueCode(issue.code))),
-  ), [view.issues, pilot]);
+  );
   const translate: Translate = (key, values) => String(t(key, values));
-  // The TOT clock follows the time display setting: Zulu dates when only Zulu is shown (F7).
-  const totReference = settings.timeDisplay === 'zulu' ? zuluDate : localDate;
 
   const na = t('overview:notAvailable');
   const cloudLabel = weather.clouds.label.trim() || na;
@@ -133,9 +122,9 @@ export default function OverviewScreen() {
   const visibleTot = totExpanded ? tot.rows : tot.rows.slice(0, TOT_PREVIEW_ROWS);
   const hasNear = tot.rows.some(row => row.near.length > 0);
 
+  /** "この箇所へ": the finding's screen, its flight (when it has one) and its anchor (the place on that screen). */
   function openFinding(finding: LintFinding) {
-    if (finding.flightKey) setFlightKey(finding.flightKey);
-    setScreen(finding.screen);
+    jumpTo(finding.screen, { flightKey: finding.flightKey, anchor: finding.anchor });
   }
 
   async function copyMetar() {
@@ -154,7 +143,7 @@ export default function OverviewScreen() {
           <h2 className="overview-title" title={meta.sortie}>{meta.sortie.trim() || t('overview:untitled')}</h2>
           <p className="overview-meta">
             <span>{t('overview:theatre')}: {meta.theatre || na}</span>
-            <span>{formatDateYMD(localDate)} {units.time(0)} ({formatUtcOffset(meta.utcOffset)})</span>
+            <span>{formatDateYMD(shownDate)} {units.time(0)} ({formatUtcOffset(meta.utcOffset)})</span>
             <span>{t('overview:meVersion')}: {meta.meVersion || na}</span>
           </p>
           <dl className="overview-counts">
@@ -192,7 +181,7 @@ export default function OverviewScreen() {
           {findings.length > 0 ? (
             <ul className="overview-list overview-lint-list">
               {findings.map(finding => {
-                // A rule without a message yet shows its code, not a raw i18n key (lint is P5's namespace).
+                // The message is in the lint namespace; a rule without one shows its code, not a raw i18n key.
                 const text = t(`lint:${finding.code}`, { ...finding.params, defaultValue: finding.code });
                 return (
                   <li key={finding.id} className="overview-lint-row">
@@ -214,11 +203,8 @@ export default function OverviewScreen() {
                 );
               })}
             </ul>
-          ) : lintReady ? (
-            <Notice tone="success">{t('overview:lint.none', { count: defaultTexts.length })}</Notice>
           ) : (
-            // Until the rules exist (P5), "no problems" would be a false all-clear.
-            <Notice tone="info">{t('overview:lint.notChecked')}</Notice>
+            <Notice tone="success">{t('overview:lint.none', { count: checkedLintRuleCount(viewMode) })}</Notice>
           )}
         </section>
 
@@ -353,7 +339,7 @@ export default function OverviewScreen() {
                   {visibleTot.map(row => {
                     const shift = dayShift(
                       settings.timeDisplay === 'zulu' ? row.zuluDate : row.localDate,
-                      totReference,
+                      shownDate,
                     );
                     return (
                       <tr key={`${row.flightKey}-${row.pointIndex}`}>
@@ -382,10 +368,7 @@ export default function OverviewScreen() {
                             type="button"
                             className="overview-link-button"
                             aria-label={`${t('overview:tot.open')}（${row.callsign}）`}
-                            onClick={() => {
-                              setFlightKey(row.flightKey);
-                              setScreen('flights');
-                            }}
+                            onClick={() => jumpTo('flights', { flightKey: row.flightKey })}
                           >
                             {t('overview:tot.open')}
                           </button>

@@ -1,6 +1,7 @@
 // Support screen (SPEC 1.3 support): tanker, AWACS, carrier and JTAC, one section per kind.
-// Owner: P5. Default export, no props. The displayed side comes first; the opposing side is shown
+// Owner: P4 for the integration (B4). Default export, no props. The displayed side comes first; the opposing side is shown
 // only in creator view (SPEC 1.3). Hidden support assets are already removed by applyViewMode (G11).
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toMHz } from '../analysis/frequencyConflicts';
 import { isPositionResolved } from '../analysis/position';
@@ -17,28 +18,62 @@ const KINDS: readonly SupportAsset['kind'][] = ['tanker', 'awacs', 'carrier', 'j
 export default function SupportScreen() {
   const { t } = useTranslation();
   const { view, side, viewMode } = useMission();
+  const { focusAnchor, clearFocusAnchor } = useWorkspace();
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [highlighted, setHighlighted] = useState<string | null>(null);
+  const [opposingOpen, setOpposingOpen] = useState(false);
   const opposing: Side = side === 'blue' ? 'red' : 'blue';
   const ownAssets = view.coalitions[side].support;
   const opposingAssets = viewMode === 'creator' ? view.coalitions[opposing].support : [];
+
+  // "この箇所へ" names one support asset (support:<side>:<index>). The opposing list is folded in creator view,
+  // so an anchor on it opens the list first. The row is highlighted and focused once, then the anchor is cleared.
+  useEffect(() => {
+    if (focusAnchor === null) return;
+    setHighlighted(focusAnchor);
+    if (focusAnchor.startsWith(`support:${opposing}:`)) setOpposingOpen(true);
+    clearFocusAnchor();
+  }, [focusAnchor, clearFocusAnchor, opposing]);
+
+  useEffect(() => {
+    if (highlighted === null) return;
+    focusAnchored(rootRef.current, highlighted);
+  }, [highlighted]);
 
   if (ownAssets.length === 0 && opposingAssets.length === 0) {
     return <EmptyState title={t('support:empty.title')} body={t('support:empty.body')} />;
   }
 
   return (
-    <div className="support-screen">
-      <SupportSide side={side} assets={ownAssets} />
+    <div className="support-screen" ref={rootRef}>
+      <SupportSide side={side} assets={ownAssets} highlighted={highlighted} />
       {opposingAssets.length > 0 && (
-        <details className="support-opposing">
+        <details
+          className="support-opposing"
+          open={opposingOpen}
+          onToggle={event => setOpposingOpen(event.currentTarget.open)}
+        >
           <summary>{t('support:opposing', { count: opposingAssets.length })}</summary>
-          <SupportSide side={opposing} assets={opposingAssets} />
+          <SupportSide side={opposing} assets={opposingAssets} highlighted={highlighted} />
         </details>
       )}
     </div>
   );
 }
 
-function SupportSide({ side, assets }: { side: Side; assets: SupportAsset[] }) {
+/**
+ * Moves focus to the element whose data-anchor is the anchor (exact match, so no selector escaping is needed).
+ * scrollIntoView is optional-called because some DOM environments (jsdom) do not implement it.
+ */
+function focusAnchored(root: HTMLElement | null, anchor: string) {
+  const target = Array.from(root?.querySelectorAll<HTMLElement>('[data-anchor]') ?? [])
+    .find(element => element.dataset.anchor === anchor);
+  if (!target) return;
+  target.focus({ preventScroll: true });
+  target.scrollIntoView?.({ block: 'center' });
+}
+
+function SupportSide({ side, assets, highlighted }: { side: Side; assets: SupportAsset[]; highlighted: string | null }) {
   const { t } = useTranslation();
   return (
     <section className="support-side" aria-label={t(`shell:side.${side}`)}>
@@ -60,6 +95,7 @@ function SupportSide({ side, assets }: { side: Side; assets: SupportAsset[] }) {
                   side={side}
                   asset={item.asset}
                   anchor={`support:${side}:${item.index}`}
+                  highlighted={`support:${side}:${item.index}` === highlighted}
                 />
               ))}
             </ul>
@@ -70,14 +106,14 @@ function SupportSide({ side, assets }: { side: Side; assets: SupportAsset[] }) {
   );
 }
 
-function SupportItem({ side, asset, anchor }: { side: Side; asset: SupportAsset; anchor: string }) {
+function SupportItem({ side, asset, anchor, highlighted }: { side: Side; asset: SupportAsset; anchor: string; highlighted: boolean }) {
   const { t } = useTranslation();
   const units = useUnits();
   const { setScreen } = useWorkspace();
 
   // data-anchor is the target of a lint finding's "この箇所へ" (LintFinding.anchor, see lint.ts).
   return (
-    <li className="support-item" data-anchor={anchor}>
+    <li className={highlighted ? 'support-item is-target' : 'support-item'} data-anchor={anchor} tabIndex={-1}>
       <p className="support-callsign"><SideMark side={side} /> <strong>{asset.callsign}</strong></p>
       <dl className="support-dl">
         <div className="support-dl-row">

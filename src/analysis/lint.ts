@@ -11,11 +11,57 @@ import type { Airbase, DisplaySettings, Flight, MissionData, RoutePoint, Side, S
 import type { LintFinding } from '../types/lint';
 import { flightKey } from '../utils/flightKey';
 import { defaultSide } from '../utils/viewMode';
-import { collectFrequencyEntries, conflictAnchor, detectFrequencyConflicts } from './frequencyConflicts';
+import { conflictAnchor, conflictSide, detectMainFrequencyConflicts } from './frequencyConflicts';
 import { isPositionResolved, type PositionLike } from './position';
 
 const SIDES: readonly Side[] = ['blue', 'red'];
 const SEVERITY_RANK: Readonly<Record<LintFinding['severity'], number>> = { error: 0, warning: 1, info: 2 };
+
+interface LintRule {
+  code: string;
+  /** Threat rules. They do not run in pilot view (D1, SPEC 5.1). */
+  creatorOnly: boolean;
+  run: (mission: MissionData, side: Side) => LintFinding[];
+}
+
+/**
+ * Every rule, in order (L1 to L10). This table is the one place that says which rules pilot view leaves out:
+ * the findings, the overview's rule count and lintRuleCodesFor all read it.
+ */
+const LINT_RULES: readonly LintRule[] = [
+  { code: 'L1', creatorOnly: false, run: ruleFrequencyOverlap },
+  { code: 'L2', creatorOnly: false, run: ruleDuplicateCallsign },
+  { code: 'L3', creatorOnly: false, run: ruleTankerTacan },
+  { code: 'L4', creatorOnly: false, run: ruleDuplicateTacan },
+  { code: 'L5', creatorOnly: false, run: ruleAirbaseOwner },
+  { code: 'L6', creatorOnly: false, run: ruleEtaMismatch },
+  { code: 'L7', creatorOnly: false, run: ruleUnresolvedPositions },
+  { code: 'L8', creatorOnly: true, run: ruleUnrecordedThreats },
+  { code: 'L9', creatorOnly: false, run: ruleLaserCode },
+  { code: 'L10', creatorOnly: false, run: ruleClientCount },
+];
+
+/** Codes of all rules, L1 to L10. */
+export const LINT_RULE_CODES: readonly string[] = LINT_RULES.map(rule => rule.code);
+
+function rulesFor(viewMode: DisplaySettings['viewMode']): readonly LintRule[] {
+  return LINT_RULES.filter(rule => viewMode === 'creator' || !rule.creatorOnly);
+}
+
+/** Whether a rule is a threat rule (creator view only, D1). The overview hides the same findings with it. */
+export function isCreatorOnlyLintRule(code: string): boolean {
+  return LINT_RULES.some(rule => rule.code === code && rule.creatorOnly);
+}
+
+/** The codes of the rules the check runs for a view. Pilot view leaves out the threat rules (D1). */
+export function lintRuleCodesFor(viewMode: DisplaySettings['viewMode']): string[] {
+  return rulesFor(viewMode).map(rule => rule.code);
+}
+
+/** How many rules the check runs for a view (the overview shows this count). */
+export function checkedLintRuleCount(viewMode: DisplaySettings['viewMode']): number {
+  return rulesFor(viewMode).length;
+}
 
 /** L6: the ETA tolerance is at least 30 s, or 10% of the ETA difference when that is larger. */
 const ETA_TOLERANCE_MIN_SECONDS = 30;
@@ -47,20 +93,8 @@ export function lintMissionForSide(
   side: Side,
   viewMode: DisplaySettings['viewMode'] = 'creator',
 ): LintFinding[] {
-  const findings: LintFinding[] = [
-    ...ruleFrequencyOverlap(mission),
-    ...ruleDuplicateCallsign(mission),
-    ...ruleTankerTacan(mission),
-    ...ruleDuplicateTacan(mission),
-    ...ruleAirbaseOwner(mission),
-    ...ruleEtaMismatch(mission),
-    ...ruleUnresolvedPositions(mission),
-    ...ruleUnrecordedThreats(mission),
-    ...ruleLaserCode(mission),
-    ...ruleClientCount(mission, side),
-  ];
-  const visible = viewMode === 'creator' ? findings : findings.filter(finding => finding.screen !== 'threats');
-  return sortFindings(visible);
+  const findings = rulesFor(viewMode).flatMap(rule => rule.run(mission, side));
+  return sortFindings(findings);
 }
 
 /**
@@ -77,26 +111,25 @@ export function ownSideOf(mission: MissionData): Side {
   return defaultSide(mission);
 }
 
-/** L1: a frequency shared by two different flights, or by a support asset (within 1 kHz, same modulation). */
+/**
+ * L1: the main frequency (flight group frequency or support frequency) of two or more different flights
+ * or support assets, within 1 kHz with the same modulation. Radio presets do not count (Lead decision 1).
+ * One finding per frequency; the comms screen lists the same conflicts with the same anchor.
+ */
 function ruleFrequencyOverlap(mission: MissionData): LintFinding[] {
-  return SIDES.flatMap(side => {
-    const entries = collectFrequencyEntries(mission, { side, includeGroupFrequency: true });
-    return detectFrequencyConflicts(entries)
-      .filter(conflict => conflict.types.includes('different-flight') || conflict.types.includes('support'))
-      .map((conflict): LintFinding => ({
-        id: `L1:${conflict.key}`,
-        code: 'L1',
-        severity: 'warning',
-        side,
-        screen: 'comms',
-        anchor: conflictAnchor(conflict),
-        params: {
-          frequency: conflict.frequencyMHz.toFixed(3),
-          modulation: conflict.modulation,
-          count: conflict.users.length,
-        },
-      }));
-  });
+  return detectMainFrequencyConflicts(mission).map((conflict): LintFinding => ({
+    id: `L1:${conflictAnchor(conflict)}`,
+    code: 'L1',
+    severity: 'warning',
+    side: conflictSide(conflict),
+    screen: 'comms',
+    anchor: conflictAnchor(conflict),
+    params: {
+      frequency: conflict.frequencyMHz.toFixed(3),
+      modulation: conflict.modulation,
+      count: conflict.users.length,
+    },
+  }));
 }
 
 /** L2: two flights of one coalition with the same callsign (case and surrounding spaces ignored). */
@@ -347,11 +380,22 @@ function ruleLaserCode(mission: MissionData): LintFinding[] {
   });
 }
 
-/** L10: the displayed side has no Client flight. */
+/**
+ * L10: the displayed side has no Client flight. The jump opens the side's first flight when there is one.
+ */
 function ruleClientCount(mission: MissionData, own: Side): LintFinding[] {
-  const clients = mission.coalitions[own].flights.filter(hasClientUnit).length;
-  if (clients > 0) return [];
-  return [{ id: `L10:${own}`, code: 'L10', severity: 'error', side: own, screen: 'flights', params: {} }];
+  const flights = mission.coalitions[own].flights;
+  if (flights.some(hasClientUnit)) return [];
+  const first = flights[0];
+  return [{
+    id: `L10:${own}`,
+    code: 'L10',
+    severity: 'error',
+    side: own,
+    screen: 'flights',
+    ...(first ? { flightKey: flightKey(own, first.groupId) } : {}),
+    params: {},
+  }];
 }
 
 function supportRefs(mission: MissionData): SupportRef[] {

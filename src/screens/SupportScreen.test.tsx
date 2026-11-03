@@ -1,11 +1,22 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { useEffect } from 'react';
 import { i18nReady } from '../i18n';
 import { makeCoalition, makeFlight, makeMission, makeSupport, makeUnit } from '../__tests__/testMission';
 import SupportScreen from './SupportScreen';
 import { mountScreen, type MountedScreen } from '../__tests__/testRender';
+import { useWorkspace } from '../shell/workspace';
 
 vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
+
+/** Jumps to an anchor when it mounts, as the overview's "この箇所へ" does. */
+function JumpTo({ anchor }: { anchor: string }) {
+  const { jumpTo } = useWorkspace();
+  useEffect(() => {
+    jumpTo('support', { anchor });
+  }, [anchor, jumpTo]);
+  return null;
+}
 
 function makeSupportMission() {
   return makeMission({
@@ -89,6 +100,22 @@ describe('SupportScreen (P5)', () => {
       .find(item => item.textContent?.includes(name));
     expect(rowOf('Texaco')?.querySelector('.side-mark')?.getAttribute('data-side')).toBe('blue');
     expect(rowOf('Darkstar')?.querySelector('.side-mark')?.getAttribute('data-side')).toBe('red');
+  });
+
+  it('opens the folded opposing list for an anchor on it, and focuses the row once', async () => {
+    screen = await mountScreen(
+      <><JumpTo anchor="support:red:0" /><SupportScreen /></>,
+      makeSupportMission(),
+      'creator',
+    );
+
+    const details = screen.container.querySelector<HTMLDetailsElement>('.support-opposing');
+    const row = screen.container.querySelector<HTMLElement>('[data-anchor="support:red:0"]');
+    expect(details?.open).toBe(true);
+    expect(row?.textContent).toContain('Darkstar');
+    expect(document.activeElement).toBe(row);
+    expect(row?.classList.contains('is-target')).toBe(true);
+    expect(screen.workspace()?.focusAnchor).toBeNull();
   });
 
   it('shows the empty state when the mission has no support assets', async () => {

@@ -16,8 +16,7 @@
   },
   "lint": {
     "title": "配布前チェック",
-    "none": "問題はありません（確認 {{count}} 件）",
-    "notChecked": "配布前チェックはまだ実装されていないため、問題の有無は確かめていません",
+    "none": "問題はありません（確認した規則 {{count}} 件）",
     "goto": "この箇所へ",
     "severity": {
       "error": "エラー",
@@ -45,7 +44,7 @@
     "none": "なし",
     "wind": "風",
     "windLevelHeader": "高度",
-    "windDirection": "風向（吹いてくる → 吹いていく）",
+    "windDirection": "風向",
     "windSpeed": "風速",
     "windLevel": {
       "ground": "地上",

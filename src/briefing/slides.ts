@@ -1,25 +1,10 @@
-import type { Flight, Side, MissionMeta, MissionData, SMEACNotes, SupportAsset, Weather } from '../types/mission';
+import type { Flight, Side, MissionMeta, MissionData, SMEACNotes, SupportAsset, Weather, DisplaySettings } from '../types/mission';
 import type { Units } from '../shell/units';
+import { BRIEFING_SECTIONS, type BriefingSection } from '../utils/briefingSections';
+import { parseFlightKey } from '../utils/flightKey';
 import { calculateRouteLegs } from '../utils/routeLegs';
 import { buildMetar } from '../utils/metar';
 import { formatDateYMD, missionLocalDate, missionZuluDate } from '../utils/time';
-
-/**
- * Sections of the full-screen briefing (SPEC 5.1 F8), in the fixed order of FR-93.
- * Inclusion comes from `settings.briefingSections`; ids not yet in that list are simply absent.
- */
-export const BRIEFING_DECK = [
-  'overview',
-  'weather',
-  'flights',
-  'route',
-  'comms',
-  'support',
-  'threats',
-  'map',
-  'notes',
-] as const;
-export type BriefingDeckSection = typeof BRIEFING_DECK[number];
 
 /** Upper bound of table rows on one slide (SPEC 1.3: 1 slide at most 14 rows). */
 export const BRIEFING_ROWS_PER_SLIDE = 14;
@@ -50,16 +35,16 @@ export interface SlideTable {
 
 export interface BriefingSlide {
   key: string;
-  section: BriefingDeckSection;
+  section: BriefingSection;
   title: string;
   pairs?: SlidePair[];
   table?: SlideTable;
   text?: string;
   /**
-   * The map slide shows all flights. MapPanel takes no flight filter yet (contract 6.1), so a
-   * slide for the selected flight waits for a contract change (Lead and P2 decide).
+   * The map slide. `flightKey` is the selected flight (contract 2.3, Lead decision 4): MapPanel shows that
+   * flight, or every flight when it is null. The caption says which of the two the slide shows.
    */
-  map?: { caption: string };
+  map?: { caption: string; flightKey: string | null };
 }
 
 export interface BriefingSlideInput {
@@ -72,6 +57,10 @@ export interface BriefingSlideInput {
   notes: SMEACNotes;
   units: Units;
   t: Translate;
+  /** The selected flight (flightKey() value) for the map slide, or null for every flight. */
+  focusFlightKey?: string | null;
+  /** The time display setting. The mission date follows it: Zulu date when only Zulu is shown (D6). */
+  timeDisplay?: DisplaySettings['timeDisplay'];
 }
 
 /**
@@ -163,29 +152,31 @@ export function formatModulation(modulation: number): string {
   return modulation === 0 ? 'AM' : 'FM';
 }
 
+/**
+ * Section builders, one per section id. The record is typed by BriefingSection, so adding a section id
+ * without a builder is a compile error (the deck order is BRIEFING_SECTIONS, FR-93).
+ */
+const SECTION_BUILDERS: Record<BriefingSection, (input: BriefingSlideInput) => BriefingSlide[]> = {
+  overview: input => [overviewSlide(input)],
+  weather: input => [weatherSlide(input)],
+  flights: input => flightSlides(input),
+  route: input => routeSlides(input),
+  comms: input => commsSlides(input),
+  support: input => supportSlides(input),
+  threats: input => threatSlides(input),
+  map: input => [mapSlide(input)],
+  notes: input => notesSlides(input),
+};
+
 export function buildBriefingSlides(input: BriefingSlideInput): BriefingSlide[] {
   const slides: BriefingSlide[] = [];
-  for (const section of BRIEFING_DECK) {
+  for (const section of BRIEFING_SECTIONS) {
     if (!input.sections.has(section)) continue;
     // Threat data is creator-only (D1); the section is not built at all in pilot view.
     if (section === 'threats' && input.viewMode === 'pilot') continue;
-    slides.push(...buildSection(section, input));
+    slides.push(...SECTION_BUILDERS[section](input));
   }
   return slides;
-}
-
-function buildSection(section: BriefingDeckSection, input: BriefingSlideInput): BriefingSlide[] {
-  switch (section) {
-    case 'overview': return [overviewSlide(input)];
-    case 'weather': return [weatherSlide(input)];
-    case 'flights': return flightSlides(input);
-    case 'route': return routeSlides(input);
-    case 'comms': return commsSlides(input);
-    case 'support': return supportSlides(input);
-    case 'threats': return threatSlides(input);
-    case 'map': return [mapSlide(input)];
-    case 'notes': return notesSlides(input);
-  }
 }
 
 /** The sides shown in this view: both in creator view, the displayed side in pilot view (D1). */
@@ -203,10 +194,11 @@ function sideLabel(input: BriefingSlideInput, side: Side): string {
 
 function overviewSlide(input: BriefingSlideInput): BriefingSlide {
   const { meta } = input.view;
+  const date = input.timeDisplay === 'zulu' ? missionZuluDate(meta) : missionLocalDate(meta);
   const pairs: SlidePair[] = [
     { label: input.t('briefing:overview.mission'), value: meta.sortie.trim() || naText(input) },
     { label: input.t('briefing:overview.theatre'), value: meta.theatre || naText(input) },
-    { label: input.t('briefing:overview.date'), value: formatDateYMD(missionLocalDate(meta)) },
+    { label: input.t('briefing:overview.date'), value: formatDateYMD(date) },
     { label: input.t('briefing:overview.start'), value: input.units.time(0) },
   ];
   for (const side of displayedSides(input)) {
@@ -404,11 +396,20 @@ function threatSlides(input: BriefingSlideInput): BriefingSlide[] {
 }
 
 function mapSlide(input: BriefingSlideInput): BriefingSlide {
+  const flightKey = input.focusFlightKey ?? null;
+  const parsed = flightKey === null ? null : parseFlightKey(flightKey);
+  const flight = parsed === null
+    ? undefined
+    : input.view.coalitions[parsed.side].flights.find(item => item.groupId === parsed.groupId);
+  // The caption names the selected flight only when there is one in the view; otherwise every flight is shown.
+  const caption = flight
+    ? input.t('briefing:map.flight', { callsign: flight.callsign })
+    : input.t('briefing:map.all');
   return {
     key: 'map',
     section: 'map',
     title: input.t('briefing:section.map'),
-    map: { caption: input.t('briefing:map.all') },
+    map: { caption, flightKey: flight ? flightKey : null },
   };
 }
 
@@ -435,7 +436,7 @@ function notesSlides(input: BriefingSlideInput): BriefingSlide[] {
  */
 function paged(
   input: BriefingSlideInput,
-  section: BriefingDeckSection,
+  section: BriefingSection,
   title: string,
   headers: string[],
   rows: SlideCell[][],
