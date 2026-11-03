@@ -64,8 +64,11 @@
   word-break: break-all;
 }
 
-/* Wide names (weapons, radio names) scroll inside this frame instead of widening the phone page. */
+/* Wide names (weapons, radio names) scroll inside this frame instead of widening the phone page. It is positioned,
+   so visually hidden labels inside cannot widen the page either (see overview.css). */
 .lineup-table-scroll {
+  position: relative;
+  min-width: 0;
   max-width: 100%;
   overflow-x: auto;
 }

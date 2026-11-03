@@ -119,7 +119,11 @@ function CrossingRow({ flight, threats }: { flight: Flight; threats: CrossingThr
 
   return (
     <li className="threats-crossing">
-      <p><strong>{flight.callsign}</strong> <span className="threats-muted">{flight.name}</span></p>
+      <p>
+        <strong>{flight.callsign}</strong>
+        {/* A group without a callsign already shows its name as the callsign (normalizer): not twice. */}
+        {flight.name.trim() !== flight.callsign.trim() && <> <span className="threats-muted">{flight.name}</span></>}
+      </p>
       {lines.length === 0 ? (
         <p className="threats-outside">{t('threats:crossing.outside')}</p>
       ) : (

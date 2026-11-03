@@ -377,6 +377,19 @@ describe('WingmanCard', () => {
     expect(container.querySelector('.wingman-point-position')?.textContent).toBe('2 / 2');
   });
 
+  it('writes no time for a later point whose ETA is 0, and keeps the mission start on the first point', async () => {
+    const flight = blueFlight();
+    flight.route[1] = { ...flight.route[1], eta: 0 };
+    writeWingmanSlot(SLOT);
+    await render(makeMission([flight]), <WingmanCard flight={flight} />);
+
+    const eta = () => Array.from(container.querySelectorAll('.wingman-point-facts > div'))
+      .find(row => row.querySelector('dt')?.textContent === 'ETA')?.querySelector('dd')?.textContent;
+    expect(eta()).toMatch(/\d\d:\d\d:\d\d/);
+    await click(buttonByText('次の点'));
+    expect(eta()).toBe('-');
+  });
+
   it('shows the leg from each point to the next one, and says the last point has none (the route stores the leg on the arrival point)', async () => {
     const flight = blueFlight();
     writeWingmanSlot(SLOT);

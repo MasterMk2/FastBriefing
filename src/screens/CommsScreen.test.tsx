@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useEffect } from 'react';
 import { i18nReady } from '../i18n';
+import { normalizedCallsignlessMission } from '../__tests__/callsignlessMission';
 import { makeCoalition, makeFlight, makeMission, makeSupport, makeUnit } from '../__tests__/testMission';
 import CommsScreen from './CommsScreen';
 import { mountScreen, type MountedScreen } from '../__tests__/testRender';
@@ -66,6 +67,20 @@ afterEach(async () => {
   await screen?.unmount();
   screen = null;
   localStorage.clear();
+});
+
+describe('CommsScreen with groups that have no callsign (normalized from the mission file)', () => {
+  it('gives every owner link a name: the group name of the flight or the support asset', async () => {
+    screen = await mountScreen(<CommsScreen />, normalizedCallsignlessMission(), 'creator');
+
+    const links = [...screen.container.querySelectorAll<HTMLButtonElement>('button.comms-link')];
+    expect(links.length).toBeGreaterThan(0);
+    expect(links.filter(link => (link.textContent ?? '').trim() === '')).toEqual([]);
+    const names = links.map(link => link.textContent ?? '');
+    expect(names).toContain('Chevy');
+    expect(names).toContain('Dealer');
+    expect(names.some(name => name.includes('Texaco'))).toBe(true);
+  });
 });
 
 describe('CommsScreen (P5)', () => {

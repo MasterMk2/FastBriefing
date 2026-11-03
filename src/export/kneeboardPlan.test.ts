@@ -138,6 +138,28 @@ describe('the PNG nav log has its labels (PE-8)', () => {
   });
 });
 
+describe('the nav log writes no time for a later point whose ETA is 0', () => {
+  it('keeps the mission start on the first point and leaves the unset ones out, in the table and the PNG lines', () => {
+    const pages = pagesWith({ briefingSections: ['route'], timeDisplay: 'zulu' }, view => {
+      const [first] = view.coalitions.blue.flights[0].route;
+      view.coalitions.blue.flights[0].route = [
+        { ...first, index: 1, name: 'START', eta: 0 },
+        { ...first, index: 2, name: 'PUSH', eta: 0 },
+        { ...first, index: 3, name: 'TARGET', eta: 1800 },
+      ];
+    });
+    const route = pages.find(page => page.kind === 'text' && page.section === 'route');
+    const section = route?.kind === 'text' ? route.sections[0] : undefined;
+    const etaColumn = section?.table?.header.indexOf('export:label.eta') ?? -1;
+    const etas = section?.table?.rows.map(row => row[etaColumn]) ?? [];
+    expect(etas[0]).toMatch(/^\d\d:\d\d:\d\dZ$/);
+    expect(etas[1]).toBe('-');
+    expect(etas[2]).toMatch(/^\d\d:\d\d:\d\dZ$/);
+    expect(etas[2]).not.toBe(etas[0]);
+    expect(section?.lines.filter(line => line.includes('export:label.eta: '))).toEqual(etas.map(eta => `  export:label.eta: ${eta}`));
+  });
+});
+
 describe('the flight pages carry the lineup (TI-4)', () => {
   const lead: Unit = {
     unitId: 11,

@@ -52,6 +52,7 @@
     "visibility": "視程",
     "clouds": "雲",
     "cloudBase": "基部 {{value}}",
+    "cloudsValue": "{{label}}（{{base}}）",
     "fog": "霧",
     "fogDetails": "厚さ {{thickness}}・視程 {{visibility}}",
     "dust": "砂塵",

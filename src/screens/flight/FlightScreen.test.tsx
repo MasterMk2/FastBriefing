@@ -302,6 +302,17 @@ describe('flight screen: navigation log (F3)', () => {
     expect(container.textContent).toContain(flightJa.route.col.bearing);
   });
 
+  it('writes no time for a later point whose ETA is 0, and keeps the mission start on the first point', async () => {
+    const { blue, red } = makeFlights();
+    blue[0].route[1] = { ...blue[0].route[1], eta: 0 };
+    await render({ initial: makeMission(blue, red), viewMode: 'creator', selectedKey: 'blue:1' });
+
+    const etas = Array.from(container.querySelectorAll('.route-table tbody tr .route-col-eta')).map(cell => cell.textContent);
+    expect(etas[0]).toMatch(/\d\d:\d\d:\d\d/);
+    expect(etas[1]).toBe('-');
+    expect(etas[2]).toMatch(/\d\d:\d\d:\d\d/);
+  });
+
   it('shows an unresolved point with the Unresolved mark and never a [0, 0] coordinate', async () => {
     const { blue, red } = makeFlights();
     await render({ initial: makeMission(blue, red), viewMode: 'creator', selectedKey: 'blue:1' });

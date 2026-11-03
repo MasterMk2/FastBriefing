@@ -75,3 +75,14 @@ export function formatEtaLocal(meta: MissionTimeMeta, elapsedSeconds: number): s
 export function formatEtaZulu(meta: MissionTimeMeta, elapsedSeconds: number): string {
   return formatTimeHHMMSS(missionZuluDateAt(meta, elapsedSeconds));
 }
+
+/**
+ * Whether a route point has a time to show. The first point (routeIndex 0, the array position) is the mission
+ * start, so its 0 is a real time. A later point with 0 (or less) has no ETA set in the mission editor: showing it
+ * as the mission start would be wrong in a briefing, so screens and outputs write their "not set" mark instead.
+ * The overview TOT applies the same rule (only eta > 0), and lint L6 does not measure a leg from such a point.
+ */
+export function hasEta(point: { eta: number }, routeIndex: number): boolean {
+  if (!Number.isFinite(point.eta)) return false;
+  return routeIndex === 0 || point.eta > 0;
+}

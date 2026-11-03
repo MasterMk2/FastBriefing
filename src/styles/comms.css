@@ -47,8 +47,11 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Positioned, so the visually hidden labels inside (side marks, caption) cannot widen the page (see overview.css). */
 .comms-table-wrap,
 .threats-table-wrap {
+  position: relative;
+  min-width: 0;
   overflow-x: auto;
 }
 

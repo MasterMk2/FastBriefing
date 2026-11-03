@@ -4,7 +4,7 @@ import { BRIEFING_SECTIONS, type BriefingSection } from '../utils/briefingSectio
 import { parseFlightKey } from '../utils/flightKey';
 import { calculateRouteLegs } from '../utils/routeLegs';
 import { buildMetar } from '../utils/metar';
-import { formatDateYMD, missionLocalDate, missionZuluDate } from '../utils/time';
+import { formatDateYMD, hasEta, missionLocalDate, missionZuluDate } from '../utils/time';
 
 /** Upper bound of table rows on one slide (SPEC 1.3: 1 slide at most 14 rows). */
 export const BRIEFING_ROWS_PER_SLIDE = 14;
@@ -231,7 +231,10 @@ function weatherSlide(input: BriefingSlideInput): BriefingSlide {
       { label: t('briefing:weather.visibility'), value: units.distance(weather.visibility) },
       {
         label: t('briefing:weather.clouds'),
-        value: `${cloudLabel}（${t('briefing:weather.cloudBase', { value: units.alt(weather.clouds.base) })}）`,
+        value: t('briefing:weather.cloudsValue', {
+          label: cloudLabel,
+          base: t('briefing:weather.cloudBase', { value: units.alt(weather.clouds.base) }),
+        }),
       },
       ...weatherConditionPairs(weather, units, t, 'briefing'),
     ],
@@ -301,7 +304,7 @@ function routeSlides(input: BriefingSlideInput): BriefingSlide[] {
           resolved ? units.coord(point.latlon, flight.type) : { unresolved: true, xy: point.xy },
           `${units.alt(point.alt)} ${t(`briefing:alt.${point.altType}`)}`,
           units.speed(point.speed),
-          units.time(point.eta),
+          hasEta(point, index) ? units.time(point.eta) : naText(input),
           leg ? units.distance(leg.distance) : naText(input),
           magvar,
         ];

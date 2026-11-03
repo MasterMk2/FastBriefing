@@ -185,6 +185,18 @@ describe('notes screen', () => {
     expect(container.textContent).not.toContain('RED1');
   });
 
+  it('names a flight without a group callsign once, not "Chevy — Chevy"', async () => {
+    const mission = fixtureMission();
+    // The normalizer gives a group without a callsign its group name as the callsign.
+    mission.coalitions.blue.flights = [{ ...flight(1, 'Chevy'), name: 'Chevy' }];
+    await renderNotes({ mission });
+    await click(button('フライト別'));
+    await click(button('Chevy'));
+
+    expect(container.querySelector('.notes-editor h4')?.textContent).toBe('Chevy');
+    expect(container.textContent).not.toContain('Chevy — Chevy');
+  });
+
   it('writes SMEAC text through setNotes', async () => {
     const changes: UserNotes[] = [];
     await renderNotes({ onNotesChange: notes => changes.push(notes) });

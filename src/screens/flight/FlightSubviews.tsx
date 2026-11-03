@@ -37,6 +37,7 @@ export function CommsView({ flight }: { flight: Flight }) {
             {unit.radios.length === 0 ? (
               <p className="hint">{t('flight:comms.noRadio')}</p>
             ) : (
+              <div className="flight-table-scroll">
               <table className="data-table">
                 <thead>
                   <tr>
@@ -68,6 +69,7 @@ export function CommsView({ flight }: { flight: Flight }) {
                   })}
                 </tbody>
               </table>
+              </div>
             )}
             {link && (
               <dl className={`flight-link16${!isLead && link16DiffersFromLead(link, leadLink) ? ' is-diff' : ''}`}>

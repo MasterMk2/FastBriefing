@@ -5,6 +5,7 @@ import {
   formatDateYMD,
   formatTimeHHMM,
   formatTimeHHMMSS,
+  hasEta,
   missionLocalDate,
   missionZuluDate,
 } from './time';
@@ -101,5 +102,15 @@ describe('mission time utilities', () => {
     expect(zuluEta.toISOString()).toBe('2025-05-01T05:01:01.000Z');
     expect(formatTimeHHMMSS(localEta)).toBe('09:01:01');
     expect(formatTimeHHMMSS(zuluEta)).toBe('05:01:01');
+  });
+});
+
+describe('hasEta (a route point time that can be shown)', () => {
+  it('keeps the first point at the mission start and treats a later 0 as not set', () => {
+    expect(hasEta({ eta: 0 }, 0)).toBe(true);
+    expect(hasEta({ eta: 0 }, 1)).toBe(false);
+    expect(hasEta({ eta: -3 }, 2)).toBe(false);
+    expect(hasEta({ eta: Number.NaN }, 2)).toBe(false);
+    expect(hasEta({ eta: 1800 }, 3)).toBe(true);
   });
 });

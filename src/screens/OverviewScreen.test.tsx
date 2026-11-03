@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import i18n from '../i18n';
 import { DEFAULT_SETTINGS, SETTINGS_STORAGE_KEY, SETTINGS_VERSION, SettingsProvider } from '../hooks/useSettings';
 import { i18nReady } from '../i18n';
+import { normalizedCallsignlessMission } from '../__tests__/callsignlessMission';
 import { makeAIGroup, makeSupport, makeUnit } from '../__tests__/testMission';
 import { MissionProvider } from '../shell/MissionContext';
 import { useWorkspace, WorkspaceProvider } from '../shell/workspace';
@@ -400,6 +401,42 @@ describe('OverviewScreen pre-distribution check (F5 list, the real rules)', () =
       await act(async () => { await i18n.changeLanguage('en'); });
       expect(defaults()).toContain('Unit not in reference data: UNKNOWN-X');
       expect(defaults()).not.toContain('参照データ');
+    } finally {
+      await act(async () => { await i18n.changeLanguage('ja'); });
+    }
+  });
+});
+
+describe('OverviewScreen with groups that have no callsign (normalized from the mission file)', () => {
+  it('names the flight by its group name in the TOT row, the near column and the open button', async () => {
+    await renderOverview(normalizedCallsignlessMission(), { viewMode: 'creator', side: 'blue' });
+
+    const rows = Array.from(container.querySelectorAll<HTMLTableRowElement>('.overview-tot tbody tr'));
+    expect(rows.map(row => row.cells[1].textContent)).toEqual(['Chevy', 'Dealer']);
+    expect(rows[0].querySelector('.overview-near')?.textContent).toContain('近接: Dealer');
+    expect(rows[0].querySelector('button')?.getAttribute('aria-label')).toBe('このフライトを見る（Chevy）');
+  });
+
+  it('writes the brackets of the open button and of the cloud line in the UI language', async () => {
+    await renderOverview(normalizedCallsignlessMission(), { viewMode: 'creator', side: 'blue' });
+    try {
+      await act(async () => { await i18n.changeLanguage('en'); });
+      const button = container.querySelector('.overview-tot tbody tr button');
+      expect(button?.getAttribute('aria-label')).toBe('View this flight (Chevy)');
+      const clouds = container.querySelector('#overview-weather-title')?.parentElement?.textContent ?? '';
+      expect(clouds).not.toMatch(/[（）]/);
+      expect(clouds).toMatch(/\(base [^)]+\)/);
+    } finally {
+      await act(async () => { await i18n.changeLanguage('ja'); });
+    }
+  });
+
+  it('keeps the finding text in the go-to button name in English too', async () => {
+    lintOverride.findings = [{ id: 'L99-1', code: 'L99', severity: 'warning', side: 'blue', screen: 'comms', params: {} }];
+    await renderOverview(makeMission({ blueFlights: [flight(1, 'Viper 1', [point(1, 600, [0, 0])])] }), { viewMode: 'creator', side: 'blue' });
+    try {
+      await act(async () => { await i18n.changeLanguage('en'); });
+      expect(buttonByText('Go to this place').getAttribute('aria-label')).toBe('Go to this place (L99)');
     } finally {
       await act(async () => { await i18n.changeLanguage('ja'); });
     }

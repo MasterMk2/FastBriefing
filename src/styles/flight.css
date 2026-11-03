@@ -265,7 +265,10 @@
   min-height: var(--target-desktop);
 }
 
+/* Positioned, so the visually hidden caption and headers inside cannot widen the page (see overview.css). */
 .route-table-wrap {
+  position: relative;
+  min-width: 0;
   overflow-x: auto;
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -461,6 +464,15 @@
   font-size: var(--fs-table);
 }
 
+/* The radio table scrolls inside this frame on a phone instead of widening the page; positioned, so visually
+   hidden labels inside cannot widen it either (see overview.css). */
+.flight-table-scroll {
+  position: relative;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
 .flight-comms tr.is-diff td {
   background: var(--warning-bg);
 }
@@ -492,6 +504,8 @@
 }
 
 .flight-roster {
+  position: relative;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 6px;

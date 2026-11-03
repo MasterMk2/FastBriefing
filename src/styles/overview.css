@@ -226,7 +226,11 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* The frame is positioned so the visually hidden labels in the table (position: absolute) stay inside it:
+   without it they take the page as their containing block and widen the page on a phone. */
 .overview-table-wrap {
+  position: relative;
+  min-width: 0;
   max-width: 100%;
   overflow-x: auto;
 }

@@ -124,11 +124,6 @@
   .shell-main {
     padding-bottom: 16px;
   }
-
-  .bottom-tabs,
-  .bottom-sheet {
-    display: none;
-  }
 }
 
 /* Left rail items */
@@ -318,6 +313,15 @@
   font: inherit;
   text-align: left;
   cursor: pointer;
+}
+
+/* Wide screens use the left rail instead. This block stays after the bottom tab rules, which set display:
+   with the same specificity, a rule written earlier would lose and both navigations would show. */
+@media (min-width: 1280px) {
+  .bottom-tabs,
+  .bottom-sheet {
+    display: none;
+  }
 }
 
 /* Segmented choice */

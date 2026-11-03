@@ -9,6 +9,7 @@ import { useWorkspace } from '../../shell/workspace';
 import type { Flight, LegInfo, MissionData, RoutePoint, Side, Unit } from '../../types/mission';
 import { formatLegDuration } from '../../utils/routeLegs';
 import { flightKey } from '../../utils/flightKey';
+import { hasEta } from '../../utils/time';
 import { isWingmanUnit, sideOfFlight, useWingmanSlot, writeWingmanSlot, type WingmanSlot } from '../../utils/wingmanSlot';
 
 // The aircraft chosen as "自機" on this device (F4). On the flight that holds it, the
@@ -217,7 +218,7 @@ function WingmanDetail({ flight, unit, onClear }: WingmanDetailProps) {
                 </div>
                 <div>
                   <dt>{t('wingman:card.eta')}</dt>
-                  <dd className="num">{units.time(point.eta)}</dd>
+                  <dd className="num">{hasEta(point, index) ? units.time(point.eta) : '-'}</dd>
                 </div>
                 <div className="wingman-point-leg">
                   <dt>{t('wingman:card.leg')}</dt>

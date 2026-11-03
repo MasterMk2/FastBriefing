@@ -612,7 +612,10 @@ path.map-stroke-preview {
   gap: 12px;
 }
 
+/* Positioned, so visually hidden labels inside cannot widen the page (see overview.css). */
 .map-dcs-table-wrap {
+  position: relative;
+  min-width: 0;
   overflow: auto;
   max-height: calc(100vh - 220px);
   border: 1px solid var(--border);

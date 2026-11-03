@@ -52,6 +52,7 @@
     "visibility": "Visibility",
     "clouds": "Clouds",
     "cloudBase": "base {{value}}",
+    "cloudsValue": "{{label}} ({{base}})",
     "fog": "Fog",
     "fogDetails": "Thickness {{thickness}}, visibility {{visibility}}",
     "dust": "Dust",

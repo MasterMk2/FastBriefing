@@ -353,7 +353,10 @@
   color: var(--warning-text);
 }
 
+/* Positioned, so visually hidden labels inside cannot widen the page (see overview.css). */
 .revision-table-scroll {
+  position: relative;
+  min-width: 0;
   max-width: 100%;
   overflow-x: auto;
   border: 1px solid var(--border);

@@ -8,7 +8,7 @@ import { getMoonInfo, getSunTimes } from '../utils/astro';
 import { buildMetar } from '../utils/metar';
 import { PROJECTIONS, formatCoordinate, resolveCoordinateFormat } from '../utils/coordinates';
 import { buildMissionMapScene } from '../utils/missionMapRaster';
-import { formatDateYMD, formatEtaLocal, formatEtaZulu, formatTimeHHMM, formatUtcOffset, missionLocalDate, missionZuluDate } from '../utils/time';
+import { formatDateYMD, formatEtaLocal, formatEtaZulu, formatTimeHHMM, formatUtcOffset, hasEta, missionLocalDate, missionZuluDate } from '../utils/time';
 import { formatAltitude, formatDistance, formatPressure, formatSpeed, formatTemperature } from '../utils/units';
 import { waypointAnnotationKey } from '../utils/waypointAnnotations';
 import type { ExportFlight, ExportPlan } from './exportPlan';
@@ -294,7 +294,7 @@ function routePages(input: PagePlanInput, t: KneeboardTranslate): KneeboardPage[
   }
   return input.flights.flatMap(({ flight, side }) => {
     // Every route point gets a row; the renderer paginates long tables (SPEC F3: rows = route points).
-    const rows = flight.route.map(point => routeRow(point, flight, input, t));
+    const rows = flight.route.map((point, routeIndex) => routeRow(point, routeIndex, flight, input, t));
     if (rows.length === 0) {
       // A flight without route points has no table to draw: say so instead of an empty table.
       return [textPage('route', `${t('export:sections.route')}: ${flight.callsign || flight.name}`, [
@@ -340,9 +340,10 @@ function routeLines(header: readonly string[], rows: readonly string[][]): strin
   ]);
 }
 
-function routeRow(point: RoutePoint, flight: Flight, input: PagePlanInput, t: KneeboardTranslate): string[] {
+function routeRow(point: RoutePoint, routeIndex: number, flight: Flight, input: PagePlanInput, t: KneeboardTranslate): string[] {
   const { settings, view } = input;
-  const eta = missionTimeText(view.meta, point.eta, settings.timeDisplay);
+  // A later point without an ETA is written as not set, not as the mission start (the first point keeps its 0).
+  const eta = hasEta(point, routeIndex) ? missionTimeText(view.meta, point.eta, settings.timeDisplay) : '-';
   const altitude = `${formatAltitude(point.alt, settings.altitudeUnit)} ${point.altType === 'RADIO' ? 'AGL' : 'MSL'}`;
   const leg = point.leg;
   const bearing = leg

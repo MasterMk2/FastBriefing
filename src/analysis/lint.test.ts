@@ -11,6 +11,7 @@ import {
   makeSupport,
   makeUnit,
 } from '../__tests__/testMission';
+import { normalizedCallsignlessMission } from '../__tests__/callsignlessMission';
 import { applyViewMode } from '../utils/viewMode';
 import { conflictAnchor, detectMainFrequencyConflicts } from './frequencyConflicts';
 
@@ -256,6 +257,24 @@ describe('lintMission L6 ETA mismatch (info, method unverified)', () => {
 
   it('skips legs where the ETA is not set', () => {
     expect(etaMismatchPoints(route(0))).toEqual([]);
+  });
+
+  it('does not measure a leg from a later point whose ETA is not set (screens show it as unset, not as the start)', () => {
+    // Start 0, IP unset (0), TARGET 1800 s: the IP -> TARGET leg is 10 km, but the 1800 s since the start are not its time.
+    const withUnsetPoint = [
+      makeRoutePoint({ index: 1, xy: [0, 0], speed: 200, eta: 0 }),
+      makeRoutePoint({ index: 2, xy: [350000, 0], speed: 200, eta: 0 }),
+      makeRoutePoint({ index: 3, xy: [360000, 0], speed: 200, eta: 1800 }),
+    ];
+    expect(etaMismatchPoints(withUnsetPoint)).toEqual([]);
+  });
+});
+
+describe('lintMission L2 with group names standing in for callsigns', () => {
+  it('does not flag flights that have no group callsign (each takes its own group name)', () => {
+    const mission = normalizedCallsignlessMission();
+    expect(mission.coalitions.blue.flights.map(flight => flight.callsign)).toEqual(['Chevy', 'Dealer']);
+    expect(codes(lintMission(mission), 'L2')).toHaveLength(0);
   });
 });
 

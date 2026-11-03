@@ -323,7 +323,7 @@ function FlightSection({ flights, activeKey, onSelect, notes, fuelDrafts, onPatc
                   aria-pressed={key === activeKey}
                   onClick={() => onSelect(key)}
                 >
-                  {flight.callsign} — {flight.name}
+                  {flightTitle(flight)}
                 </button>
               </li>
             ))}
@@ -342,6 +342,12 @@ function FlightSection({ flights, activeKey, onSelect, notes, fuelDrafts, onPatc
       )}
     </section>
   );
+}
+
+/** "callsign — group name"; only one of them when the group has no callsign (the normalizer then gives its name). */
+function flightTitle(flight: Flight): string {
+  const name = flight.name.trim();
+  return !name || name === flight.callsign.trim() ? flight.callsign : `${flight.callsign} — ${flight.name}`;
 }
 
 function FlightEditor({ flightKey, flight, value, fuelDrafts, onPatch, onFuel }: {
@@ -384,7 +390,7 @@ function FlightEditor({ flightKey, flight, value, fuelDrafts, onPatch, onFuel }:
 
   return (
     <div className="notes-editor">
-      <h4>{flight.callsign} — {flight.name}</h4>
+      <h4>{flightTitle(flight)}</h4>
       <Field label={t('notes:flights.pilotName')}>
         {id => (
           <input

@@ -18,6 +18,7 @@
     "title": "配布前チェック",
     "none": "問題はありません（確認した規則 {{count}} 件）",
     "goto": "この箇所へ",
+    "gotoFinding": "この箇所へ（{{text}}）",
     "severity": {
       "error": "エラー",
       "warning": "注意",
@@ -35,6 +36,7 @@
     "visibility": "視程",
     "clouds": "雲",
     "cloudBase": "基部 {{value}}",
+    "cloudsValue": "{{label}}（{{base}}）",
     "fog": "霧",
     "fogDetails": "厚さ {{thickness}}・視程 {{visibility}}",
     "dust": "砂塵",
@@ -81,6 +83,7 @@
     "nearRule": "近接は、時刻の差が 60 秒以内かつ距離が 1000 m 以内の、別のフライトの点どうしです。",
     "dayShift": "+{{count}} 日",
     "open": "このフライトを見る",
+    "openFlight": "このフライトを見る（{{callsign}}）",
     "empty": "時刻のある経路点はありません",
     "zeroEta": "時刻が 0 の点 {{count}} 件は一覧から外しています",
     "zeroEta_one": "時刻が 0 の点 {{count}} 件は一覧から外しています",

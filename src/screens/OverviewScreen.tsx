@@ -191,7 +191,7 @@ export default function OverviewScreen() {
                     <button
                       type="button"
                       className="overview-link-button"
-                      aria-label={`${t('overview:lint.goto')}（${text}）`}
+                      aria-label={t('overview:lint.gotoFinding', { text })}
                       onClick={() => openFinding(finding)}
                     >
                       {t('overview:lint.goto')}
@@ -213,7 +213,12 @@ export default function OverviewScreen() {
             <div><dt>{t('overview:weather.visibility')}</dt><dd>{units.distance(weather.visibility)}</dd></div>
             <div>
               <dt>{t('overview:weather.clouds')}</dt>
-              <dd>{cloudLabel}（{t('overview:weather.cloudBase', { value: units.alt(weather.clouds.base) })}）</dd>
+              <dd>
+                {t('overview:weather.cloudsValue', {
+                  label: cloudLabel,
+                  base: t('overview:weather.cloudBase', { value: units.alt(weather.clouds.base) }),
+                })}
+              </dd>
             </div>
             {weatherConditionPairs(weather, units, translate, 'overview').map(pair => (
               <div key={pair.label}>
@@ -364,7 +369,7 @@ export default function OverviewScreen() {
                           <button
                             type="button"
                             className="overview-link-button"
-                            aria-label={`${t('overview:tot.open')}（${row.callsign}）`}
+                            aria-label={t('overview:tot.openFlight', { callsign: row.callsign })}
                             onClick={() => jumpTo('flights', { flightKey: row.flightKey })}
                           >
                             {t('overview:tot.open')}

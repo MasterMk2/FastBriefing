@@ -10,6 +10,7 @@
 import type { Airbase, DisplaySettings, Flight, MissionData, RoutePoint, Side, SupportAsset } from '../types/mission';
 import type { LintFinding } from '../types/lint';
 import { flightKey } from '../utils/flightKey';
+import { hasEta } from '../utils/time';
 import { defaultSide } from '../utils/viewMode';
 import { conflictAnchor, conflictSide, detectMainFrequencyConflicts } from './frequencyConflicts';
 import { isPositionResolved, type PositionLike } from './position';
@@ -264,14 +265,16 @@ function ruleEtaMismatch(mission: MissionData): LintFinding[] {
 /**
  * Route points whose leg does not match its ETA. A leg is skipped when the
  * ETA does not increase (ETA not set) or the speed is not positive, because
- * nothing can be compared then.
+ * nothing can be compared then. A leg that starts at a later point without an
+ * ETA (hasEta: the screens show it as not set) is skipped too: the time since
+ * the mission start is not the time of that one leg.
  */
 export function etaMismatchPoints(route: RoutePoint[]): RoutePoint[] {
   const result: RoutePoint[] = [];
   for (let i = 1; i < route.length; i += 1) {
     const previous = route[i - 1];
     const current = route[i];
-    if (!Number.isFinite(previous.eta) || !Number.isFinite(current.eta)) continue;
+    if (!hasEta(previous, i - 1) || !hasEta(current, i)) continue;
     const etaDifference = current.eta - previous.eta;
     if (etaDifference <= 0) continue;
     if (!(current.speed > 0)) continue;

@@ -233,7 +233,10 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Positioned, so visually hidden labels inside cannot widen the page (see overview.css). */
 .briefing-table-wrap {
+  position: relative;
+  min-width: 0;
   max-width: 100%;
   overflow-x: auto;
 }

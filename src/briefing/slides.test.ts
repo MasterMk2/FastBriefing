@@ -242,6 +242,22 @@ describe('buildBriefingSlides (F8)', () => {
     expect(slides[2].title).toBe('briefing:route.title');
   });
 
+  it('leaves the brackets of the cloud line to the translation (no Japanese brackets in English)', () => {
+    const [slide] = buildBriefingSlides(input(makeMission(), { sections: new Set(['weather']) }));
+    const clouds = slide.pairs?.find(pair => pair.label === 'briefing:weather.clouds');
+    expect(clouds?.value).toBe('briefing:weather.cloudsValue');
+  });
+
+  it('writes no time for a later navlog point whose ETA is 0, and keeps the mission start on the first point', () => {
+    const mission = makeMission({
+      blue: [flight(1, 'Viper 1', [point(0, 0), point(1, 0), point(2, 1800), point(3, -5)])],
+    });
+
+    const [slide] = buildBriefingSlides(input(mission, { sections: new Set(['route']) }));
+
+    expect(cellsOfTable(slide).map(row => row[5])).toEqual(['T0', 'briefing:notAvailable', 'T1800', 'briefing:notAvailable']);
+  });
+
   it('draws unresolved navlog positions as unresolved cells, not as coordinates', () => {
     const mission = makeMission({
       blue: [flight(1, 'Viper 1', [point(0, 60, false), point(1, 120)])],

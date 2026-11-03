@@ -4,6 +4,7 @@ import type { IssueCode, MissionData } from '../types/mission';
 import utcOffsetData from '../data/utcOffsets.json';
 import { formatTimeHHMM, missionLocalDate, missionZuluDate } from '../utils/time';
 import { calculateBearing, calculateDistance } from '../utils/coordinates';
+import { normalizedCallsignlessMission } from '../__tests__/callsignlessMission';
 
 type IssueFilter = Record<string, string | number>;
 
@@ -1026,5 +1027,22 @@ describe('new theatre projection integration', () => {
     expect(normalized.coalitions.blue.flights[0].route[0].latlonResolved).toBe(true);
     expect(normalized.issues.some(issue => issue.code === 'map.unsupported')).toBe(false);
     expect(hasIssue(normalized, 'magvar.unsupported', { theatre })).toBe(true);
+  });
+});
+
+describe('groups without a group callsign', () => {
+  it('give the flight, tanker and AWACS their group name as the callsign, never an empty one', () => {
+    const blue = normalizedCallsignlessMission().coalitions.blue;
+    expect(blue.flights.map(flight => flight.callsign)).toEqual(['Chevy', 'Dealer']);
+    expect(blue.support.map(asset => [asset.kind, asset.callsign])).toEqual([['tanker', 'Texaco'], ['awacs', 'Overlord']]);
+  });
+
+  it('do not turn a callsign table without a name into "[object Object]"', () => {
+    const mission = makeMission();
+    const flight = (mission.mission.coalition.blue as { country: Array<{ plane: Array<{ group: Array<Record<string, unknown>> }> }> })
+      .country[0].plane[0].group[0];
+    flight.name = 'Nameless';
+    flight.callsign = { 1: 7, 2: 1, 3: 1 };
+    expect(normalizeMission(mission, settings).coalitions.blue.flights[0].callsign).toBe('Nameless');
   });
 });

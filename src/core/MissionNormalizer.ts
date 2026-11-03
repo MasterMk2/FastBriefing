@@ -530,10 +530,11 @@ function normalizeFlights(
 
       const hidden = getValue(groupData, ['hidden']) === true;
       const groupIssues: MissionIssue[] = [];
+      const name = resolveDictKey(getString(groupData, ['name']), dictionary);
       flights.push({
         groupId: getNumber(groupData, ['groupId']),
-        name: resolveDictKey(getString(groupData, ['name']), dictionary),
-        callsign: normalizeCallsign(getValue(groupData, ['callsign']), dictionary),
+        name,
+        callsign: groupCallsign(groupData, dictionary),
         type: getString(units[0] as Record<string, unknown>, ['type']),
         task: resolveDictKey(getString(groupData, ['task']), dictionary),
         frequency: getNumber(groupData, ['frequency']),
@@ -550,9 +551,19 @@ function normalizeFlights(
   return flights;
 }
 
+/**
+ * The callsign of a group, or its group name when the group has none. DCS often keeps the callsign on the units
+ * only, so the group table has none; every screen and output then shows the group name instead of an empty cell.
+ */
+function groupCallsign(groupData: Record<string, unknown>, dictionary: Record<string, string>): string {
+  return normalizeCallsign(getValue(groupData, ['callsign']), dictionary)
+    || resolveDictKey(getString(groupData, ['name']), dictionary);
+}
+
 function normalizeCallsign(callsign: unknown, dictionary: Record<string, string>): string {
   if (!callsign) return '';
   if (typeof callsign === 'number') return String(callsign);
+  if (typeof callsign === 'string') return resolveDictKey(callsign, dictionary);
   if (typeof callsign === 'object') {
     const c = callsign as Record<string, unknown>;
     if (c.name) return resolveDictKey(getString(c, ['name']), dictionary);
@@ -561,7 +572,8 @@ function normalizeCallsign(callsign: unknown, dictionary: Record<string, string>
       if (name) return resolveDictKey(name, dictionary);
     }
   }
-  return String(callsign);
+  // A table without a name (only the numeric slots) has no readable callsign: never "[object Object]".
+  return '';
 }
 
 function normalizeUnits(units: unknown[], dictionary: Record<string, string>, _theatre: string, issues: MissionIssue[]): Unit[] {
@@ -823,7 +835,7 @@ function normalizeTanker(groupData: Record<string, unknown>, dictionary: Record<
   
   return {
     kind: 'tanker',
-    callsign: normalizeCallsign(getValue(groupData, ['callsign']), dictionary),
+    callsign: groupCallsign(groupData, dictionary),
     frequency: getNumber(groupData, ['frequency']),
     position: [x, y],
     ...coordinate,
@@ -849,7 +861,7 @@ function normalizeAWACS(groupData: Record<string, unknown>, dictionary: Record<s
   
   return {
     kind: 'awacs',
-    callsign: normalizeCallsign(getValue(groupData, ['callsign']), dictionary),
+    callsign: groupCallsign(groupData, dictionary),
     frequency: getNumber(groupData, ['frequency']),
     position: [x, y],
     ...coordinate,
@@ -873,7 +885,7 @@ function normalizeCarrier(groupData: Record<string, unknown>, dictionary: Record
   
   return {
     kind: 'carrier',
-    callsign: normalizeCallsign(getValue(groupData, ['callsign']), dictionary) || resolveDictKey(getString(groupData, ['name']), dictionary),
+    callsign: groupCallsign(groupData, dictionary),
     frequency: getNumber(groupData, ['frequency']),
     position: [x, y],
     ...coordinate,

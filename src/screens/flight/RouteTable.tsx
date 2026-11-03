@@ -15,6 +15,7 @@ import WaypointAnnotationEditor from '../../components/WaypointAnnotationEditor'
 import { formatLegDuration } from '../../utils/routeLegs';
 import { resolveCoordinateFormat } from '../../utils/coordinates';
 import { flightKey } from '../../utils/flightKey';
+import { hasEta } from '../../utils/time';
 import { waypointAnnotationKey } from '../../utils/waypointAnnotations';
 import { annotationFieldCount, isResolvedPoint } from './flightModel';
 
@@ -243,7 +244,7 @@ function renderRouteCell({ column, point, routeIndex, selected, flight, side, no
     case 'speed':
       return units.speed(point.speed);
     case 'eta':
-      return units.time(point.eta);
+      return hasEta(point, routeIndex) ? units.time(point.eta) : '-';
     case 'leg':
       return leg ? units.distance(leg.distance) : '-';
     case 'bearing':
