@@ -5,6 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 import { SettingsProvider } from './hooks/useSettings';
 import { i18nReady } from './i18n';
+import { readExportScope, setExportScope } from './export/exportPlan';
+import { readNoteDrafts, writeNoteDraft } from './screens/flight/noteDrafts';
 
 const mocks = vi.hoisted(() => ({ parse: vi.fn(), cancel: vi.fn() }));
 vi.mock('./core/MissionParser', async importOriginal => ({
@@ -201,5 +203,30 @@ describe('two-file revision UI', () => {
     await act(async () => { [...band!.querySelectorAll<HTMLButtonElement>('button')][1].click(); });
     expect(container.querySelector('.app-error')).toBeNull();
     expect(mission()).toBe('new');
+  });
+});
+
+describe('app shell inputs and closing a mission', () => {
+  it('keeps the hidden file inputs out of the Tab order and of the accessibility tree (A11Y-4)', () => {
+    for (const id of ['file-input', 'compare-file-input']) {
+      const element = container.querySelector<HTMLInputElement>(`#${id}`);
+      expect(element?.tabIndex, id).toBe(-1);
+      expect(element?.getAttribute('aria-hidden'), id).toBe('true');
+    }
+  });
+
+  it('drops the export target and the unsaved flight notes when the mission is closed (W5)', async () => {
+    mocks.parse.mockResolvedValueOnce(parsed('kept'));
+    await choose([file('kept.miz')]);
+    expect(mission()).toBe('kept');
+    setExportScope('kept', { kind: 'side', side: 'red' });
+    writeNoteDraft('kept', 'blue:1', { joker: '12' });
+
+    await click('ファイル ▾');
+    await click('ミッションを閉じる');
+
+    expect(mission()).toBeUndefined();
+    expect(readExportScope('kept')).toEqual({ kind: 'mission' });
+    expect(readNoteDrafts('kept')).toEqual({});
   });
 });

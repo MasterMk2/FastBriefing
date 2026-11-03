@@ -4,6 +4,8 @@ import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SettingsProvider } from '../hooks/useSettings';
 import { i18nReady } from '../i18n';
+import exportJa from '../i18n/locales/ja/export.json';
+import settingsJa from '../i18n/locales/ja/settings.json';
 import shellJa from '../i18n/locales/ja/shell.json';
 import { fixtureMission } from '../export/__tests__/fixture';
 import { resetExportScope } from '../export/exportPlan';
@@ -264,6 +266,31 @@ describe('export screen actions', { timeout: 60_000 }, () => {
       container.querySelector<HTMLButtonElement>('button[aria-label="Strike 削除"]')?.click();
     });
     expect(container.querySelector('.export-preset-list')?.textContent).not.toContain('Strike');
+  });
+
+  it('says so when a preset or a section change cannot be stored, instead of "saved" (i18n-state-4)', async () => {
+    await renderShell();
+    await openExport();
+    const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('quota');
+    });
+    try {
+      const nameInput = container.querySelector<HTMLInputElement>('.export-preset-save input');
+      if (!nameInput) throw new Error('preset name input not rendered');
+      await typeInto(nameInput, 'Strike');
+      await act(async () => {
+        container.querySelector<HTMLButtonElement>('.export-preset-save button')?.click();
+      });
+      expect(container.textContent).toContain(exportJa.ui.presetUnsaved);
+      expect(container.textContent).not.toContain(exportJa.ui.presetSaved);
+
+      await act(async () => {
+        sectionRow('通信').querySelector<HTMLInputElement>('input')?.click();
+      });
+      expect(container.textContent).toContain(settingsJa.unsaved);
+    } finally {
+      setItem.mockRestore();
+    }
   });
 
   it('moves a section up and down in the order of the output', async () => {

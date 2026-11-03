@@ -42,12 +42,9 @@ function FlightScreenBody() {
   const ownFlights = view.coalitions[side].flights;
   const opposing: Side = side === 'blue' ? 'red' : 'blue';
   const opposingFlights = viewMode === 'creator' ? view.coalitions[opposing].flights : [];
-  // The notes screen can select a neutral flight (creator view), so the picker lists them too and never shows
-  // "none" while a neutral flight's details are on screen (W9). Pilot view has no neutral flights (D1).
-  const neutralFlights = viewMode === 'creator' ? view.coalitions.neutral.flights : [];
   const hasClient = ownFlights.some(isClientFlight);
   // Empty guidance is shown only when no flight can be chosen at all (the flight screen opens on a selection, T7).
-  const selectableCount = ownFlights.length + opposingFlights.length + neutralFlights.length;
+  const selectableCount = ownFlights.length + opposingFlights.length;
 
   const choose = (event: ChangeEvent<HTMLSelectElement>) => {
     setFlightKey(event.target.value === '' ? null : event.target.value);
@@ -78,15 +75,6 @@ function FlightScreenBody() {
               <optgroup label={t(`shell:side.${opposing}`)}>
                 {opposingFlights.map(flight => (
                   <option key={flight.groupId} value={flightKey(opposing, flight.groupId)}>
-                    {flight.callsign || flight.name} · {flight.type}
-                  </option>
-                ))}
-              </optgroup>
-            )}
-            {neutralFlights.length > 0 && (
-              <optgroup label={t('shell:side.neutral')}>
-                {neutralFlights.map(flight => (
-                  <option key={flight.groupId} value={flightKey('neutral', flight.groupId)}>
                     {flight.callsign || flight.name} · {flight.type}
                   </option>
                 ))}
