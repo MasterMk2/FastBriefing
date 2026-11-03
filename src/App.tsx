@@ -17,15 +17,20 @@ function App() {
   const [sourceFile, setSourceFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // A failure of the old-version pick (F10). It has its own band, so the open mission is never reset from it.
+  const [compareError, setCompareError] = useState<string | null>(null);
   const [revisions, setRevisions] = useState<[LoadedRevision, LoadedRevision] | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [storageFailed, setStorageFailed] = useState(false);
   const { settings } = useSettings();
   const { t } = useTranslation();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const compareInputRef = useRef<HTMLInputElement>(null);
   const dragCounterRef = useRef(0);
   const loaderRef = useRef(new MissionBatchLoader(() => new MissionParser()));
   const parseGenerationRef = useRef(0);
+  // The revision snapshot of the open file, so that comparing parses only the older file (F10).
+  const latestSnapshotRef = useRef<LoadedRevision | null>(null);
 
   useEffect(() => {
     if (typeof document === 'undefined') return;
@@ -41,6 +46,7 @@ function App() {
     const files = Array.from(fileList);
     const generation = ++parseGenerationRef.current;
     loaderRef.current.cancel();
+    setCompareError(null);
     const validationError = validateMissionFiles(files);
     if (validationError) {
       setLoading(false);
@@ -59,6 +65,7 @@ function App() {
         const normalized = normalizeMission(parsed[parsed.length - 1], settings);
         normalized.userNotes = readStoredNotes(missionKey) ?? emptyUserNotes(missionKey);
         const snapshots = parsed.map((mission, index) => ({ name: files[index].name, fingerprint: mission.sourceFingerprint, revision: createMissionRevision(mission) }));
+        latestSnapshotRef.current = snapshots[snapshots.length - 1] ?? null;
         setStorageFailed(false);
         setMissionData(normalized);
         setSourceFile(latestFile);
@@ -142,6 +149,45 @@ function App() {
     if (files.length) handleFiles(files);
   }, [handleFiles]);
 
+  /** The old version of a comparison: only that file is parsed; the open mission stays as it is (F10). */
+  const handleCompareSelect = useCallback((event: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files ?? []);
+    event.target.value = '';
+    const current = latestSnapshotRef.current;
+    if (files.length === 0 || !current) return;
+    const [file] = files;
+    setError(null);
+    setCompareError(null);
+    const validationError = validateMissionFiles([file]);
+    if (validationError) {
+      setCompareError(t(`legacy:app.${validationError}`));
+      return;
+    }
+    const generation = ++parseGenerationRef.current;
+    loaderRef.current.cancel();
+    setLoading(true);
+    void (async () => {
+      try {
+        const parsed = await loaderRef.current.load([file]);
+        if (!parsed || parseGenerationRef.current !== generation) return;
+        const before: LoadedRevision = {
+          name: file.name,
+          fingerprint: parsed[0].sourceFingerprint,
+          revision: createMissionRevision(parsed[0]),
+        };
+        setRevisions([before, current]);
+      } catch (err) {
+        if (parseGenerationRef.current === generation && !isAbortError(err)) {
+          const message = err instanceof Error ? err.message : '';
+          const translationKey = missionLoadErrorTranslationKey(err);
+          setCompareError(message ? t(`legacy:${translationKey}`, { message }) : t('legacy:app.parseError'));
+        }
+      } finally {
+        if (parseGenerationRef.current === generation) setLoading(false);
+      }
+    })();
+  }, [t]);
+
   const openFilePicker = useCallback(() => {
     fileInputRef.current?.click();
   }, []);
@@ -151,14 +197,27 @@ function App() {
     openFilePicker();
   }, [openFilePicker]);
 
+  /** Opens the comparison input (the old version), never the picker that replaces the mission (F10). */
+  const openComparePicker = useCallback(() => {
+    compareInputRef.current?.click();
+  }, []);
+
+  /** Chooses the old version again. */
+  const handleRetryCompare = useCallback(() => {
+    setCompareError(null);
+    openComparePicker();
+  }, [openComparePicker]);
+
   const resetMission = useCallback(() => {
     loaderRef.current.cancel();
     parseGenerationRef.current += 1;
     setLoading(false);
     setError(null);
+    setCompareError(null);
     setMissionData(null);
     setSourceFile(null);
     setRevisions(null);
+    latestSnapshotRef.current = null;
   }, []);
 
   return (
@@ -172,6 +231,15 @@ function App() {
         id="file-input"
         className="visually-hidden"
         aria-label={t('app.selectMiz')}
+      />
+      <input
+        ref={compareInputRef}
+        type="file"
+        accept=".miz"
+        onChange={handleCompareSelect}
+        id="compare-file-input"
+        className="visually-hidden"
+        aria-label={t('revision:pickOld')}
       />
 
       <AppShell
@@ -193,12 +261,21 @@ function App() {
         </div>
       )}
 
-      {error && (
+      {(compareError ?? error) && (
         <div className="error app-error" role="alert">
-          <p>{error}</p>
+          <p>{compareError ?? error}</p>
           <div className="error-actions">
-            <button type="button" className="btn btn-secondary" onClick={handleRetrySelection}>{t('app.retry')}</button>
-            <button type="button" className="btn btn-secondary" onClick={resetMission}>{t('app.reset')}</button>
+            {compareError ? (
+              <>
+                <button type="button" className="btn btn-secondary" onClick={handleRetryCompare}>{t('revision:retryCompare')}</button>
+                <button type="button" className="btn btn-secondary" onClick={() => setCompareError(null)}>{t('revision:dismissCompare')}</button>
+              </>
+            ) : (
+              <>
+                <button type="button" className="btn btn-secondary" onClick={handleRetrySelection}>{t('app.retry')}</button>
+                <button type="button" className="btn btn-secondary" onClick={resetMission}>{t('app.reset')}</button>
+              </>
+            )}
           </div>
         </div>
       )}

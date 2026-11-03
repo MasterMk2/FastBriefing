@@ -1,1 +1,425 @@
-/* Owner: see src/styles/index.css. Package styles are added by the owning package (SPEC 7.2). */
+/* Owner: P6 (記入・改版・ファイル操作・初回画面). Notes screen (SPEC 1.3 記入), whiteboard, and the revision comparison (F10). Tokens only (SPEC 4.1). */
+
+.notes-screen {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+.notes-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.notes-header h2 {
+  margin: 0;
+  color: var(--text);
+  font-size: 1.25rem;
+}
+
+.notes-save-state {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--fs-note);
+}
+
+.notes-layout {
+  display: grid;
+  grid-template-columns: 200px minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+
+.notes-nav {
+  display: grid;
+  gap: 4px;
+  position: sticky;
+  top: 8px;
+}
+
+.notes-nav-item {
+  min-height: var(--target-desktop);
+  padding: 6px 10px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.notes-nav-item:hover {
+  background: var(--surface-1);
+}
+
+.notes-nav-item[aria-current="true"] {
+  border-color: var(--accent);
+  background: var(--surface-2);
+  font-weight: 600;
+}
+
+.notes-nav-item:focus-visible,
+.notes-flight-item:focus-visible,
+.notes-board-color:focus-visible,
+.notes-screen button:focus-visible,
+.notes-screen input:focus-visible,
+.notes-screen select:focus-visible,
+.notes-screen textarea:focus-visible,
+.notes-screen label.btn:focus-within,
+.revision-comparison button:focus-visible,
+.revision-comparison select:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.notes-body {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+.notes-section,
+.notes-board,
+.notes-editor {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.notes-section h3,
+.notes-board h3,
+.notes-editor h4,
+.notes-board-share h4 {
+  margin: 0;
+  color: var(--text);
+  font-size: 1.0625rem;
+}
+
+.notes-editor h4 {
+  font-size: var(--fs-body);
+}
+
+.notes-section .hint,
+.notes-board .hint,
+.notes-storage .hint {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--fs-note);
+}
+
+.notes-count,
+.notes-empty {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--fs-note);
+}
+
+.notes-message {
+  margin: 0;
+  color: var(--info-text);
+  font-size: var(--fs-note);
+}
+
+.notes-textarea,
+.notes-screen input[type="text"],
+.notes-screen input[type="number"],
+.notes-screen select,
+.notes-screen textarea {
+  width: 100%;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-0);
+  color: var(--text);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  box-sizing: border-box;
+}
+
+.notes-textarea {
+  min-height: 7em;
+  resize: vertical;
+  line-height: 1.6;
+}
+
+.notes-screen input[aria-invalid="true"] {
+  border-color: var(--danger-border);
+}
+
+.notes-field-error {
+  margin: 4px 0 0;
+  color: var(--danger-text);
+  font-size: var(--fs-note);
+}
+
+.notes-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.notes-screen .notice-body .btn {
+  margin-top: 8px;
+}
+
+/* Per-flight notes: the list on the left, the editor on the right. */
+.notes-flights {
+  display: grid;
+  grid-template-columns: minmax(180px, 240px) minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.notes-flight-list {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 60vh;
+  overflow: auto;
+}
+
+.notes-flight-item {
+  width: 100%;
+  min-height: var(--target-desktop);
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-0);
+  color: var(--text);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.notes-flight-item[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--surface-2);
+  font-weight: 600;
+}
+
+.notes-fuel {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+/* Whiteboard */
+.notes-board-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.notes-board-state {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--fs-note);
+}
+
+.notes-board-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.notes-board-colors {
+  display: flex;
+  gap: 6px;
+}
+
+.notes-board-color {
+  width: var(--target-desktop);
+  height: var(--target-desktop);
+  border: 2px solid var(--surface-0);
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.notes-board-color[aria-pressed="true"] {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.notes-board-width {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text);
+  font-size: var(--fs-note);
+}
+
+.notes-board-surface {
+  position: relative;
+  width: 100%;
+  max-width: 900px;
+  aspect-ratio: 16 / 9;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-0);
+  overflow: hidden;
+}
+
+.notes-board-surface svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.notes-board-input {
+  touch-action: none;
+  cursor: crosshair;
+}
+
+.notes-board-text {
+  display: grid;
+  gap: 6px;
+}
+
+.notes-board-text textarea {
+  min-height: 5em;
+  resize: vertical;
+}
+
+.notes-board-share {
+  display: grid;
+  gap: 6px;
+}
+
+/* Revision comparison (F10). Direction is fixed, so there is no swap control. */
+.revision-comparison {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.revision-comparison h2 {
+  margin: 0;
+  color: var(--text);
+  font-size: 1.25rem;
+}
+
+.revision-comparison .revision-direction,
+.revision-comparison .revision-count,
+.revision-comparison .revision-warning,
+.revision-comparison .revision-scope {
+  margin: 0;
+  font-size: var(--fs-note);
+}
+
+.revision-direction {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.revision-scope {
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+
+.revision-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.revision-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text);
+  font-size: var(--fs-note);
+}
+
+.revision-count {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.revision-warning {
+  color: var(--warning-text);
+}
+
+.revision-table-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.revision-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-table);
+  font-variant-numeric: tabular-nums;
+}
+
+.revision-table th,
+.revision-table td {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  text-align: left;
+  vertical-align: top;
+}
+
+.revision-value {
+  overflow-wrap: anywhere;
+  max-width: 320px;
+}
+
+.revision-delta {
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+@media (max-width: 767px) {
+  .notes-layout,
+  .notes-flights,
+  .notes-fuel {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .notes-nav {
+    display: flex;
+    flex-wrap: wrap;
+    position: static;
+  }
+
+  .notes-nav-item {
+    min-height: var(--target-touch);
+  }
+
+  .notes-flight-list {
+    max-height: none;
+  }
+
+  .notes-flight-item,
+  .notes-board-color {
+    min-height: var(--target-touch);
+  }
+
+  .notes-board-color {
+    width: var(--target-touch);
+    height: var(--target-touch);
+  }
+
+  .notes-board-surface {
+    aspect-ratio: auto;
+    min-height: 220px;
+  }
+}

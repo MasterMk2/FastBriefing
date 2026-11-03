@@ -1,1 +1,106 @@
-{}
+{
+  "title": "Notes",
+  "nav": {
+    "label": "Notes sections"
+  },
+  "sections": {
+    "situation": "Situation (S)",
+    "mission": "Mission (M)",
+    "execution": "Execution (E)",
+    "adminLogistics": "Admin & logistics (A)",
+    "commandSignal": "Command & signal (C)",
+    "flights": "Per flight",
+    "whiteboard": "Whiteboard",
+    "storage": "Storage"
+  },
+  "smeacHelp": "Write the five SMEAC sections as text for the briefing material.",
+  "smeac": {
+    "situation": "Situation",
+    "mission": "Mission",
+    "execution": "Execution",
+    "adminLogistics": "Admin & logistics",
+    "commandSignal": "Command & signal"
+  },
+  "status": {
+    "saved": "Changes are saved automatically on this device.",
+    "headerUnavailable": "Not saved",
+    "unavailable": "Notes cannot be saved on this device. Input stays until the page closes.",
+    "corruptTitle": "Saved notes cannot be read, so saving is stopped",
+    "corruptBody": "The original data is kept. Setting it aside keeps it in another place and starts from empty notes. Input on screen is lost when set aside, so export it first if needed.",
+    "setAside": "Set aside and start empty",
+    "setAsideDone": "Original data moved to {{key}}",
+    "setAsideFailed": "Could not set the data aside. The original data is unchanged.",
+    "previousAvailable": "A previous version with the same file name has notes",
+    "loadPrevious": "Load the previous version's notes",
+    "previousLoaded": "Loaded the previous version's notes"
+  },
+  "flights": {
+    "title": "Per-flight notes",
+    "help": "Choose a flight, then write the pilot, TOT, fuel and free notes. Notes that are all empty are not saved.",
+    "empty": "No flights can be noted in this view",
+    "pick": "Flight to note",
+    "pilotName": "Pilot",
+    "tot": "TOT",
+    "joker": "Joker (kg, provisional)",
+    "bingo": "Bingo (kg, provisional)",
+    "fuelInvalid": "Enter a number of 0 or more. This value is not saved.",
+    "customNotes": "Free notes",
+    "limit": "Notes are limited to {{count}} flights. Clear a flight's notes to add another."
+  },
+  "storage": {
+    "title": "Storage and export",
+    "help": "Notes are saved per mission in this browser. An exported JSON file can be loaded on another device.",
+    "pilotNote": "In pilot view, only the notes for the flights shown are exported. Map notes are not exported.",
+    "export": "Export notes as JSON",
+    "import": "Import notes from JSON",
+    "exported": "Notes exported",
+    "exportFailed": "Export failed",
+    "imported": "Notes imported",
+    "importFailed": "This file cannot be imported as notes for this mission"
+  },
+  "screen": {
+    "charCount": "{{count}} / {{max}} characters",
+    "board": {
+      "blockedTitle": "The saved board cannot be read, so saving is stopped",
+      "blockedBody": "The board stays on screen only. Setting it aside keeps the saved copy in another place and starts an empty board. The board on screen is lost when set aside, so export it first if needed.",
+      "setAside": "Set aside and start an empty board",
+      "setAsideDone": "Original board moved to {{key}}",
+      "setAsideFailed": "Could not set the board aside. The original board is unchanged."
+    }
+  },
+  "whiteboard": {
+    "title": "Whiteboard",
+    "description": "Draw and write on the board. Its content is saved per mission on this device.",
+    "savedLocally": "Saved on this device",
+    "memoryOnly": "Cannot be saved (lost when the page closes)",
+    "blocked": "Saving is stopped",
+    "toolbar": "Drawing tools",
+    "penColor": "Colour",
+    "selectColor": "Draw in {{color}}",
+    "penWidth": "Width",
+    "widthValue": "{{width}}",
+    "undo": "Undo last stroke",
+    "clearDrawing": "Clear all strokes",
+    "canvasLabel": "Board drawing",
+    "drawingSurface": "Drawing area (drag to draw)",
+    "pointerOnly": "Draw with a mouse or touch. From the keyboard, write in the board notes below.",
+    "colorNames": {
+      "black": "Black",
+      "red": "Red",
+      "blue": "Blue",
+      "green": "Green",
+      "orange": "Orange"
+    },
+    "strokeLimit": "This stroke reached its length limit, so nothing more is drawn past this point.",
+    "notes": "Board notes",
+    "notesHelp": "Notes kept with the board. They also appear in the exported material.",
+    "notesPlaceholder": "e.g. Push at 14:30Z, leave to the north",
+    "shareTitle": "Export or import the board",
+    "shareHelp": "An exported board can only be imported for the same mission.",
+    "exportJson": "Export board as JSON",
+    "importJson": "Import board from JSON",
+    "exported": "Board exported",
+    "imported": "Board imported",
+    "importFailed": "This board cannot be imported for this mission"
+  }
+}

@@ -66,21 +66,117 @@ export function updateFlightNotes(notes: UserNotes, key: string, value: FlightNo
   return { ...notes, perFlight };
 }
 
-export function readStoredNotes(missionKey: string): UserNotes | null {
+const INDEX_KEY = 'fastbriefing-notes-index';
+const BACKUP_PREFIX = 'fastbriefing-notes-backup:';
+/** `v1-<name fingerprint>-<length>-<content fingerprint>`: the first two parts identify the file name. */
+const MISSION_KEY_PATTERN = /^(v1-[0-9a-f]{16})-[0-9a-f]+-[0-9a-f]{16}$/;
+
+/** What the browser store holds for one mission key. Missing and broken records are different states (F11). */
+export type StoredNotesState =
+  | { kind: 'absent' }
+  | { kind: 'ok'; notes: UserNotes }
+  | { kind: 'corrupt' }
+  | { kind: 'unavailable' };
+
+export function hasNotesContent(notes: UserNotes): boolean {
+  return smeacFields.some(field => notes.smeac[field] !== '')
+    || Object.keys(notes.perFlight).length > 0
+    || Object.keys(notes.waypoints).length > 0
+    || notes.mapAnnotations.length > 0;
+}
+
+/** Reads the stored record without changing it. */
+export function inspectStoredNotes(missionKey: string): StoredNotesState {
+  let json: string | null;
   try {
-    const json = localStorage.getItem(STORAGE_PREFIX + missionKey);
-    return json ? parseNotesSidecar(json, missionKey) : null;
+    json = localStorage.getItem(STORAGE_PREFIX + missionKey);
   } catch {
-    return null;
+    return { kind: 'unavailable' };
+  }
+  if (json === null) return { kind: 'absent' };
+  try {
+    return { kind: 'ok', notes: parseNotesSidecar(json, missionKey) };
+  } catch {
+    return { kind: 'corrupt' };
   }
 }
 
+export function readStoredNotes(missionKey: string): UserNotes | null {
+  const state = inspectStoredNotes(missionKey);
+  return state.kind === 'ok' ? state.notes : null;
+}
+
+/**
+ * Writes the notes unless that would overwrite a record this code cannot read (F11).
+ * Empty notes with nothing stored are not written, so opening a file never replaces
+ * the record of its previous version.
+ */
 export function saveStoredNotes(notes: UserNotes): boolean {
+  const key = STORAGE_PREFIX + notes.missionKey;
   try {
-    localStorage.setItem(STORAGE_PREFIX + notes.missionKey, serializeNotesSidecar(notes));
+    const existing = localStorage.getItem(key);
+    if (existing === null && !hasNotesContent(notes)) return true;
+    if (existing !== null) {
+      try {
+        parseNotesSidecar(existing, notes.missionKey);
+      } catch {
+        return false;
+      }
+    }
+    localStorage.setItem(key, serializeNotesSidecar(notes));
+    if (hasNotesContent(notes)) rememberNotesVersion(notes.missionKey);
     return true;
   } catch {
     return false;
+  }
+}
+
+/**
+ * Moves a record that cannot be read under a backup key and removes the original.
+ * Returns the backup key, or null when nothing was stored. Throws when the store refuses.
+ */
+export function setAsideStoredNotes(missionKey: string, now: Date = new Date()): string | null {
+  const key = STORAGE_PREFIX + missionKey;
+  const raw = localStorage.getItem(key);
+  if (raw === null) return null;
+  const backupKey = `${BACKUP_PREFIX}${missionKey}:${now.toISOString()}`;
+  localStorage.setItem(backupKey, raw);
+  localStorage.removeItem(key);
+  return backupKey;
+}
+
+/** The latest saved version of a file with the same name and other contents (前版の注記), when it has content. */
+export function findPreviousStoredNotes(missionKey: string): UserNotes | null {
+  const prefix = notesFileIdentity(missionKey);
+  if (!prefix) return null;
+  const previousKey = readNotesIndex()[prefix];
+  if (!previousKey || previousKey === missionKey) return null;
+  const state = inspectStoredNotes(previousKey);
+  return state.kind === 'ok' && hasNotesContent(state.notes) ? state.notes : null;
+}
+
+function notesFileIdentity(missionKey: string): string | null {
+  return MISSION_KEY_PATTERN.exec(missionKey)?.[1] ?? null;
+}
+
+function readNotesIndex(): Record<string, string> {
+  try {
+    const value: unknown = JSON.parse(localStorage.getItem(INDEX_KEY) ?? '{}');
+    if (!isRecord(value)) return {};
+    return Object.fromEntries(Object.entries(value).filter((entry): entry is [string, string] => typeof entry[1] === 'string'));
+  } catch {
+    return {};
+  }
+}
+
+/** Remembers the key of the latest version that has content, per file name. The index is not user data, so a failure is ignored. */
+function rememberNotesVersion(missionKey: string): void {
+  const identity = notesFileIdentity(missionKey);
+  if (!identity) return;
+  try {
+    localStorage.setItem(INDEX_KEY, JSON.stringify({ ...readNotesIndex(), [identity]: missionKey }));
+  } catch {
+    // Keep the notes saved even when the index cannot be written.
   }
 }
 
