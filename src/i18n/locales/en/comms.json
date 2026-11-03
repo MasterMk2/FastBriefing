@@ -1,1 +1,63 @@
-{}
+{
+  "conflicts": {
+    "title": "Frequency conflicts",
+    "none": "No conflicts",
+    "count": "{{count}} conflicts",
+    "explanation": "Frequencies within {{kilohertz}} kHz with the same modulation (AM/FM) are counted as conflicts.",
+    "scope": "In creator view, the frequencies of both sides are compared together. The pre-distribution check L1 compares each side separately, so conflicts across sides appear here but not in L1."
+  },
+  "frequencyValue": "{{frequency}} MHz ({{modulation}})",
+  "types": {
+    "same-aircraft-preset": "The same frequency on another channel of the same aircraft",
+    "different-flight": "The same frequency as another flight",
+    "support": "The same frequency as a support asset"
+  },
+  "usage": {
+    "support": "Support asset frequency"
+  },
+  "table": {
+    "title": "Frequency list",
+    "caption": "{{count}} frequencies",
+    "side": "Side",
+    "owner": "Owner",
+    "channel": "Channel",
+    "usage": "Use",
+    "modulation": "Modulation",
+    "frequency": "Frequency"
+  },
+  "empty": {
+    "title": "No frequencies",
+    "body": "No flight has radio presets, and no support asset has a frequency."
+  },
+  "filter": {
+    "side": "Filter by side",
+    "modulation": "Filter by modulation",
+    "owner": "Owner",
+    "all": "All",
+    "noMatch": "No frequencies match the filter",
+    "clear": "Clear filter",
+    "shown": "Showing {{shown}} of {{total}}"
+  },
+  "sort": {
+    "label": "Sort",
+    "frequency": "By frequency",
+    "owner": "By owner"
+  },
+  "common": {
+    "title": "Common frequencies"
+  },
+  "guard": {
+    "uhf": "Guard (emergency, UHF)",
+    "vhf": "Guard (emergency, VHF)"
+  },
+  "navaid": {
+    "title": "Support TACAN and ICLS",
+    "none": "No support asset has a TACAN or ICLS",
+    "tacan": "TACAN",
+    "icls": "ICLS"
+  },
+  "atc": {
+    "title": "Air traffic control (ATC)",
+    "notRecorded": "ATC frequencies are not recorded. Airbase control frequencies are not shown on this screen."
+  }
+}

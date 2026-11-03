@@ -1,1 +1,23 @@
-{}
+{
+  "empty": {
+    "title": "支援機はありません",
+    "body": "このミッションには、給油機・AWACS・空母・JTAC が登録されていません。"
+  },
+  "none": "この陣営に支援機はありません",
+  "opposing": "相手陣営（作成者ビュー）: {{count}} 件",
+  "kinds": {
+    "tanker": "給油機",
+    "awacs": "AWACS",
+    "carrier": "空母",
+    "jtac": "JTAC"
+  },
+  "field": {
+    "frequency": "周波数",
+    "tacan": "TACAN",
+    "icls": "ICLS",
+    "altitude": "旋回高度",
+    "speed": "旋回速度",
+    "position": "位置"
+  },
+  "toComms": "通信の一覧で見る"
+}

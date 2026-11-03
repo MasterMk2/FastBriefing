@@ -1,1 +1,23 @@
-{}
+{
+  "empty": {
+    "title": "No support assets",
+    "body": "This mission has no tanker, AWACS, carrier or JTAC."
+  },
+  "none": "This side has no support assets",
+  "opposing": "Opposing side (creator view): {{count}}",
+  "kinds": {
+    "tanker": "Tanker",
+    "awacs": "AWACS",
+    "carrier": "Carrier",
+    "jtac": "JTAC"
+  },
+  "field": {
+    "frequency": "Frequency",
+    "tacan": "TACAN",
+    "icls": "ICLS",
+    "altitude": "Orbit altitude",
+    "speed": "Orbit speed",
+    "position": "Position"
+  },
+  "toComms": "Show in the comms list"
+}

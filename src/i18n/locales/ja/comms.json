@@ -1,1 +1,63 @@
-{}
+{
+  "conflicts": {
+    "title": "周波数の衝突",
+    "none": "衝突はありません",
+    "count": "{{count}} 件の衝突",
+    "explanation": "同じ変調（AM／FM）で {{kilohertz}} kHz 以内の周波数を衝突として数えます。",
+    "scope": "作成者ビューでは、両陣営の周波数をまとめて比べます。事前チェックの L1 は陣営ごとに比べるため、ここには陣営をまたぐ衝突も出ます。"
+  },
+  "frequencyValue": "{{frequency}} MHz（{{modulation}}）",
+  "types": {
+    "same-aircraft-preset": "同じ機の別のチャンネルに同じ周波数",
+    "different-flight": "別のフライトと同じ周波数",
+    "support": "支援機と同じ周波数"
+  },
+  "usage": {
+    "support": "支援機の周波数"
+  },
+  "table": {
+    "title": "周波数の一覧",
+    "caption": "周波数 {{count}} 件",
+    "side": "陣営",
+    "owner": "所属",
+    "channel": "チャンネル",
+    "usage": "用途",
+    "modulation": "変調",
+    "frequency": "周波数"
+  },
+  "empty": {
+    "title": "周波数はありません",
+    "body": "フライトに無線の設定が無く、支援機にも周波数がありません。"
+  },
+  "filter": {
+    "side": "陣営で絞り込む",
+    "modulation": "変調で絞り込む",
+    "owner": "所属",
+    "all": "すべて",
+    "noMatch": "条件に合う周波数がありません",
+    "clear": "絞り込みを解除",
+    "shown": "{{total}} 件中 {{shown}} 件を表示"
+  },
+  "sort": {
+    "label": "並び順",
+    "frequency": "周波数順",
+    "owner": "所属順"
+  },
+  "common": {
+    "title": "共通の周波数"
+  },
+  "guard": {
+    "uhf": "緊急（Guard、UHF）",
+    "vhf": "緊急（Guard、VHF）"
+  },
+  "navaid": {
+    "title": "支援機の TACAN と ICLS",
+    "none": "TACAN と ICLS を持つ支援機はありません",
+    "tacan": "TACAN",
+    "icls": "ICLS"
+  },
+  "atc": {
+    "title": "管制（ATC）",
+    "notRecorded": "管制周波数（ATC）は未収録です。飛行場ごとの管制周波数は、この画面では表示していません。"
+  }
+}
