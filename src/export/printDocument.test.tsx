@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { applyViewMode } from '../utils/viewMode';
 import type { KneeboardPage } from '../utils/kneeboard';
 import { DEFAULT_SETTINGS } from '../hooks/useSettings';
-import PrintDocument, { type PrintMapState } from './printDocument';
+import PrintDocument from './printDocument';
 import { buildExportModel } from './exportModel';
 import { fixtureMission } from './__tests__/fixture';
 
@@ -27,7 +27,7 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 
-async function render(pages: readonly KneeboardPage[], onMapStateChange?: (state: PrintMapState) => void) {
+async function render(pages: readonly KneeboardPage[], drawMaps = true) {
   await act(async () => {
     root.render(
       <PrintDocument
@@ -35,10 +35,49 @@ async function render(pages: readonly KneeboardPage[], onMapStateChange?: (state
         title="Export Test"
         viewLabel="creator"
         t={t}
-        onMapStateChange={onMapStateChange}
+        drawMaps={drawMaps}
       />,
     );
   });
+  await settle();
+}
+
+/** Lets the map draws finish (the fake image fails at once, so only a macrotask is needed). */
+async function settle() {
+  await act(async () => {
+    await new Promise(resolve => setTimeout(resolve, 0));
+  });
+}
+
+function mapPages(): KneeboardPage[] {
+  const view = applyViewMode(fixtureMission(), 'creator', 'blue');
+  const model = buildExportModel({
+    view,
+    settings: { ...DEFAULT_SETTINGS, briefingSections: ['map'], viewMode: 'creator' },
+    side: 'blue',
+    scope: { kind: 'mission' },
+    whiteboard: { notes: '', strokes: [] },
+  }, t);
+  return model.pages;
+}
+
+/** A 2D context that accepts every call. Only measureText returns a value. */
+function fakeContext(): CanvasRenderingContext2D {
+  const state: Record<string, unknown> = {
+    font: '', fillStyle: '', strokeStyle: '', lineWidth: 1, textAlign: 'start', lineCap: 'butt', lineJoin: 'miter',
+  };
+  return new Proxy(state, {
+    get(target, property) {
+      if (typeof property !== 'string') return undefined;
+      if (property === 'measureText') return (value: string) => ({ width: Array.from(value).length * 8 });
+      if (property in target) return target[property];
+      return () => undefined;
+    },
+    set(target, property, value) {
+      target[property as string] = value;
+      return true;
+    },
+  }) as unknown as CanvasRenderingContext2D;
 }
 
 describe('PrintDocument', () => {
@@ -59,28 +98,6 @@ describe('PrintDocument', () => {
     expect(cells).toEqual(['1', 'IP']);
   });
 
-  it('reports ready when there is no map page', async () => {
-    const onMapStateChange = vi.fn();
-    await render([], onMapStateChange);
-    expect(onMapStateChange).toHaveBeenLastCalledWith('ready');
-  });
-
-  it('reports an error for a map when the canvas cannot be drawn', async () => {
-    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null);
-    const onMapStateChange = vi.fn();
-    const view = applyViewMode(fixtureMission(), 'creator', 'blue');
-    const model = buildExportModel({
-      view,
-      settings: { ...DEFAULT_SETTINGS, briefingSections: ['map'], viewMode: 'creator' },
-      side: 'blue',
-      scope: { kind: 'mission' },
-      whiteboard: { notes: '', strokes: [] },
-    }, t);
-    await render(model.pages, onMapStateChange);
-    expect(onMapStateChange).toHaveBeenLastCalledWith('error');
-    expect(container.querySelector('.print-map-canvas')).not.toBeNull();
-  });
-
   it('never prints the other side in pilot view', async () => {
     const view = applyViewMode(fixtureMission(), 'pilot', 'blue');
     const model = buildExportModel({
@@ -94,6 +111,111 @@ describe('PrintDocument', () => {
     expect(container.textContent).toContain('Viper 1');
     expect(container.textContent).not.toContain('Bandit 1');
     expect(container.textContent).not.toContain('SA-10');
+  });
+});
+
+describe('PrintDocument maps (decision 7: drawn only when allowed)', () => {
+  let contexts = 0;
+  let images = 0;
+
+  beforeEach(() => {
+    contexts = 0;
+    images = 0;
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(() => {
+      contexts += 1;
+      return fakeContext();
+    });
+    // The fake image fails as soon as its source is set, so no tile request waits for the timeout.
+    vi.stubGlobal('Image', class FakeImage {
+      crossOrigin = '';
+      onload: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      url = '';
+
+      constructor() {
+        images += 1;
+      }
+
+      set src(value: string) {
+        this.url = value;
+        queueMicrotask(() => this.onerror?.());
+      }
+    });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('reads the mission without drawing: no canvas, no tile request, and a wait text', async () => {
+    await render(mapPages(), false);
+    expect(contexts).toBe(0);
+    expect(images).toBe(0);
+    expect(container.querySelector('.print-map-status')?.textContent).toBe('export:ui.mapDeferred');
+  });
+
+  it('draws the map once, and not again for the same content (an unrelated re-render)', async () => {
+    const pages = mapPages();
+    await render(pages, true);
+    const firstDraw = contexts;
+    expect(firstDraw).toBeGreaterThan(0);
+    // A new object with the same content, as the export model gives after an unrelated setting change.
+    await render(JSON.parse(JSON.stringify(pages)) as KneeboardPage[], true);
+    expect(contexts).toBe(firstDraw);
+  });
+
+  it('draws again when what the map shows changes', async () => {
+    const pages = JSON.parse(JSON.stringify(mapPages())) as KneeboardPage[];
+    await render(pages, true);
+    const firstDraw = contexts;
+    const changed = pages.map(page => (page.kind === 'map' ? { ...page, scene: { ...page.scene, basemap: false } } : page));
+    await render(changed, true);
+    expect(contexts).toBeGreaterThan(firstDraw);
+  });
+
+  it('keeps the drawn map when a page is added before it, because the same map is still shown', async () => {
+    const pages = mapPages();
+    await render(pages, true);
+    const firstDraw = contexts;
+    expect(firstDraw).toBeGreaterThan(0);
+    // A page before the map shifts its position in the list, but not what the map shows.
+    const added: KneeboardPage = {
+      kind: 'whiteboard',
+      section: 'notes',
+      title: 'Whiteboard',
+      data: { notes: 'Added before the map', strokes: [] },
+    };
+    await render([added, ...(JSON.parse(JSON.stringify(pages)) as KneeboardPage[])], true);
+    expect(contexts).toBe(firstDraw);
+  });
+
+  it('says the basemap is unavailable when the canvas cannot be drawn', async () => {
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null);
+    await render(mapPages(), true);
+    expect(container.querySelector('.print-map-canvas')).not.toBeNull();
+    expect(container.querySelector('.print-map-status')?.textContent).toBe('export:label.basemapUnavailable');
+  });
+
+  it('shows no map status for a map page with no content, because an empty map is not an error', async () => {
+    const empty: KneeboardPage = {
+      kind: 'map',
+      section: 'map',
+      title: 'Map',
+      scene: {
+        theatre: 'Caucasus',
+        routes: [],
+        zones: [],
+        drawings: [],
+        support: [],
+        threats: [],
+        userPins: [],
+        userStrokes: [],
+        unprojectableMapAnnotations: 0,
+      },
+    };
+    await render([empty], true);
+    expect(container.querySelector('.print-map-canvas')).not.toBeNull();
+    expect(container.querySelector('.print-map-status')).toBeNull();
   });
 });
 

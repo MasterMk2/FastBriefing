@@ -2,7 +2,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MissionData } from '../types/mission';
 import type { KneeboardPage, KneeboardTranslate } from './kneeboard';
-import { buildMissionMapScene, drawMissionMap, type MissionMapLabels } from './missionMapRaster';
+import {
+  buildMissionMapScene,
+  drawMissionMap,
+  hasMissionMapContent,
+  mapDrawFailed,
+  type MissionMapDrawResult,
+  type MissionMapLabels,
+  type MissionMapScene,
+} from './missionMapRaster';
 import {
   assertKneeboardRenderBudget,
   countKneeboardPages,
@@ -129,7 +137,7 @@ describe('kneeboard map without a basemap (offline)', () => {
         queueMicrotask(() => this.onerror?.());
       }
     });
-    const scene = buildMissionMapScene(fixtureMission() as unknown as MissionData);
+    const scene = { ...buildMissionMapScene(fixtureMission() as unknown as MissionData), basemap: true };
     const labels: MissionMapLabels = {
       empty: 'empty',
       basemapUnavailable: 'basemap-unavailable',
@@ -142,5 +150,83 @@ describe('kneeboard map without a basemap (offline)', () => {
     expect(result.background).toBe(false);
     expect(result.drawn).toBeGreaterThan(0);
     expect(texts).toContain('basemap-unavailable');
+  });
+});
+
+describe('map page outcome (migrated from the old kneeboard map tests)', () => {
+  const emptyScene = (): MissionMapScene => ({
+    theatre: 'Caucasus',
+    basemap: true,
+    routes: [],
+    zones: [],
+    drawings: [],
+    support: [],
+    threats: [],
+    userPins: [],
+    userStrokes: [],
+    unprojectableMapAnnotations: 0,
+  });
+  const noBackground: MissionMapDrawResult = { background: false, drawn: 0 };
+  const labels: MissionMapLabels = {
+    empty: 'empty',
+    basemapUnavailable: 'basemap-unavailable',
+    routes: 'routes',
+    support: 'support',
+    threats: 'threats',
+    zones: 'zones',
+  };
+
+  beforeEach(() => {
+    // Tiles fail at once, as they do offline, so the basemap is never drawn in these tests.
+    vi.stubGlobal('Image', class {
+      onerror: (() => void) | null = null;
+      onload: (() => void) | null = null;
+      crossOrigin = '';
+      set src(_value: string) {
+        queueMicrotask(() => this.onerror?.());
+      }
+    });
+  });
+
+  it('fails when an annotation-only map could not get its basemap', () => {
+    const scene = emptyScene();
+    scene.userPins.push({ id: 'pin-1', position: [0, 0], label: 'IP', color: '#ff0000' });
+    expect(mapDrawFailed(scene, noBackground)).toBe(true);
+  });
+
+  it('allows a genuinely empty map page when no map content exists, after a real draw', async () => {
+    // The page is drawn through drawMissionMap, so the result comes from the draw, not from a constant.
+    const scene = emptyScene();
+    const result = await drawMissionMap(fakeCanvasContext(texts), scene, 0, 0, 1536, 1024, labels);
+    expect(result.background).toBe(false);
+    expect(hasMissionMapContent(scene)).toBe(false);
+    expect(mapDrawFailed(scene, result)).toBe(false);
+  });
+
+  it('fails when source annotations cannot be projected into the raster scene', () => {
+    const coalition = {
+      flights: [], navPoints: [], airbases: [], support: [], aiGroups: [], zones: [], drawings: [],
+    };
+    const mission = {
+      meta: { theatre: 'UnsupportedTestTheatre' },
+      coalitions: { blue: coalition, red: coalition, neutral: coalition },
+      userNotes: {
+        waypoints: {},
+        mapAnnotations: [
+          { id: 'pin-unsupported', kind: 'pin', position: [34, 69], label: 'IP', notes: '', color: '#ff0000' },
+        ],
+      },
+    } as unknown as MissionData;
+    const scene = buildMissionMapScene(mission);
+
+    expect(scene.userPins).toHaveLength(0);
+    expect(scene.unprojectableMapAnnotations).toBe(1);
+    expect(mapDrawFailed(scene, noBackground)).toBe(true);
+  });
+
+  it('does not fail a map whose basemap the user turned off, because that is a choice (decision 6)', () => {
+    const scene: MissionMapScene = { ...emptyScene(), basemap: false };
+    scene.userPins.push({ id: 'pin-1', position: [0, 0], label: 'IP', color: '#ff0000' });
+    expect(mapDrawFailed(scene, noBackground)).toBe(false);
   });
 });

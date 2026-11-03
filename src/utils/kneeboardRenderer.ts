@@ -302,6 +302,7 @@ export function mapLabels(t: KneeboardTranslate): MissionMapLabels {
   return {
     empty: t('export:label.mapEmpty'),
     basemapUnavailable: t('export:label.basemapUnavailable'),
+    basemapDisabled: t('export:label.basemapDisabled'),
     routes: t('export:label.mapRoutes'),
     support: t('export:label.mapSupport'),
     threats: t('export:label.mapThreats'),

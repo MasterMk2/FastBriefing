@@ -322,4 +322,40 @@ describe('export screen actions', { timeout: 60_000 }, () => {
     expect(document.documentElement.dataset.printPreview).toBeUndefined();
     expect(container.querySelector('.print-preview-bar')).toBeNull();
   });
+
+  it('moves focus into the print preview, keeps the screen behind it out of focus, and returns focus when it closes', async () => {
+    await renderShell();
+    await openExport();
+    const previewButton = buttonByText('印刷プレビュー');
+    await act(async () => {
+      previewButton.click();
+    });
+    const printInBar = container.querySelector<HTMLButtonElement>('.print-preview-bar .btn-primary');
+    expect(printInBar).not.toBeNull();
+    expect(document.activeElement).toBe(printInBar);
+    expect(container.querySelector('.export-formats')?.hasAttribute('inert')).toBe(true);
+    expect(container.querySelector('.export-plan')?.hasAttribute('inert')).toBe(true);
+    // The bar itself stays usable.
+    expect(container.querySelector('.print-preview-bar')?.hasAttribute('inert')).toBe(false);
+
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    });
+    expect(container.querySelector('.print-preview-bar')).toBeNull();
+    expect(container.querySelector('.export-formats')?.hasAttribute('inert')).toBe(false);
+    expect(document.activeElement).toBe(previewButton);
+  });
+
+  it('returns focus to the preview button when the close button is used', async () => {
+    await renderShell();
+    await openExport();
+    const previewButton = buttonByText('印刷プレビュー');
+    await act(async () => {
+      previewButton.click();
+    });
+    await act(async () => {
+      buttonByText('閉じる').click();
+    });
+    expect(document.activeElement).toBe(previewButton);
+  });
 });

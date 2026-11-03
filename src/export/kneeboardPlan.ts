@@ -71,14 +71,16 @@ export function planExportPages(input: PagePlanInput, t: KneeboardTranslate): Kn
 
 function overviewPage(input: PagePlanInput, t: KneeboardTranslate): KneeboardPage {
   const { meta } = input.view;
+  const { timeDisplay } = input.settings;
   const local = missionLocalDate(meta);
   const zulu = missionZuluDate(meta);
   const lines = [
     meta.sortie || t('export:label.notAvailable'),
     `${t('export:label.theatre')}: ${meta.theatre}`,
     `${t('export:label.date')}: ${formatDateYMD(local)}`,
-    `${t('export:label.startLocal')}: ${formatTimeHHMM(local)} (${formatUtcOffset(meta.utcOffset)})`,
-    `${t('export:label.startZulu')}: ${formatTimeHHMM(zulu)}Z`,
+    // The start time follows the time display setting (D6), as the route table does.
+    ...(timeDisplay !== 'zulu' ? [`${t('export:label.startLocal')}: ${formatTimeHHMM(local)} (${formatUtcOffset(meta.utcOffset)})`] : []),
+    ...(timeDisplay !== 'local' ? [`${t('export:label.startZulu')}: ${formatTimeHHMM(zulu)}Z`] : []),
     `${t('export:label.view')}: ${t(input.plan.viewMode === 'pilot' ? 'export:label.viewPilot' : 'export:label.viewCreator')}`,
   ];
   const description = input.view.meta.description.trim();
@@ -302,15 +304,17 @@ function mapPages(input: PagePlanInput, t: KneeboardTranslate): KneeboardPage[] 
   const pages: KneeboardPage[] = [];
   for (let index = 0; index < pageCount; index += 1) {
     const title = pageCount > 1 ? `${t('export:sections.map')} ${index + 1}/${pageCount}` : t('export:sections.map');
+    const scene = buildMissionMapScene(
+      view,
+      flights.slice(index * MAP_FLIGHTS_PER_PAGE, (index + 1) * MAP_FLIGHTS_PER_PAGE),
+      input.side === 'blue' ? 'red' : 'blue',
+    );
+    // The display setting "mapBackground" applies to the print, the PNG and the .miz alike (decision 6).
     pages.push({
       kind: 'map',
       section: 'map',
       title,
-      scene: buildMissionMapScene(
-        view,
-        flights.slice(index * MAP_FLIGHTS_PER_PAGE, (index + 1) * MAP_FLIGHTS_PER_PAGE),
-        input.side === 'blue' ? 'red' : 'blue',
-      ),
+      scene: { ...scene, basemap: input.settings.mapBackground },
     });
   }
   return pages;
@@ -339,12 +343,12 @@ function notesPage(input: PagePlanInput, t: KneeboardTranslate): KneeboardPage {
   return textPage('notes', t('export:sections.notes'), sections);
 }
 
+/** Blue and red support only: neutral support is not exported, the same as the support screen (decision 11). */
 function supportAssets(view: MissionData): SupportAsset[] {
   const seen = new Set<string>();
   return [
     ...view.coalitions.blue.support,
     ...view.coalitions.red.support,
-    ...view.coalitions.neutral.support,
   ].filter(asset => {
     if (asset.hidden) return false;
     const key = `${asset.kind}:${asset.callsign}:${asset.position.join(',')}`;
