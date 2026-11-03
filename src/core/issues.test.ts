@@ -68,4 +68,19 @@ describe('mission issues', () => {
 
     expect(normalized.issues).toContainEqual({ code: 'parse.unknownNode', severity: 'warning', params: { type: 'Vararg' } });
   });
+
+  it('reports a defaulted QNH and temperature only when the mission omits them', () => {
+    const normalize = (weather: Record<string, unknown>) => normalizeMission({
+      mission: { sortie: 'Issue fixture', start_time: 0, weather },
+      theatre: 'Caucasus',
+      warehouses: {},
+      dictionary: {},
+      mapResource: {},
+    }, { coordinateFormat: 'DDM', unitSystem: 'metric', viewMode: 'creator' }).issues.map(issue => issue.code);
+
+    expect(normalize({})).toEqual(expect.arrayContaining(['weather.qnhDefaulted', 'weather.temperatureDefaulted']));
+    const complete = normalize({ qnh: 755, season: { temperature: 12 } });
+    expect(complete).not.toContain('weather.qnhDefaulted');
+    expect(complete).not.toContain('weather.temperatureDefaulted');
+  });
 });

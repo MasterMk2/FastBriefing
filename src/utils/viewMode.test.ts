@@ -68,7 +68,7 @@ function makeSupport(hidden: boolean | undefined): SupportAsset {
 
 function makeDrawing(hidden: boolean | undefined): Drawing {
   const drawing = {
-    layer: hidden === true ? 'Hidden layer' : 'Visible layer',
+    layer: hidden === true ? 'Neutral' : 'Common',
     visible: true,
     objects: [],
   };
@@ -141,8 +141,8 @@ describe('applyViewMode', () => {
     expect(own.flights.map(item => item.name)).toEqual(['Visible flight']);
     expect(own.support.map(item => item.callsign)).toEqual(['Visible tanker']);
     expect(own.aiGroups.map(item => item.type)).toEqual(['Visible SAM']);
-    expect(own.zones.map(item => item.name)).toEqual(['Visible zone']);
-    expect(own.drawings.map(item => item.layer)).toEqual(['Visible layer']);
+    expect(own.zones).toEqual([]);
+    expect(own.drawings.map(item => item.layer)).toEqual(['Common']);
   });
 
   it('withholds the opposing coalition entirely in pilot view (D1)', () => {
@@ -158,24 +158,39 @@ describe('applyViewMode', () => {
     expect(enemy.bullseye.latlonResolved).toBe(false);
   });
 
-  it('keeps the shared zones and drawings for the map when red is displayed (hidden ones removed)', () => {
+  it('keeps the shared drawings for the map when red is displayed (hidden ones removed)', () => {
     const mission = makeMission(true);
 
     const result = applyViewMode(mission, 'pilot', 'red');
 
-    expect(result.coalitions.blue.zones.map(item => item.name)).toEqual(['Visible zone']);
-    expect(result.coalitions.blue.drawings.map(item => item.layer)).toEqual(['Visible layer']);
-    expect(result.coalitions.red.zones.map(item => item.name)).toEqual(['Visible zone']);
+    expect(result.coalitions.blue.drawings.map(item => item.layer)).toEqual(['Common']);
+    expect(result.coalitions.red.drawings.map(item => item.layer)).toEqual(['Common']);
   });
 
-  it('removes hidden zones from every coalition copy in pilot view, whichever side is displayed (G11)', () => {
+  it('removes trigger zones from every coalition copy in pilot view, as the F10 map does (D1)', () => {
     for (const side of ['blue', 'red'] as const) {
-      const result = applyViewMode(makeMission(true), 'pilot', side);
+      const result = applyViewMode(makeMission(false), 'pilot', side);
 
       for (const coalition of [result.coalitions.blue, result.coalitions.red, result.coalitions.neutral]) {
-        expect(coalition.zones.map(item => item.name)).toEqual(['Visible zone']);
+        expect(coalition.zones).toEqual([]);
       }
     }
+  });
+
+  it('keeps only the drawing layers a player of the displayed side sees (D1)', () => {
+    const layer = (name: string, visible = true): Drawing => ({ layer: name, visible, objects: [] });
+    const mission = makeMission(false);
+    const drawings = [layer('Blue'), layer('Red'), layer('Neutral'), layer('Common'), layer('Author'), layer('Blue', false), layer('Custom')];
+    for (const coalition of [mission.coalitions.blue, mission.coalitions.red, mission.coalitions.neutral]) {
+      coalition.drawings = drawings;
+    }
+
+    const blue = applyViewMode(mission, 'pilot', 'blue');
+    const red = applyViewMode(mission, 'pilot', 'red');
+
+    expect(blue.coalitions.blue.drawings.map(item => item.layer)).toEqual(['Blue', 'Neutral', 'Common']);
+    expect(red.coalitions.blue.drawings.map(item => item.layer)).toEqual(['Red', 'Neutral', 'Common']);
+    expect(applyViewMode(mission, 'creator', 'blue').coalitions.blue.drawings).toHaveLength(7);
   });
 
   it('removes late-activation AI groups and neutral flights in pilot view', () => {

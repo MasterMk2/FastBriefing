@@ -13,7 +13,8 @@ export const ZIP_LIMITS = {
   MAX_ENTRIES: 4096,
   MAX_TOTAL_SIZE: 50 * 1024 * 1024,
   MAX_ENTRY_SIZE: 10 * 1024 * 1024,
-  MAX_IMAGE_SIZE: 5 * 1024 * 1024,
+  // Campaign briefing images reach 5.1 MiB (Flightplan.jpg in FIWOS M2 FINAL).
+  MAX_IMAGE_SIZE: 10 * 1024 * 1024,
   MAX_COMPRESSION_RATIO: 100,
 } as const;
 

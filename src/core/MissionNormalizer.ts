@@ -242,6 +242,8 @@ function normalizeWeather(mission: Record<string, unknown>, _dictionary: Record<
   const weather = getValue(mission, ['weather']) as Record<string, unknown> || {};
   const wind = getValue(weather, ['wind']) as Record<string, unknown> || {};
   
+  if (getOptionalNumber(weather, ['qnh']) === undefined) addIssue(issues, 'weather.qnhDefaulted');
+  if (getOptionalNumber(weather, ['season', 'temperature']) === undefined) addIssue(issues, 'weather.temperatureDefaulted');
   const qnhMmHg = getNumber(weather, ['qnh'], 760);
   const qnh = pressureValuesFromMmHg(qnhMmHg);
   const temperature = getNumber(weather, ['season', 'temperature']);

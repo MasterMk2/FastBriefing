@@ -73,7 +73,7 @@
 
 | 関数 | ファイル | 規則 |
 |---|---|---|
-| `applyViewMode(mission, viewMode, side?)` | `src/utils/viewMode.ts` | creator は原本をそのまま返す。pilot は表示勢力以外の陣営の flights・support・aiGroups・navPoints を空にし、敵の bullseye を `latlonResolved: false` に置き換え、敵の飛行場を除く（D1）。敵陣営の任務文（`meta.descriptionBlueTask` / `descriptionRedTask` のうち敵側）を空にする。中立の任務文は残す（D1）。hidden と lateActivation の AI を除く（G11）。`side` 省略時は `defaultSide`。zones と drawings は、正規化で陣営間の共有データ（同じ配列）なので陣営では消さず、hidden だけを除く（地図は blue の配列を読む）。**zones と drawings を陣営で絞るかは未決定**（§10）。実データの図形には hidden が無いため、drawings の hidden 除去は実データでは効かない（同梱 .miz の `drawings` 節に `hidden` は 0 件）。issues は `side` を持たないもの（全体）と表示勢力のものだけを残す（D1）。 |
+| `applyViewMode(mission, viewMode, side?)` | `src/utils/viewMode.ts` | creator は原本をそのまま返す。pilot は表示勢力以外の陣営の flights・support・aiGroups・navPoints を空にし、敵の bullseye を `latlonResolved: false` に置き換え、敵の飛行場を除く（D1）。敵陣営の任務文（`meta.descriptionBlueTask` / `descriptionRedTask` のうち敵側）を空にする。中立の任務文は残す（D1）。hidden と lateActivation の AI を除く（G11）。`side` 省略時は `defaultSide`。zones と drawings は正規化で陣営間の共有データ（同じ配列、地図は blue の配列を読む）。パイロットでは DCS の F10 マップで表示勢力のプレイヤーに見えるものだけを残す（Lead 決定）: トリガーゾーンはエディタ専用なので全部除く。図形は表示勢力のレイヤー・`Neutral`・`Common` で、かつ `visible` のものだけ残す。`Author`、相手陣営、名前が不明なレイヤーは除く。issues は `side` を持たないもの（全体）と表示勢力のものだけを残す（D1）。 |
 | `compareMissionRevisions(before, after, viewMode, side?)` | `src/utils/missionRevision.ts` | P0 が `side` を足した。パイロットでは表示勢力（`side`）のフライトだけを照合・比較する（D1）。相手陣営と中立のフライトは照合の前に除くので、その追加・削除・変更は出ない。`side` が無いパイロットは、フライトを 1 件も比べない（安全側）。hidden は従来どおり除く（G11）。改版画面は `useMission().side` を `RevisionComparison` の `side` prop に渡す。 |
 | `defaultSide(mission)` / `resolveSide(mission, side?)` | 同上 | D2。 |
 | `getMagneticVariation(theatre, lat, lon, date)` | `src/utils/magvar.ts` | `number \| null`。表が無い地図（Afghanistan、Iraq、独自地図）は `null`。`routeLegs` は null のとき磁方位を `undefined`（真のみ）にする。 |
@@ -309,12 +309,12 @@ interface MapPanelProps { readOnly?: boolean; height?: string; }   // P2 の src
 
 ## 10. 既知の制限と未確認（報告に必ず書く）
 
-- **FIWOS M2 FINAL.miz は依然として読めない（利用者の判断待ち）**: エントリ数の上限（101 > 100）は解消したが、`l10n/DEFAULT/Flightplan.jpg`（5,386,369 バイト）が個別画像の上限 `MAX_IMAGE_SIZE`（5 MiB）を超える。`mizCorpus.test.ts` と `realMiz.test.ts` の両方が、この 1 件で失敗する。依頼どおり個別サイズの上限は据え置いた。読めるようにするには `MAX_IMAGE_SIZE` の引き上げ（例 8 MiB）を利用者が決める必要がある。エントリ数の修正だけでは読めない。
+- **FIWOS M2 FINAL.miz**: エントリ数の上限（101 > 100）に加え、`l10n/DEFAULT/Flightplan.jpg`（5,386,369 バイト）が個別画像の上限（5 MiB）を超えていた。Lead が `MAX_IMAGE_SIZE` を 10 MiB（`MAX_ENTRY_SIZE` と同じ）に上げた。合計サイズと圧縮比の上限は据え置き。
 - **FIWOS の hidden 検査（G11、実データ）**: 元の FIWOS には `hidden = true` の group が 498 件ある。`Flightplan.jpg` だけを同じ名前の 160 バイトの代替画像に差し替えた複製（リポジトリ外の一時フォルダ）で `realMiz.test.ts` を走らせた。隠し要素は 505 件、creator の件数 1473、pilot の件数 701。両陣営について、pilot に隠し要素が 0 件、表示勢力の非隠し要素の件数が一致、反対陣営のフライトが 0 件、を確かめて通った。代替画像で検査したため、元の画像を含む読み込みは未確認。複製はリポジトリに入れていない。
 - **drawings の hidden（実データ）**: 同梱の .miz（27 件）の `drawings` 節には `hidden` のキーが無い（group 側にだけある）。このため `viewMode.ts` の図形の hidden 除去は実データで何もしない。型 `Drawing` に hidden が無いのも同じ理由。将来の DCS 形式で付く場合に備えて残す。
-- **zones と drawings の D1（未決定）**: §3 と同じ論点。SPEC の D1 は「ゾーン」を表示勢力だけに残すとも読める。実データで相手陣営の図形の漏れは観測していない（Red レイヤーのオブジェクトは全件 0、Author レイヤーに図形がある 2 ファイル、それぞれ 5 件と 1 件）。レイヤーの `visible = false` の図形をパイロットで出すかも未決定。利用者が決める。
+- **zones と drawings の D1（Lead 決定、利用者が覆せる）**: §3 のとおり F10 マップの見え方に合わせた。パイロットの地図・出力にトリガーゾーンは出ない。
 - **改版比較の D1（P0 で修正）**: パイロットでは相手陣営と中立のフライトを比べない（§3 の `compareMissionRevisions`）。単体テストで確認した。改版画面の描画と操作は未確認。
-- **発生しない issue**: `weather.qnhDefaulted`、`weather.temperatureDefaulted`、`airbase.nameMissing`、`coord.unresolved` は P0 では発生させていない（§2.1）。QNH の既定値（760 mmHg）を issue にするかは利用者が決める。
+- **発生しない issue**: `airbase.nameMissing`、`coord.unresolved` は P0 では発生させていない（§2.1）。`weather.qnhDefaulted` と `weather.temperatureDefaulted` は、mission に値が無く既定値（760 mmHg、0 ℃）で補ったときに出す（Lead が追加）。
 - **smoke の既存の失敗**: CaucasusConquest.miz（theatre が空、UTC 表に無い）は基準から変わらない。実データのテストは `SMOKE_MIZ_DIR` が無いとスキップされる（`npm run check` では走らない）。
 - jsdom で AppShell を描画すると、出力画面の地図（`MissionMapCanvas`）が `HTMLCanvasElement.prototype.getContext` の未実装の警告を出す。テストは通る（jsdom の制限で、ブラウザの問題ではない）。
 - smoke の既存の失敗 1 件（CaucasusConquest.miz: theatre が空で UTC 表に無い）は、基準（origin/master）から変わらず残っている。
@@ -328,6 +328,6 @@ interface MapPanelProps { readOnly?: boolean; height?: string; }   // P2 の src
 - 名前の衝突を避けるため、旧ファイル（`MissionView.tsx`）は削除済み。`src/components/*Tab.tsx` などの旧タブは残している（統合時に削除）。
 - 旧 `src/index.css` の `.header-controls` 等の旧ヘッダ規則は未使用になった（統合時に削除）。統合時にこの規則を消すと、`src/themeContrast.test.ts` の旧検査 'header selector contrast keeps explicit selector and option colors...'（旧 `.header-controls select option` の検査）も消える。その代わりにトークンの組み合わせ検査（4.5:1）が入っている。
 - TACAN と ICLS は `[0, 0]` を入れない（`latlon` は未解決で `undefined`）。NavPoint、Airbase、Runway、支援機、AI 群などは、P0 の時点でまだ `[0, 0]` の既定を入れている。描画は必ず `latlonResolved` で判定し、未解決は `Unresolved` で出す（旧タブの `|| [0, 0]` は統合時に消す）。
-- ME 図形の `layer`（レイヤー名）は陣営を表すとは限らない。パイロット表示で陣営のレイヤーだけを出す規則は未実装で、図形は表示勢力の陣営にかかわらず hidden 以外すべて出る（P0 の既存の動作と同じ）。レイヤー名に陣営名が入る実データでの D1 の確認は未実施。
+- ME 図形のレイヤーは DCS の固定 5 種（Red、Blue、Neutral、Common、Author）を前提に絞る。Red・Blue レイヤーに図形がある実データでの確認は未実施（同梱 .miz では Red レイヤーは 0 件）。
 - 出力の磁方位（`magvar.unsupported`）の severity（warning）は、SPEC に記載が無いため P0 が決めた値。
 - `BriefingSectionId` は旧定義（8 項目、`whiteboard` を含む）のまま。P3 が SPEC §6.2 の 9 項目へ更新する。

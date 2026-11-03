@@ -32,26 +32,28 @@ function missionFixture(theatre = 'Caucasus'): MissionData {
 
 describe('geospatial export', () => {
   it('exports WGS84 lon/lat routes and closed zone polygons', () => {
-    const result = buildGeospatialExport(missionFixture(), 'pilot');
+    // Trigger zones are editor-only, so only the creator export carries them (D1).
+    const result = buildGeospatialExport(missionFixture(), 'creator');
+    const geometryOf = (name: string) => result.features.find(feature => feature.properties.name === name)!.geometry;
     expect(result.skipped).toBe(0);
-    expect(result.features).toHaveLength(3);
-    expect(result.features[0].geometry).toEqual({ type: 'LineString', coordinates: [[42, 41], [42.5, 41.5]] });
-    const circle = result.features[1].geometry;
+    expect(result.features).toHaveLength(5);
+    expect(geometryOf('Viper & <Lead>')).toEqual({ type: 'LineString', coordinates: [[42, 41], [42.5, 41.5]] });
+    const circle = geometryOf('Circle');
     expect(circle.type).toBe('Polygon');
     if (circle.type === 'Polygon') {
       expect(circle.coordinates[0]).toHaveLength(65);
       expect(circle.coordinates[0][0]).toEqual(circle.coordinates[0][64]);
     }
-    const polygon = result.features[2].geometry;
+    const polygon = geometryOf('Polygon');
     expect(polygon.type).toBe('Polygon');
     if (polygon.type === 'Polygon') expect(polygon.coordinates[0][0]).toEqual(polygon.coordinates[0][3]);
-    expect(JSON.parse(toGeoJson(result)).features).toHaveLength(3);
+    expect(JSON.parse(toGeoJson(result)).features).toHaveLength(5);
   });
 
-  it('filters hidden features for pilots and escapes KML names', () => {
+  it('filters hidden features and trigger zones for pilots and escapes KML names', () => {
     const pilot = buildGeospatialExport(missionFixture(), 'pilot');
     const creator = buildGeospatialExport(missionFixture(), 'creator');
-    expect(pilot.features).toHaveLength(3);
+    expect(pilot.features).toHaveLength(1);
     expect(creator.features).toHaveLength(5);
     expect(toKml(pilot)).toContain('<name>Viper &amp; &lt;Lead&gt;</name>');
     expect(toKml(pilot)).toContain('<coordinates>42,41 42.5,41.5</coordinates>');
@@ -62,7 +64,7 @@ describe('geospatial export', () => {
     mission.coalitions.blue.flights[0].route[0].latlonResolved = false;
     const result = buildGeospatialExport(mission, 'pilot');
     expect(result.features).toHaveLength(0);
-    expect(result.skipped).toBe(3);
+    expect(result.skipped).toBe(1);
   });
 
   it('exports waypoint and map annotations as geographic features', () => {

@@ -1,4 +1,4 @@
-import type { Coalition, DisplaySettings, Flight, MissionData, MissionMeta, Side } from '../types/mission';
+import type { Coalition, DisplaySettings, Drawing, Flight, MissionData, MissionMeta, Side } from '../types/mission';
 
 type ViewMode = DisplaySettings['viewMode'];
 
@@ -24,20 +24,20 @@ export function resolveSide(mission: MissionData, side?: Side | null): Side {
  * Creator view returns the original object: the creator sees every coalition,
  * including hidden items, with the opposing side folded in the UI.
  *
- * Pilot view (D1) keeps only the displayed side's flights, support, AI groups
- * and zones. The opposing coalition and the neutral coalition lose their
+ * Pilot view (D1) keeps only the displayed side's flights, support and AI
+ * groups. The opposing coalition and the neutral coalition lose their
  * flights, support, AI groups and navigation points; the opposing bullseye is
  * replaced by an unresolved position; enemy airbases are removed; the opposing
  * side's mission task text is cleared (D1). The neutral task text is kept.
  * Hidden items and late-activation AI groups are removed everywhere (G11, FR-70).
  *
  * Zones and ME drawings are mission-level data: the normalizer gives every
- * coalition the same arrays, and the map reads the blue collection. They are
- * therefore not removed per side here (only hidden ones are), so the map shows
- * the same zones in either pilot view. Whether D1 should also withhold zones and
- * drawings per side is undecided (docs/redesign-contracts.md §3, §10). Real DCS
- * drawing layers carry no `hidden` field (only `visible`), so the drawing filter
- * below removes nothing on real files; it applies only if a source sets it.
+ * coalition the same arrays, and the map reads the blue collection. Pilot view
+ * keeps what a player of the displayed side sees on the DCS F10 map: trigger
+ * zones are editor-only and are removed; drawings are kept only on the displayed
+ * side's layer and the Neutral and Common layers, and only when the layer is
+ * visible. The Author layer, the opposing side's layer and layers with an
+ * unknown name are removed (D1).
  *
  * Issues that carry a `side` are kept only for the displayed side (D1). Issues
  * without a side describe the whole mission and are kept.
@@ -48,15 +48,18 @@ export function applyViewMode(mission: MissionData, viewMode: ViewMode, side?: S
   const shown = resolveSide(mission, side);
   const opposing = shown === 'blue' ? 'red' : 'blue';
   const opposingOwner = OPPOSITE_OWNER[shown];
+  const drawingLayers = new Set<string>([shown, 'neutral', 'common']);
+  const keepDrawing = (drawing: Drawing) =>
+    drawing.visible !== false && !hasHiddenFlag(drawing) && drawingLayers.has(drawing.layer.trim().toLowerCase());
 
   return {
     ...mission,
     meta: withoutOpposingTask(mission.meta, opposing),
     issues: mission.issues.filter(issue => issue.side === undefined || issue.side === shown),
     coalitions: {
-      blue: pilotCoalition(mission.coalitions.blue, { keepTacticalData: shown === 'blue', opposingOwner, isOpposing: opposing === 'blue' }),
-      red: pilotCoalition(mission.coalitions.red, { keepTacticalData: shown === 'red', opposingOwner, isOpposing: opposing === 'red' }),
-      neutral: pilotCoalition(mission.coalitions.neutral, { keepTacticalData: false, opposingOwner, isOpposing: false }),
+      blue: pilotCoalition(mission.coalitions.blue, { keepTacticalData: shown === 'blue', opposingOwner, isOpposing: opposing === 'blue', keepDrawing }),
+      red: pilotCoalition(mission.coalitions.red, { keepTacticalData: shown === 'red', opposingOwner, isOpposing: opposing === 'red', keepDrawing }),
+      neutral: pilotCoalition(mission.coalitions.neutral, { keepTacticalData: false, opposingOwner, isOpposing: false, keepDrawing }),
     },
   };
 }
@@ -75,10 +78,12 @@ interface PilotOptions {
   opposingOwner: string;
   /** True for the opposing side: even its bullseye position is withheld. */
   isOpposing: boolean;
+  /** True for a drawing the displayed side sees on the F10 map. */
+  keepDrawing: (drawing: Drawing) => boolean;
 }
 
 function pilotCoalition(coalition: Coalition, options: PilotOptions): Coalition {
-  const { keepTacticalData, opposingOwner, isOpposing } = options;
+  const { keepTacticalData, opposingOwner, isOpposing, keepDrawing } = options;
   const airbases = (coalition.airbases ?? []).filter(airbase => (airbase.owner ?? '').toUpperCase() !== opposingOwner);
 
   if (!keepTacticalData) {
@@ -90,8 +95,8 @@ function pilotCoalition(coalition: Coalition, options: PilotOptions): Coalition 
       flights: [],
       support: [],
       aiGroups: [],
-      zones: coalition.zones.filter(item => !hasHiddenFlag(item)),
-      drawings: coalition.drawings.filter(item => !hasHiddenFlag(item)),
+      zones: [],
+      drawings: coalition.drawings.filter(keepDrawing),
     };
   }
 
@@ -101,8 +106,8 @@ function pilotCoalition(coalition: Coalition, options: PilotOptions): Coalition 
     flights: coalition.flights.filter(item => !hasHiddenFlag(item)),
     support: coalition.support.filter(item => !hasHiddenFlag(item)),
     aiGroups: coalition.aiGroups.filter(item => !hasHiddenFlag(item) && !item.lateActivation),
-    zones: coalition.zones.filter(item => !hasHiddenFlag(item)),
-    drawings: coalition.drawings.filter(item => !hasHiddenFlag(item)),
+    zones: [],
+    drawings: coalition.drawings.filter(keepDrawing),
   };
 }
 
