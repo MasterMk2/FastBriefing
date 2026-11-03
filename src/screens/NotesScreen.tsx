@@ -1,26 +1,27 @@
 // Owner: P6 (記入・改版・ファイル操作・初回画面). Notes screen (SPEC 1.3 記入, F11).
 // Contract: default export, no props. Notes come from useMission().notes; every change goes through setNotes,
 // and App saves it and refuses to overwrite a record it cannot read. The whiteboard is useMission().whiteboard.
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Field } from '../shell/Field';
 import { Notice } from '../shell/Notice';
 import { useMission } from '../shell/MissionContext';
 import { useWorkspace } from '../shell/workspace';
-import type { Flight, FlightNotes, MissionData, Side, SMEACNotes, UserNotes } from '../types/mission';
+import type { Flight, FlightNotes, MissionData, SMEACNotes, UserNotes } from '../types/mission';
 import {
   emptyFlightNotes,
-  emptyUserNotes,
   findPreviousStoredNotes,
   hasNotesContent,
   inspectStoredNotes,
   MAX_FLIGHT_NOTES,
   parseNotesSidecar,
+  saveStoredNotes,
   serializeNotesSidecar,
-  setAsideStoredNotes,
+  setAsideAndSaveStoredNotes,
   updateFlightNotes,
 } from '../utils/notes';
+import { flightKey, type FlightKeySide } from '../utils/flightKey';
 import { filterWaypointAnnotationsForFlights } from '../utils/waypointAnnotations';
 import { WhiteboardPanel } from './notes/WhiteboardPanel';
 
@@ -35,12 +36,13 @@ type FuelField = 'jokerFuel' | 'bingoFuel';
 interface ListedFlight { key: string; flight: Flight }
 
 /**
- * Flights that the notes can name in the displayed view (D1). Keys follow the notes format `side:groupId`,
- * which is also the flight key used by the workspace selection.
+ * Flights that the notes can name in the displayed view (D1). Keys are flightKey() values (`side:groupId`,
+ * neutral included), the same form as the notes keys and the workspace selection.
  */
 function listFlights(view: MissionData): ListedFlight[] {
-  return (['blue', 'red', 'neutral'] as const).flatMap((side: Side | 'neutral') =>
-    view.coalitions[side].flights.map(flight => ({ key: `${side}:${flight.groupId}`, flight })));
+  const sides: FlightKeySide[] = ['blue', 'red', 'neutral'];
+  return sides.flatMap(side =>
+    view.coalitions[side].flights.map(flight => ({ key: flightKey(side, flight.groupId), flight })));
 }
 
 function fuelPatch(field: FuelField, value: number | null): Partial<FlightNotes> {
@@ -75,6 +77,9 @@ export default function NotesScreen() {
   const flights = useMemo(() => listFlights(view), [view]);
   const activeKey = flights.some(item => item.key === selectedKey) ? selectedKey : flights[0]?.key ?? null;
   const storedState = useMemo(() => inspectStoredNotes(notes.missionKey).kind, [notes]);
+  // A record that cannot be read is never overwritten, so an import would not be saved and is not offered (F11).
+  const importBlocked = storageFailed && storedState === 'corrupt';
+  const importInputRef = useRef<HTMLInputElement>(null);
   const previous = useMemo(
     () => (storedState === 'absent' || storedState === 'ok') && !hasNotesContent(notes)
       ? findPreviousStoredNotes(notes.missionKey)
@@ -131,25 +136,33 @@ export default function NotesScreen() {
   const importNotes = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     event.target.value = '';
-    if (!file) return;
+    if (!file || importBlocked) return;
     if (file.size > MAX_IMPORT_BYTES) {
       setMessage(t('notes:storage.importFailed'));
       return;
     }
     try {
-      setNotes(parseNotesSidecar(await file.text(), notes.missionKey));
+      const parsed = parseNotesSidecar(await file.text(), notes.missionKey);
+      // The notes go on screen either way. The success text is shown only when the store keeps them (F11).
+      const saved = saveStoredNotes(parsed);
+      setNotes(parsed);
       setFuelDrafts({});
-      setMessage(t('notes:storage.imported'));
+      setMessage(t(saved ? 'notes:storage.imported' : 'notes:storage.importedUnsaved'));
     } catch {
       setMessage(t('notes:storage.importFailed'));
     }
   };
 
+  // Keeps the notes on screen and saves them again after the unreadable record is set aside (F11). The success
+  // text is shown only when the save worked; a new object makes App save again and refresh its save state.
   const setAside = () => {
     try {
-      const backupKey = setAsideStoredNotes(notes.missionKey);
-      setNotes(emptyUserNotes(notes.missionKey));
-      setFuelDrafts({});
+      const { backupKey, saved } = setAsideAndSaveStoredNotes(notes);
+      setNotes({ ...notes });
+      if (!saved) {
+        setMessage(t('notes:status.setAsideSaveFailed', { key: backupKey ?? '' }));
+        return;
+      }
       setMessage(backupKey ? t('notes:status.setAsideDone', { key: backupKey }) : '');
     } catch {
       setMessage(t('notes:status.setAsideFailed'));
@@ -220,12 +233,28 @@ export default function NotesScreen() {
               <h3 id="notes-storage-title">{t('notes:storage.title')}</h3>
               <p className="hint">{t('notes:storage.help')}</p>
               {viewMode === 'pilot' && <p className="hint">{t('notes:storage.pilotNote')}</p>}
+              {importBlocked && <p className="notes-field-error" id="notes-import-blocked">▲ {t('notes:storage.importBlocked')}</p>}
               <div className="notes-actions">
                 <button type="button" className="btn btn-secondary" onClick={exportNotes}>{t('notes:storage.export')}</button>
-                <label className="btn btn-secondary">
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  disabled={importBlocked}
+                  aria-describedby={importBlocked ? 'notes-import-blocked' : undefined}
+                  onClick={() => importInputRef.current?.click()}
+                >
                   {t('notes:storage.import')}
-                  <input className="visually-hidden" type="file" accept=".json,application/json" onChange={event => void importNotes(event)} />
-                </label>
+                </button>
+                <input
+                  ref={importInputRef}
+                  className="visually-hidden"
+                  type="file"
+                  accept=".json,application/json"
+                  tabIndex={-1}
+                  aria-hidden="true"
+                  disabled={importBlocked}
+                  onChange={event => void importNotes(event)}
+                />
               </div>
             </section>
           )}

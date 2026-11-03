@@ -1,7 +1,9 @@
 // Owner: P6 (記入・改版・ファイル操作・初回画面). Initial screen (SPEC 1.3 初回画面).
 // Contract (frozen): default export InitialScreen, props InitialScreenProps below.
-//   Shown by AppShell when no mission is open. Errors and the loading overlay are rendered by App.tsx
-//   (the error band sits under the header). The hidden <input type="file" id="file-input"> lives in App.tsx;
+//   Shown by AppShell when no mission is open. Errors and the loading overlay are rendered by App.tsx, after
+//   AppShell. So in this state the error band sits below the full-height shell, not directly under the drop
+//   area as SPEC 3 asks. Moving it needs an error prop on this screen (a contract change, not made here).
+//   The hidden <input type="file" id="file-input"> lives in App.tsx;
 //   onPickFiles opens it. Drop events are handled by App.tsx on the window.
 import { useEffect, useState } from 'react';
 import type { DragEvent } from 'react';

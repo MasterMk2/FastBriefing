@@ -72,7 +72,7 @@
 .file-menu-trigger:focus-visible,
 .initial-pick:focus-visible,
 .initial-drop:focus-visible {
-  outline: 2px solid var(--focus-ring);
+  outline: var(--focus-ring);
   outline-offset: 2px;
 }
 

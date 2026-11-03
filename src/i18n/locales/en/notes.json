@@ -26,13 +26,14 @@
     "headerUnavailable": "Not saved",
     "unavailable": "Notes cannot be saved on this device. Input stays until the page closes.",
     "corruptTitle": "Saved notes cannot be read, so saving is stopped",
-    "corruptBody": "The original data is kept. Setting it aside keeps it in another place and starts from empty notes. Input on screen is lost when set aside, so export it first if needed.",
-    "setAside": "Set aside and start empty",
+    "corruptBody": "The original data is kept. Setting it aside keeps it in another place, then saves the notes on screen again.",
+    "setAside": "Set aside and save again",
     "setAsideDone": "Original data moved to {{key}}",
     "setAsideFailed": "Could not set the data aside. The original data is unchanged.",
     "previousAvailable": "A previous version with the same file name has notes",
     "loadPrevious": "Load the previous version's notes",
-    "previousLoaded": "Loaded the previous version's notes"
+    "previousLoaded": "Loaded the previous version's notes",
+    "setAsideSaveFailed": "Set aside, but the current notes could not be saved. The original data is at {{key}}."
   },
   "flights": {
     "title": "Per-flight notes",
@@ -56,16 +57,19 @@
     "exported": "Notes exported",
     "exportFailed": "Export failed",
     "imported": "Notes imported",
-    "importFailed": "This file cannot be imported as notes for this mission"
+    "importedUnsaved": "Notes imported, but they cannot be saved on this device. They are lost when the page closes",
+    "importFailed": "This file cannot be imported as notes for this mission",
+    "importBlocked": "Import is stopped because the saved notes cannot be read. Set them aside first."
   },
   "screen": {
     "charCount": "{{count}} / {{max}} characters",
     "board": {
       "blockedTitle": "The saved board cannot be read, so saving is stopped",
-      "blockedBody": "The board stays on screen only. Setting it aside keeps the saved copy in another place and starts an empty board. The board on screen is lost when set aside, so export it first if needed.",
-      "setAside": "Set aside and start an empty board",
+      "blockedBody": "The board stays on screen only. Setting it aside keeps the original in another place, then saves the board on screen again.",
+      "setAside": "Set aside and save the board again",
       "setAsideDone": "Original board moved to {{key}}",
-      "setAsideFailed": "Could not set the board aside. The original board is unchanged."
+      "setAsideFailed": "Could not set the board aside. The original board is unchanged.",
+      "setAsideSaveFailed": "Set aside, but the current board could not be saved. The original board is at {{key}}."
     }
   },
   "whiteboard": {
@@ -101,6 +105,8 @@
     "importJson": "Import board from JSON",
     "exported": "Board exported",
     "imported": "Board imported",
-    "importFailed": "This board cannot be imported for this mission"
+    "importedUnsaved": "Board imported, but it cannot be saved on this device. It is lost when the page closes",
+    "importFailed": "This board cannot be imported for this mission",
+    "importBlocked": "Import is stopped because the saved board cannot be read. Set it aside first."
   }
 }

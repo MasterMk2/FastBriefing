@@ -145,6 +145,19 @@ export function setAsideStoredNotes(missionKey: string, now: Date = new Date()):
   return backupKey;
 }
 
+/**
+ * Sets the unreadable record aside, then saves the notes the screen holds (F11). The screen data is kept, not
+ * replaced. `saved` is false when the store refuses the write; only a true `saved` may be reported as success.
+ * Throws when the store refuses the backup, in which case nothing has been removed.
+ */
+export function setAsideAndSaveStoredNotes(
+  notes: UserNotes,
+  now: Date = new Date(),
+): { backupKey: string | null; saved: boolean } {
+  const backupKey = setAsideStoredNotes(notes.missionKey, now);
+  return { backupKey, saved: saveStoredNotes(notes) };
+}
+
 /** The latest saved version of a file with the same name and other contents (前版の注記), when it has content. */
 export function findPreviousStoredNotes(missionKey: string): UserNotes | null {
   const prefix = notesFileIdentity(missionKey);

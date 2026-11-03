@@ -38,6 +38,9 @@ export function WhiteboardPanel() {
   const [message, setMessage] = useState('');
   const draftRef = useRef<WhiteboardStroke | null>(null);
   const pointerIdRef = useRef<number | null>(null);
+  const importInputRef = useRef<HTMLInputElement>(null);
+  // An unreadable saved board is never overwritten, so an import would not be saved and is not offered (F11).
+  const importBlocked = persistenceStatus === 'blocked';
 
   const colorName = (color: string): string => {
     const key = COLOR_NAME_KEYS[WHITEBOARD_COLORS.indexOf(color as (typeof WHITEBOARD_COLORS)[number])];
@@ -121,22 +124,29 @@ export function WhiteboardPanel() {
   const importBoard = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     event.target.value = '';
-    if (!file) return;
+    if (!file || importBlocked) return;
     if (file.size > MAX_WHITEBOARD_SIDECAR_BYTES) {
       setMessage(t('notes:whiteboard.importFailed'));
       return;
     }
     try {
-      whiteboard.replaceData(parseWhiteboardSidecar(await file.text(), mission.sourceFingerprint));
-      setMessage(t('notes:whiteboard.imported'));
+      // The board goes on screen either way. The success text is shown only when the store keeps it (F11).
+      const saved = whiteboard.replaceData(parseWhiteboardSidecar(await file.text(), mission.sourceFingerprint));
+      setMessage(t(saved ? 'notes:whiteboard.imported' : 'notes:whiteboard.importedUnsaved'));
     } catch {
       setMessage(t('notes:whiteboard.importFailed'));
     }
   };
 
+  // Keeps the board on screen and saves it again after the unreadable record is set aside (F11). The success text
+  // is shown only when the save worked.
   const setAside = () => {
     try {
-      const backupKey = whiteboard.setAside();
+      const { backupKey, saved } = whiteboard.setAside();
+      if (!saved) {
+        setMessage(t('notes:screen.board.setAsideSaveFailed', { key: backupKey ?? '' }));
+        return;
+      }
       setMessage(backupKey ? t('notes:screen.board.setAsideDone', { key: backupKey }) : '');
     } catch {
       setMessage(t('notes:screen.board.setAsideFailed'));
@@ -233,12 +243,28 @@ export function WhiteboardPanel() {
       <div className="notes-board-share">
         <h4>{t('notes:whiteboard.shareTitle')}</h4>
         <p className="hint">{t('notes:whiteboard.shareHelp')}</p>
+        {importBlocked && <p className="notes-field-error" id="notes-board-import-blocked">▲ {t('notes:whiteboard.importBlocked')}</p>}
         <div className="notes-actions">
           <button type="button" className="btn btn-secondary" onClick={exportBoard}>{t('notes:whiteboard.exportJson')}</button>
-          <label className="btn btn-secondary">
+          <button
+            type="button"
+            className="btn btn-secondary"
+            disabled={importBlocked}
+            aria-describedby={importBlocked ? 'notes-board-import-blocked' : undefined}
+            onClick={() => importInputRef.current?.click()}
+          >
             {t('notes:whiteboard.importJson')}
-            <input className="visually-hidden" type="file" accept=".json,application/json" onChange={event => void importBoard(event)} />
-          </label>
+          </button>
+          <input
+            ref={importInputRef}
+            className="visually-hidden"
+            type="file"
+            accept=".json,application/json"
+            tabIndex={-1}
+            aria-hidden="true"
+            disabled={importBlocked}
+            onChange={event => void importBoard(event)}
+          />
         </div>
       </div>
       {message && <p role="status" className="notes-message">{message}</p>}

@@ -238,13 +238,17 @@ export function useWhiteboard(mission: MissionData) {
     data,
     persistenceStatus,
     storedState: stored,
-    /** Keeps the unreadable board under a backup key and starts an empty board (F11). */
-    setAside: () => {
+    /**
+     * Keeps the unreadable board under a backup key, then saves the board the screen holds (F11). The screen data is
+     * not replaced. `saved` is false when the store refuses the write; only a true `saved` may be reported as success.
+     * Throws when the store refuses the backup, in which case nothing has been removed.
+     */
+    setAside: (): { backupKey: string | null; saved: boolean } => {
       const backupKey = setAsideWhiteboard(missionId);
+      const saved = saveWhiteboard(missionId, data);
       setStored('absent');
       setClearedStrokes(null);
-      setData(createEmptyWhiteboard());
-      return backupKey;
+      return { backupKey, saved };
     },
     canUndo: data.strokes.length > 0 || clearedStrokes !== null,
     setNotes: (notes: string) => setData(current => ({
@@ -276,9 +280,15 @@ export function useWhiteboard(mission: MissionData) {
       setClearedStrokes(data.strokes);
       setData(current => ({ ...current, strokes: [] }));
     },
-    replaceData: (next: WhiteboardData) => {
+    /**
+     * Shows the board given (an import). Returns true only when the store keeps it. A board that cannot be read is
+     * never saved over (F11), so the result is false then.
+     */
+    replaceData: (next: WhiteboardData): boolean => {
       setClearedStrokes(null);
-      setData(normalizeWhiteboard({ version: WHITEBOARD_VERSION, ...next }));
+      const normalized = normalizeWhiteboard({ version: WHITEBOARD_VERSION, ...next });
+      setData(normalized);
+      return stored !== 'corrupt' && saveWhiteboard(missionId, normalized);
     },
   };
 }

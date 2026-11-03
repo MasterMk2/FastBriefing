@@ -4,6 +4,7 @@ import {
   findPreviousStoredNotes,
   inspectStoredNotes,
   saveStoredNotes,
+  setAsideAndSaveStoredNotes,
   setAsideStoredNotes,
 } from './notes';
 
@@ -79,6 +80,38 @@ describe('notes store protection (F11)', () => {
     expect(values.get(backupKey as string)).toBe(raw);
     expect(values.has(storageKey(firstKey))).toBe(false);
     expect(saveStoredNotes(emptyUserNotes(firstKey))).toBe(true);
+  });
+
+  it('sets a broken record aside and saves the notes on screen again, reporting the save', () => {
+    const { values, storage } = memoryStorage();
+    vi.stubGlobal('localStorage', storage);
+    values.set(storageKey(firstKey), '{"broken":');
+
+    const result = setAsideAndSaveStoredNotes(notesWithText(firstKey, 'Typed on screen'), new Date('2026-11-03T00:00:00.000Z'));
+
+    expect(result.saved).toBe(true);
+    expect(values.get(result.backupKey ?? '')).toBe('{"broken":');
+    expect(JSON.parse(values.get(storageKey(firstKey)) ?? '{}')).toMatchObject({ smeac: { mission: 'Typed on screen' } });
+  });
+
+  it('reports no save when the store refuses the write, and still keeps the backup', () => {
+    const values = new Map<string, string>();
+    const storage = {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => {
+        if (key === storageKey(firstKey)) throw new Error('QuotaExceededError');
+        values.set(key, value);
+      },
+      removeItem: (key: string) => { values.delete(key); },
+    };
+    vi.stubGlobal('localStorage', storage);
+    values.set(storageKey(firstKey), '{"broken":');
+
+    const result = setAsideAndSaveStoredNotes(notesWithText(firstKey, 'Typed on screen'));
+
+    expect(result.saved).toBe(false);
+    expect(values.get(result.backupKey ?? '')).toBe('{"broken":');
+    expect(values.has(storageKey(firstKey))).toBe(false);
   });
 
   it('returns null when there is nothing to set aside', () => {
