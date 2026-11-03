@@ -19,7 +19,7 @@ export default function FlightsTab({ mission, settings, onNotesChange }: Flights
   const { t } = useTranslation();
   const [selectedFlight, setSelectedFlight] = useState<Flight | null>(null);
   const [side, setSide] = useState<'blue' | 'red'>('blue');
-  const viewMission = useMemo(() => applyViewMode(mission, settings.viewMode), [mission, settings.viewMode]);
+  const viewMission = useMemo(() => applyViewMode(mission, settings.viewMode, settings.side), [mission, settings.viewMode, settings.side]);
   const flights = side === 'blue' ? viewMission.coalitions.blue.flights : viewMission.coalitions.red.flights;
   const visibleSelectedFlight = selectedFlight && flights.includes(selectedFlight) ? selectedFlight : null;
   

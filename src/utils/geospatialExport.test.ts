@@ -26,6 +26,7 @@ function missionFixture(theatre = 'Caucasus'): MissionData {
       neutral: emptyCoalition(),
     },
     userNotes: { waypoints: {}, mapAnnotations: [] },
+    issues: [],
   } as unknown as MissionData;
 }
 

@@ -1,4 +1,4 @@
-import type { DisplaySettings, ParsedMissionFile } from '../types/mission';
+import type { DisplaySettings, ParsedMissionFile, Side } from '../types/mission';
 
 export type RevisionValue = string | number | boolean | null | RevisionValue[] | { [key: string]: RevisionValue };
 type RecordValue = Record<string, unknown>;
@@ -210,7 +210,19 @@ function pointPairs(before: RevisionPoint[], after: RevisionPoint[]) {
   return anchored;
 }
 
-export function compareMissionRevisions(before: MissionRevision, after: MissionRevision, viewMode: DisplaySettings['viewMode']): MissionRevisionDiff {
+/**
+ * Compare two revisions as the given view shows them.
+ *
+ * Pilot view (D1) lists only the displayed side's flights. The opposing and
+ * neutral flights are left out before matching, so their added, removed or
+ * changed fields never appear, the same rule applyViewMode applies to the
+ * mission. A pilot comparison without a side lists no flights (fail closed).
+ * Hidden flights are also left out in pilot view (G11).
+ */
+export function compareMissionRevisions(before: MissionRevision, after: MissionRevision, viewMode: DisplaySettings['viewMode'], side?: Side): MissionRevisionDiff {
+  const visibleFlights = (flights: RevisionFlight[]) => viewMode === 'creator'
+    ? flights
+    : flights.filter(flight => side !== undefined && flight.side === side);
   const changes: RevisionChange[] = [];
   const routes: RevisionRoute[] = [];
   const diff = (category: RevisionCategory, entity: string, field: string, a?: RevisionValue, b?: RevisionValue) => {
@@ -229,7 +241,7 @@ export function compareMissionRevisions(before: MissionRevision, after: MissionR
   diff('mission', '', 'start_time', before.startTime, after.startTime);
   diff('mission', '', 'date', before.date, after.date);
   diff('weather', '', 'weather', before.weather, after.weather);
-  const pairs = match(before.flights, after.flights, [
+  const pairs = match(visibleFlights(before.flights), visibleFlights(after.flights), [
     f => f.id ? `${f.side}:${f.category}:${f.id}` : undefined,
     f => f.name ? `${f.side}:${f.category}:${f.name}` : undefined,
   ]);

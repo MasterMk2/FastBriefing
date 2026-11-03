@@ -29,7 +29,7 @@ export function planKneeboardPages(
   aircraftType: string | null = null,
   whiteboard: WhiteboardData = { notes: '', strokes: [] },
 ): KneeboardPage[] {
-  const visible = applyViewMode(mission, settings.viewMode);
+  const visible = applyViewMode(mission, settings.viewMode, settings.side);
   const allFlights = [
     ...visible.coalitions.blue.flights,
     ...visible.coalitions.red.flights,

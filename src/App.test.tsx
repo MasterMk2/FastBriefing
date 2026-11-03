@@ -13,7 +13,17 @@ vi.mock('./core/MissionParser', async importOriginal => ({
   parse = mocks.parse;
   cancel = mocks.cancel;
 } }));
-vi.mock('./components/MissionView', () => ({ default: ({ mission }: { mission: { meta: { sortie: string } } }) => <div data-testid="mission-view">{mission.meta.sortie}</div> }));
+// The mission name is read from the shell header; the carried-over tab screens are not under test here.
+const emptyScreen = () => null;
+vi.mock('./screens/OverviewScreen', () => ({ default: emptyScreen }));
+vi.mock('./screens/FlightScreen', () => ({ default: emptyScreen }));
+vi.mock('./screens/MapScreen', () => ({ default: emptyScreen }));
+vi.mock('./screens/CommsScreen', () => ({ default: emptyScreen }));
+vi.mock('./screens/SupportScreen', () => ({ default: emptyScreen }));
+vi.mock('./screens/ThreatsScreen', () => ({ default: emptyScreen }));
+vi.mock('./screens/NotesScreen', () => ({ default: emptyScreen }));
+vi.mock('./screens/ExportScreen', () => ({ default: emptyScreen }));
+vi.mock('./screens/BriefingMode', () => ({ default: emptyScreen }));
 vi.mock('./components/RevisionMap', () => ({ default: () => <div data-testid="revision-map">Map</div> }));
 vi.mock('./utils/notes', async importOriginal => ({
   ...await importOriginal<typeof import('./utils/notes')>(),
@@ -31,15 +41,27 @@ function deferred<T>() { let resolve!: (value: T) => void; let reject!: (error: 
 let container: HTMLDivElement;
 let root: ReturnType<typeof createRoot>;
 const input = () => container.querySelector('input[type=file]') as HTMLInputElement;
+// Screens are lazy-loaded, so let pending module loads and state updates settle before asserting.
+async function settle() {
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
+}
 async function choose(files: File[]) {
   Object.defineProperty(input(), 'files', { configurable: true, value: files });
   await act(async () => { input().dispatchEvent(new Event('change', { bubbles: true })); });
+  await settle();
+}
+// Wait until the lazily loaded revision screen shows the expected text (bounded, so a missing text still fails).
+async function waitForText(text: string) {
+  for (let attempt = 0; attempt < 100 && !container.textContent?.includes(text); attempt += 1) {
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)); });
+  }
 }
 async function click(text: string) {
   const button = [...container.querySelectorAll('button')].find(node => node.textContent === text);
   expect(button).toBeDefined(); await act(async () => { button!.click(); });
+  await settle();
 }
-const mission = () => container.querySelector('[data-testid=mission-view]')?.textContent;
+const mission = () => container.querySelector('.shell-mission-name')?.textContent;
 
 beforeEach(async () => {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
@@ -56,9 +78,11 @@ describe('two-file revision UI', () => {
     mocks.parse.mockResolvedValueOnce(parsed('old')).mockResolvedValueOnce(parsed('new', 37000));
     await choose([file('old.miz'), file('new.miz')]);
     expect(mission()).toBe('new');
+    await waitForText('変更前: old.miz → 変更後: new.miz');
     expect(container.textContent).toContain('変更前: old.miz → 変更後: new.miz');
     expect(container.textContent).toContain('start_time');
     await click('変更前／変更後を入れ替え');
+    await waitForText('変更前: new.miz → 変更後: old.miz');
     expect(container.textContent).toContain('変更前: new.miz → 変更後: old.miz');
     expect(mission()).toBe('new');
     await click('差分を閉じる');
@@ -69,6 +93,7 @@ describe('two-file revision UI', () => {
     const event = new Event('drop', { bubbles: true, cancelable: true });
     Object.defineProperty(event, 'dataTransfer', { value: { files: [file('a.miz'), file('b.miz')], types: ['Files'] } });
     await act(async () => { window.dispatchEvent(event); });
+    await settle();
     expect(container.querySelector('.revision-comparison')).not.toBeNull();
     mocks.parse.mockResolvedValueOnce(parsed('c')); await choose([file('c.miz')]);
     expect(mission()).toBe('c'); expect(container.querySelector('.revision-comparison')).toBeNull();
@@ -76,7 +101,7 @@ describe('two-file revision UI', () => {
   it('rejects 3 files or mixed formats without changing the current mission', async () => {
     mocks.parse.mockResolvedValueOnce(parsed('original')); await choose([file('a.miz')]);
     await choose([file('a.miz'), file('b.miz'), file('c.miz')]);
-    expect(container.querySelector('[role=alert]')).not.toBeNull(); expect(mission()).toBe('original');
+    expect(container.querySelector('.app-error')).not.toBeNull(); expect(mission()).toBe('original');
     await choose([file('a.miz'), file('notes.txt')]); expect(mocks.parse).toHaveBeenCalledTimes(1);
   });
   it('keeps the previous mission when the second archive fails, then permits selecting the same names again', async () => {
@@ -84,30 +109,30 @@ describe('two-file revision UI', () => {
     mocks.parse.mockResolvedValueOnce(parsed('old')).mockRejectedValueOnce(new Error('invalid archive'));
     await choose([file('old.miz'), file('new.miz')]); expect(mission()).toBe('original');
     expect(container.querySelector('.revision-comparison')).toBeNull(); expect(input().value).toBe('');
-    expect(container.querySelector('[role=alert]')).not.toBeNull();
+    expect(container.querySelector('.app-error')).not.toBeNull();
     mocks.parse.mockResolvedValueOnce(parsed('old')).mockResolvedValueOnce(parsed('new'));
     await choose([file('old.miz'), file('new.miz')]); expect(mission()).toBe('new');
-    expect(container.querySelector('[role=alert]')).toBeNull();
+    expect(container.querySelector('.app-error')).toBeNull();
   });
   it('discards a late old result after a newer selection, and after explicit cancel', async () => {
     const old = deferred<ReturnType<typeof parsed>>(); mocks.parse.mockReturnValueOnce(old.promise);
     await choose([file('old.miz'), file('old2.miz')]);
     mocks.parse.mockResolvedValueOnce(parsed('new')); await choose([file('new.miz')]);
-    await act(async () => { old.resolve(parsed('stale')); }); expect(mission()).toBe('new');
+    await act(async () => { old.resolve(parsed('stale')); }); await settle(); expect(mission()).toBe('new');
     expect(mocks.parse).toHaveBeenCalledTimes(2);
     const canceled = deferred<ReturnType<typeof parsed>>(); mocks.parse.mockReturnValueOnce(canceled.promise);
     await choose([file('cancel.miz')]); await click('読込をキャンセル');
-    await act(async () => { canceled.resolve(parsed('canceled')); }); expect(mission()).toBe('new');
+    await act(async () => { canceled.resolve(parsed('canceled')); }); await settle(); expect(mission()).toBe('new');
     expect(container.querySelector('.loading-overlay')).toBeNull();
   });
   it('invalidates a pending batch on an invalid drop rather than later replacing the current mission', async () => {
     const pending = deferred<ReturnType<typeof parsed>>(); mocks.parse.mockReturnValueOnce(pending.promise);
     await choose([file('pending.miz')]); await choose([file('bad.txt')]);
     await act(async () => { pending.resolve(parsed('stale')); }); expect(mission()).toBeUndefined();
-    expect(container.querySelector('[role=alert]')).not.toBeNull();
+    expect(container.querySelector('.app-error')).not.toBeNull();
   });
   it('ignores a canceled file picker and renders untrusted filenames as text', async () => {
-    await choose([]); expect(container.querySelector('[role=alert]')).toBeNull();
+    await choose([]); expect(container.querySelector('.app-error')).toBeNull();
     mocks.parse.mockResolvedValueOnce(parsed('a')).mockResolvedValueOnce(parsed('b'));
     await choose([file('<img src=x onerror=alert(1)>.miz'), file('b.miz')]);
     expect(container.querySelector('.revision-comparison img')).toBeNull();

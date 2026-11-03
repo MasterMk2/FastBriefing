@@ -108,10 +108,29 @@ describe('mission revision matching and changes', () => {
   it('does not leak hidden groups in either direction or on the map in pilot mode', () => {
     const a = snapshot([group()]), b = snapshot([{ ...group(), hidden: true }]);
     b.flights[0].route[0].data.x = 999;
-    const result = compareMissionRevisions(a, b, 'pilot');
+    const result = compareMissionRevisions(a, b, 'pilot', 'blue');
     expect(result.changes).toEqual([]); expect(result.routes).toEqual([]);
-    expect(compareMissionRevisions(b, a, 'pilot').changes).toEqual([]);
+    expect(compareMissionRevisions(b, a, 'pilot', 'blue').changes).toEqual([]);
     expect(compare(a, b).changes).not.toHaveLength(0);
+  });
+  it('compares only the displayed side in pilot view and never lists the opposing flights (D1)', () => {
+    const build = (enemyX: number, withEnemy = true) => {
+      const own = group(1, 'Own');
+      const enemy = { ...group(9, 'Enemy'), route: { points: [point('START', enemyX), point('IP', 100), point('LAND', 200)] } };
+      return createMissionRevision({ theatre: 'Caucasus', dictionary: {}, mission: {
+        start_time: 36000, weather: { qnh: 760 }, coalition: {
+          blue: { country: [{ plane: { group: [own] } }] },
+          red: { country: [{ plane: { group: withEnemy ? [enemy] : [] } }] },
+        } } });
+    };
+    const a = build(0), b = build(500);
+    expect(compareMissionRevisions(a, b, 'creator').changes.length).toBeGreaterThan(0);
+    expect(compareMissionRevisions(a, b, 'pilot', 'blue').changes).toEqual([]);
+    const redView = compareMissionRevisions(a, b, 'pilot', 'red');
+    expect(redView.changes.length).toBeGreaterThan(0);
+    expect(redView.changes.every(change => change.entity.startsWith('red /'))).toBe(true);
+    expect(compareMissionRevisions(build(0, true), build(0, false), 'pilot', 'blue').changes).toEqual([]);
+    expect(compareMissionRevisions(a, b, 'pilot').changes).toEqual([]);
   });
   it('marks different theatres without pretending route coordinates are compatible', () => {
     const a = snapshot([group()]), b = snapshot([group()]); b.theatre = 'Syria';

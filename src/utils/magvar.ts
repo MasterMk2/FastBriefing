@@ -54,7 +54,9 @@ function interpolate(table: MagneticVariationTable, year: number): number {
 }
 
 /**
- * Return representative magnetic variation in degrees (east positive).
+ * Return representative magnetic variation in degrees (east positive), or null
+ * when no table exists for the theatre (for example Afghanistan, Iraq and
+ * custom maps). Callers must show a true bearing only in that case.
  *
  * UI note: this is a map-level approximation, so variation changes within a
  * theatre are not reflected.  Latitude/longitude are retained for API
@@ -62,15 +64,14 @@ function interpolate(table: MagneticVariationTable, year: number): number {
  * plus year data, and the reference coordinate used to obtain it is recorded
  * in each theatre's `_reference` JSON entry.
  * Dates outside the table are clamped to the nearest available reference year.
- * Unknown theatres and invalid dates return 0°, which leaves a true bearing
- * unchanged while keeping the UI safe for custom maps.
+ * An invalid date returns null as well.
  */
-export function getMagneticVariation(theatre: string, _lat: number, _lon: number, date: Date): number {
+export function getMagneticVariation(theatre: string, _lat: number, _lon: number, date: Date): number | null {
   const year = decimalYear(date);
-  if (year === null) return 0;
+  if (year === null) return null;
 
   const table = MAGNETIC_VARIATION_DATA[theatre];
-  return table ? interpolate(table, year) : 0;
+  return table ? interpolate(table, year) : null;
 }
 
 function normalizeBearing(bearing: number): number {

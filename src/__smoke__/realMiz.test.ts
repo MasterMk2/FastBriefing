@@ -13,7 +13,6 @@ declare const process: {
 
 const smokeDirectory = process.env.SMOKE_MIZ_DIR?.trim() ?? '';
 const settings = { coordinateFormat: 'DDM', unitSystem: 'metric', viewMode: 'creator' };
-const unknownUnitWarningPrefix = '参照データに未収録のユニット: ';
 
 function filePath(directory: string, name: string): string {
   return `${directory.replace(/[\\/]+$/, '')}/${name}`;
@@ -130,24 +129,44 @@ describe.skipIf(!smokeDirectory)('real .miz smoke test', () => {
       }
 
       const normalized = normalizeMission(parsed, settings);
-      const unknownUnits = normalized.warnings
-        .filter(warning => warning.startsWith(unknownUnitWarningPrefix))
-        .map(warning => warning.slice(unknownUnitWarningPrefix.length));
-      totalWarningCount += normalized.warnings.length;
+      // issues are kept per side (D1), so one type can appear once per side. Count each type once per mission.
+      const unknownUnits = [...new Set(normalized.issues
+        .filter(issue => issue.code === 'unit.unknownType')
+        .map(issue => String(issue.params?.type ?? '')))];
+      totalWarningCount += normalized.issues.length;
       unknownUnitWarningCount += unknownUnits.length;
       unknownUnits.forEach((unit) => {
         unknownUnitMissionCounts.set(unit, (unknownUnitMissionCounts.get(unit) ?? 0) + 1);
       });
       const creatorView = applyViewMode(normalized, 'creator');
-      const pilotView = applyViewMode(normalized, 'pilot');
+      const pilotView = applyViewMode(normalized, 'pilot', 'blue');
       const creatorEntityCount = missionEntityCount(creatorView);
       const pilotEntityCount = missionEntityCount(pilotView);
       const hiddenCount = hiddenEntityCount(normalized);
 
-      if (hiddenCount > 0) {
-        hiddenMissionCount += 1;
-        if (pilotEntityCount < creatorEntityCount) reducedPilotMissionCount += 1;
+      if (hiddenCount > 0) hiddenMissionCount += 1;
+      // G11 and D1 on the real file: each displayed side keeps exactly its non-hidden entities
+      // (and no late-activation AI), and the opposing side has no flights in that view.
+      let reducedHere = false;
+      for (const side of ['blue', 'red'] as const) {
+        const opposing = side === 'blue' ? 'red' : 'blue';
+        const pilot = applyViewMode(normalized, 'pilot', side);
+        const own = normalized.coalitions[side];
+        const shown = pilot.coalitions[side];
+        const ownHidden = own.flights.filter(hasHiddenFlag).length
+          + own.support.filter(hasHiddenFlag).length
+          + own.aiGroups.filter(hasHiddenFlag).length;
+        if (ownHidden > 0) reducedHere = true;
+        expect.soft(hiddenEntityCount(pilot), `${name}: ${side} pilot view keeps a hidden entity`).toBe(0);
+        expect.soft(shown.flights.length, `${name}: ${side} pilot flights`)
+          .toBe(own.flights.filter(item => !hasHiddenFlag(item)).length);
+        expect.soft(shown.support.length, `${name}: ${side} pilot support`)
+          .toBe(own.support.filter(item => !hasHiddenFlag(item)).length);
+        expect.soft(shown.aiGroups.length, `${name}: ${side} pilot AI groups`)
+          .toBe(own.aiGroups.filter(item => !hasHiddenFlag(item) && !item.lateActivation).length);
+        expect.soft(pilot.coalitions[opposing].flights.length, `${name}: ${opposing} flights in ${side} pilot view`).toBe(0);
       }
+      if (reducedHere) reducedPilotMissionCount += 1;
 
       const flights = [
         ...normalized.coalitions.blue.flights,
@@ -186,7 +205,7 @@ describe.skipIf(!smokeDirectory)('real .miz smoke test', () => {
           routePoints: routePointCount,
           pylons: pylonCount,
           threatGroups: threatGroups.length,
-          warnings: normalized.warnings.length,
+          issues: normalized.issues.length,
           unknownUnits,
           sourceHasClientData,
           sourceHasPylonData,
@@ -235,9 +254,10 @@ describe.skipIf(!smokeDirectory)('real .miz smoke test', () => {
         [...unknownUnitMissionCounts.entries()].sort(([left], [right]) => left.localeCompare(right)),
       ),
     }));
-    expect(parseFailures, `解析に失敗した .miz: ${parseFailures.join('; ')}`).toEqual([]);
-    expect(pylonMissionCount, '搭載パイロンを取得できたミッション数').toBeGreaterThan(0);
-    expect(threatMissionCount, '脅威半径を解決できたミッション数').toBeGreaterThan(0);
+    // Soft: a parse failure must not stop the hidden-flag checks above from being reported.
+    expect.soft(parseFailures, `解析に失敗した .miz: ${parseFailures.join('; ')}`).toEqual([]);
+    expect.soft(pylonMissionCount, '搭載パイロンを取得できたミッション数').toBeGreaterThan(0);
+    expect.soft(threatMissionCount, '脅威半径を解決できたミッション数').toBeGreaterThan(0);
     console.log(JSON.stringify({
       refueling: {
         missionCount: refuelingMissionCount,
@@ -254,5 +274,5 @@ describe.skipIf(!smokeDirectory)('real .miz smoke test', () => {
     } else {
       expect(reducedPilotMissionCount, 'hidden フラグを持つミッションでパイロットビューの件数が減る').toBeGreaterThan(0);
     }
-  });
+  }, 120_000);
 });

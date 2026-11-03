@@ -8,6 +8,7 @@ import { getMoonInfo, getSunTimes, type SunTimes } from '../utils/astro';
 import { buildMetar } from '../utils/metar';
 import { addSeconds, formatDateYMD, formatEtaLocal, formatEtaZulu, formatTimeHHMM, formatUtcOffset, missionLocalDate, missionZuluDate } from '../utils/time';
 import { applyViewMode } from '../utils/viewMode';
+import { issueTextList, issueTexts } from '../core/issueText';
 import WhiteboardDrawing from './WhiteboardDrawing';
 import MissionMapCanvas, { type MissionMapRenderState } from './MissionMapCanvas';
 import { formatLegDuration, formatRouteCoordinate } from '../utils/routeLegs';
@@ -34,7 +35,7 @@ const GUARD_FREQUENCIES_MHZ = {
 
 export default function PrintView({ mission, settings, whiteboard, onMapRenderStateChange }: PrintViewProps) {
   const { t } = useTranslation();
-  const viewMission = useMemo(() => applyViewMode(mission, settings.viewMode), [mission, settings.viewMode]);
+  const viewMission = useMemo(() => applyViewMode(mission, settings.viewMode, settings.side), [mission, settings.viewMode, settings.side]);
   const printT: PrintTranslator = (key, options) => t(key, {
     ...options,
     lng: settings.outputLanguage,
@@ -329,11 +330,11 @@ function PrintOverview({ mission, settings, t }: { mission: MissionData; setting
         </section>
       )}
 
-      {mission.warnings.length > 0 && (
+      {mission.issues.length > 0 && (
         <section className="section warnings print-subsection">
           <h3>{t('overview.warning')}</h3>
           <ul>
-            {mission.warnings.map((warning, index) => <li key={index}>{warning}</li>)}
+            {issueTextList(mission.issues).map(text => <li key={text}>{text}</li>)}
           </ul>
         </section>
       )}
@@ -731,8 +732,8 @@ function PrintThreats({ mission, settings, t }: { mission: MissionData; settings
   const threats = allEnemies.filter(hasResolvedThreatRange);
   const unrecordedThreats = allEnemies.filter(isUnrecordedThreat);
   const otherEnemies = allEnemies.filter(group => !hasResolvedThreatRange(group) && !isUnrecordedThreat(group));
-  const threatWarnings = [...new Set(mission.warnings.filter(warning => warning.startsWith('脅威半径が未収録')))].sort();
-  const unknownUnitWarnings = [...new Set(mission.warnings.filter(warning => warning.startsWith('参照データに未収録のユニット')))].sort();
+  const threatWarnings = issueTexts(mission.issues, ['threat.rangeUnrecorded']);
+  const unknownUnitWarnings = issueTexts(mission.issues, ['unit.unknownType']);
   const showCreatorDetails = settings.viewMode === 'creator';
 
   return (

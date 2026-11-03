@@ -1,14 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { ChangeEvent, DragEvent as ReactDragEvent, KeyboardEvent as ReactKeyboardEvent } from 'react';
+import type { ChangeEvent } from 'react';
 import { MissionParser } from './core/MissionParser';
 import { MissionBatchLoader, validateMissionFiles } from './core/MissionBatchLoader';
 import { createMissionRevision } from './utils/missionRevision';
-import RevisionComparison from './components/RevisionComparison';
 import type { LoadedRevision } from './components/RevisionComparison';
 import { normalizeMission } from './core/MissionNormalizer';
-import type { DisplaySettings, MissionData, UserNotes } from './types/mission';
-import MissionView from './components/MissionView';
-import { THEMES, useSettings } from './hooks/useSettings';
+import type { MissionData, UserNotes } from './types/mission';
+import AppShell from './shell/AppShell';
+import { useSettings } from './hooks/useSettings';
 import { useTranslation } from 'react-i18next';
 import { createMissionKey, emptyUserNotes, readStoredNotes, saveStoredNotes } from './utils/notes';
 import { missionLoadErrorTranslationKey } from './utils/missionLoadError';
@@ -21,7 +20,7 @@ function App() {
   const [revisions, setRevisions] = useState<[LoadedRevision, LoadedRevision] | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [storageFailed, setStorageFailed] = useState(false);
-  const { settings, setViewMode, setLanguage, setTheme } = useSettings();
+  const { settings } = useSettings();
   const { t } = useTranslation();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dragCounterRef = useRef(0);
@@ -31,10 +30,12 @@ function App() {
   useEffect(() => {
     if (typeof document === 'undefined') return;
     document.documentElement.dataset.theme = settings.theme;
+    document.documentElement.dataset.fontScale = settings.fontScale;
     return () => {
       delete document.documentElement.dataset.theme;
+      delete document.documentElement.dataset.fontScale;
     };
-  }, [settings.theme]);
+  }, [settings.theme, settings.fontScale]);
 
   const handleFiles = useCallback((fileList: FileList | readonly File[]) => {
     const files = Array.from(fileList);
@@ -134,11 +135,6 @@ function App() {
     };
   }, []);
 
-  const handleDropZoneDragOver = useCallback((event: ReactDragEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    event.stopPropagation();
-  }, []);
-
   const handleFileSelect = useCallback((event: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files ?? []);
     // Snapshot before clearing, so the same selection can be retried.
@@ -149,13 +145,6 @@ function App() {
   const openFilePicker = useCallback(() => {
     fileInputRef.current?.click();
   }, []);
-
-  const handleDropLabelKeyDown = useCallback((event: ReactKeyboardEvent<HTMLLabelElement>) => {
-    if (event.key === 'Enter' || event.key === ' ') {
-      event.preventDefault();
-      openFilePicker();
-    }
-  }, [openFilePicker]);
 
   const handleRetrySelection = useCallback(() => {
     setError(null);
@@ -173,99 +162,58 @@ function App() {
   }, []);
 
   return (
-    <div className="app" data-theme={settings.theme}>
-      <header className="header">
-        <h1>FastBriefing</h1>
-        <div className="header-controls">
-          <label>
-            <input type="checkbox" checked={settings.viewMode === 'creator'} onChange={() => setViewMode(settings.viewMode === 'creator' ? 'pilot' : 'creator')} />
-            {settings.viewMode === 'creator' ? t('app.creatorView') : t('app.pilotView')}
-          </label>
-          <select value={settings.language} onChange={(event) => setLanguage(event.target.value as DisplaySettings['language'])} aria-label={t('app.displayLanguage')}>
-            <option value="ja">{t('app.japanese')}</option>
-            <option value="en">{t('app.english')}</option>
-          </select>
-          {THEMES.length > 1 && (
-            <select value={settings.theme} onChange={(event) => setTheme(event.target.value as DisplaySettings['theme'])} aria-label={t('app.theme')}>
-              {THEMES.map(theme => <option key={theme} value={theme}>{t(`app.themes.${theme}`)}</option>)}
-            </select>
-          )}
+    <div className="app" data-theme={settings.theme} data-font-scale={settings.fontScale}>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".miz"
+        multiple
+        onChange={handleFileSelect}
+        id="file-input"
+        className="visually-hidden"
+        aria-label={t('app.selectMiz')}
+      />
+
+      <AppShell
+        mission={missionData}
+        sourceFile={sourceFile}
+        storageFailed={storageFailed}
+        revisions={revisions}
+        loading={loading}
+        isDragging={isDragging}
+        onNotesChange={handleNotesChange}
+        onPickFiles={openFilePicker}
+        onCloseRevisions={() => setRevisions(null)}
+        onCloseMission={resetMission}
+      />
+
+      {isDragging && missionData && (
+        <div className="drop-overlay" role="status" aria-live="polite">
+          {t('app.dropFile')}
         </div>
-      </header>
+      )}
 
-      <main className="main">
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept=".miz"
-          multiple
-          onChange={handleFileSelect}
-          id="file-input"
-          className="visually-hidden"
-          aria-label={t('app.selectMiz')}
-        />
-
-        {missionData && <div className="revision-actions">
-          <button type="button" className="btn btn-secondary" onClick={openFilePicker}>{t('revision.open')}</button>
-          <span>{sourceFile?.name}</span>
-        </div>}
-        {revisions && <RevisionComparison
-          key={`${revisions[0].fingerprint}:${revisions[1].fingerprint}`}
-          revisions={revisions} settings={settings} onClose={() => setRevisions(null)}
-        />}
-        {!missionData ? (
-          <div
-            className={`drop-zone${isDragging ? ' dragging' : ''}`}
-            onDragOver={handleDropZoneDragOver}
-            aria-label={t('app.dropZone')}
-            aria-busy={loading}
-          >
-            <label
-              htmlFor="file-input"
-              className="drop-label"
-              role="button"
-              tabIndex={0}
-              onKeyDown={handleDropLabelKeyDown}
-              aria-describedby="drop-hint"
-            >
-              <div className="drop-icon" aria-hidden="true">📁</div>
-              <p>{t('app.dropFile')}</p>
-              <p className="drop-hint" id="drop-hint">{t('app.dropHint')}</p>
-            </label>
+      {error && (
+        <div className="error app-error" role="alert">
+          <p>{error}</p>
+          <div className="error-actions">
+            <button type="button" className="btn btn-secondary" onClick={handleRetrySelection}>{t('app.retry')}</button>
+            <button type="button" className="btn btn-secondary" onClick={resetMission}>{t('app.reset')}</button>
           </div>
-        ) : (
-          <MissionView mission={missionData} settings={settings} sourceFile={sourceFile} onNotesChange={handleNotesChange} storageFailed={storageFailed} />
-        )}
+        </div>
+      )}
 
-        {isDragging && missionData && (
-          <div className="drop-overlay" role="status" aria-live="polite">
-            {t('app.dropFile')}
-          </div>
-        )}
-
-
-        {error && (
-          <div className="error app-error" role="alert">
-            <p>{error}</p>
-            <div className="error-actions">
-              <button type="button" className="btn btn-secondary" onClick={handleRetrySelection}>{t('app.retry')}</button>
-              <button type="button" className="btn btn-secondary" onClick={resetMission}>{t('app.reset')}</button>
-            </div>
-          </div>
-        )}
-
-        {loading && (
-          <div className="loading-overlay" role="status" aria-live="polite">
-            <div className="spinner" aria-hidden="true"></div>
-            <p>{t('app.loading')}</p>
-            <button type="button" className="btn btn-secondary" onClick={() => {
-              loaderRef.current.cancel();
-              parseGenerationRef.current += 1;
-              setLoading(false);
-            }}>{t('revision.cancel')}</button>
-          </div>
-        )}
-      </main>
+      {loading && (
+        <div className="loading-overlay" role="status" aria-live="polite">
+          <div className="spinner" aria-hidden="true"></div>
+          <p>{t('app.loading')}</p>
+          <button type="button" className="btn btn-secondary" onClick={() => {
+            loaderRef.current.cancel();
+            parseGenerationRef.current += 1;
+            setLoading(false);
+          }}>{t('revision.cancel')}</button>
+        </div>
+      )}
     </div>
   );
 }

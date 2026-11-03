@@ -148,7 +148,7 @@ function classifyFrequencyCluster(entries: CommunicationFrequency[]): FrequencyC
 
 export default function CommsTab({ mission, settings }: CommsTabProps) {
   const { t } = useTranslation();
-  const viewMission = useMemo(() => applyViewMode(mission, settings.viewMode), [mission, settings.viewMode]);
+  const viewMission = useMemo(() => applyViewMode(mission, settings.viewMode, settings.side), [mission, settings.viewMode, settings.side]);
   const allFlights = [...viewMission.coalitions.blue.flights, ...viewMission.coalitions.red.flights];
   const allSupport = [...viewMission.coalitions.blue.support, ...viewMission.coalitions.red.support];
   const flightRows = createStableKeys(

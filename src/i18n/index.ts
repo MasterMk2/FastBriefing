@@ -1,13 +1,50 @@
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
-import en from './locales/en.json';
-import ja from './locales/ja.json';
 
 export const SETTINGS_STORAGE_KEY = 'fastbriefing-settings';
-export const SETTINGS_VERSION = 4;
+export const SETTINGS_VERSION = 5;
+/** Settings records that loadInitialLanguage can still read (older versions migrate on load). */
+export const READABLE_SETTINGS_VERSIONS: readonly number[] = [1, 2, 3, 4, SETTINGS_VERSION];
 export const SUPPORTED_LANGUAGES = ['ja', 'en'] as const;
 export type SupportedLanguage = typeof SUPPORTED_LANGUAGES[number];
 export const DEFAULT_LANGUAGE: SupportedLanguage = 'ja';
+
+/**
+ * Translation namespaces. `legacy` holds every key the pre-redesign tabs use and
+ * is the defaultNS, so existing `t('overview.sortie')` calls keep resolving.
+ * New code names its namespace explicitly, for example `t('shell:nav.overview')`.
+ * Remove `legacy` keys as the old tabs are replaced during integration.
+ */
+export const NAMESPACES = [
+  'legacy', 'shell', 'flight', 'map', 'export', 'briefing', 'comms', 'support', 'threats',
+  'notes', 'revision', 'wingman', 'settings', 'issues', 'lint', 'overview', 'initial', 'common',
+] as const;
+export type Namespace = typeof NAMESPACES[number];
+export const DEFAULT_NAMESPACE: Namespace = 'legacy';
+
+type MessageTree = Record<string, unknown>;
+export type LocaleModules = Record<string, { default: MessageTree }>;
+export type LocaleResources = Record<SupportedLanguage, Record<string, MessageTree>>;
+
+const localeModules = import.meta.glob<{ default: MessageTree }>('./locales/*/*.json', { eager: true }) as LocaleModules;
+
+/**
+ * Group `./locales/<lang>/<namespace>.json` modules by language and namespace.
+ * Exported so that tests can check the file layout without a second glob.
+ */
+export function buildLocaleResources(modules: LocaleModules): LocaleResources {
+  const resources: LocaleResources = { ja: {}, en: {} };
+  for (const [path, module] of Object.entries(modules)) {
+    const match = /\.\/locales\/([^/]+)\/([^/]+)\.json$/.exec(path);
+    if (!match) continue;
+    const [, language, namespace] = match;
+    if (language !== 'ja' && language !== 'en') continue;
+    resources[language][namespace] = module.default;
+  }
+  return resources;
+}
+
+const resources = buildLocaleResources(localeModules);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -40,10 +77,7 @@ export function loadInitialLanguage(storage: Pick<Storage, 'getItem'> | null = g
 
     const value: unknown = JSON.parse(serialized);
     if (!isRecord(value)) return DEFAULT_LANGUAGE;
-    const isReadableVersion = value.settingsVersion === SETTINGS_VERSION
-      || value.settingsVersion === 3
-      || value.settingsVersion === 2
-      || value.settingsVersion === 1;
+    const isReadableVersion = READABLE_SETTINGS_VERSIONS.includes(value.settingsVersion as number);
     if (!isReadableVersion || !isSupportedLanguage(value.language)) {
       return DEFAULT_LANGUAGE;
     }
@@ -57,10 +91,9 @@ export function loadInitialLanguage(storage: Pick<Storage, 'getItem'> | null = g
 export const i18nReady = i18n
   .use(initReactI18next)
   .init({
-    resources: {
-      ja: { translation: ja },
-      en: { translation: en },
-    },
+    resources,
+    ns: [...NAMESPACES],
+    defaultNS: DEFAULT_NAMESPACE,
     lng: loadInitialLanguage(),
     fallbackLng: 'ja',
     interpolation: { escapeValue: false },

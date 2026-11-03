@@ -1,4 +1,4 @@
-import type { DisplaySettings, MissionData } from '../types/mission';
+import type { DisplaySettings, MissionData, Side } from '../types/mission';
 import { dcsToLatLon } from './coordinates';
 import { applyViewMode } from './viewMode';
 import { waypointAnnotationKey } from './waypointAnnotations';
@@ -40,8 +40,9 @@ const EARTH_RADIUS_METERS = 6371008.8;
 export function buildGeospatialExport(
   mission: MissionData,
   viewMode: DisplaySettings['viewMode'],
+  side?: Side | null,
 ): GeospatialExport {
-  const visible = applyViewMode(mission, viewMode);
+  const visible = applyViewMode(mission, viewMode, side);
   const features: GeoFeature[] = [];
   let skipped = 0;
 

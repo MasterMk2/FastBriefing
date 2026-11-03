@@ -83,7 +83,8 @@ export interface ATCFrequency {
 export interface TACAN {
   channel: string;
   mode: string;
-  latlon: [number, number];
+  /** Undefined when the beacon position is unresolved (never [0, 0]). */
+  latlon?: [number, number];
   latlonResolved?: boolean;
   callsign?: string;
   system?: number | string;
@@ -191,6 +192,8 @@ export interface LegInfo {
 export interface SupportAsset {
   kind: 'tanker' | 'awacs' | 'carrier' | 'jtac';
   callsign: string;
+  /** DCS group flag. Pilot view removes hidden support assets (G11). */
+  hidden: boolean;
   frequency: number;
   tacan?: TACAN;
   icls?: ICLS;
@@ -206,7 +209,8 @@ export interface SupportAsset {
 
 export interface ICLS {
   channel: number | string;
-  latlon: [number, number];
+  /** Undefined when the position is unresolved (never [0, 0]). */
+  latlon?: [number, number];
   latlonResolved?: boolean;
   callsign?: string;
 }
@@ -275,6 +279,37 @@ export interface DrawingObject {
   name: string;
 }
 
+export type IssueSeverity = 'error' | 'warning' | 'info';
+
+/**
+ * Stable machine-readable issue codes. Display text is resolved through the
+ * `issues` i18n namespace from `code` and `params`; never store prose here.
+ */
+export type IssueCode =
+  | 'threat.rangeUnrecorded'
+  | 'unit.unknownType'
+  | 'weapon.unknownClsid'
+  | 'weather.cloudPresetUnknown'
+  | 'weather.qnhDefaulted'
+  | 'weather.temperatureDefaulted'
+  | 'airbase.nameMissing'
+  | 'map.unsupported'
+  | 'time.utcOffsetUnknown'
+  | 'magvar.unsupported'
+  | 'parse.unknownNode'
+  | 'coord.unresolved';
+
+/** Coalition that produced an issue. Absent for issues about the whole mission (map, weather, time). */
+export type IssueSide = 'blue' | 'red' | 'neutral';
+
+export interface MissionIssue {
+  code: IssueCode;
+  severity: IssueSeverity;
+  params?: Record<string, string | number>;
+  /** Set when the issue comes from one coalition's data; pilot view drops other sides (D1). */
+  side?: IssueSide;
+}
+
 export interface MissionData {
   /** Stable fingerprint of the source .miz archive bytes. */
   sourceFingerprint: string;
@@ -282,7 +317,8 @@ export interface MissionData {
   weather: Weather;
   coalitions: { blue: Coalition; red: Coalition; neutral: Coalition };
   userNotes: UserNotes;
-  warnings: string[];
+  /** Deduplicated issues found while reading the mission (replaces `warnings`). */
+  issues: MissionIssue[];
 }
 
 export interface UserNotes {
@@ -342,23 +378,37 @@ export interface ParsedMissionFile {
   dictionary: Record<string, string>;
   mapResource: Record<string, string>;
   kneeboardFiles: Map<string, Uint8Array>;
+  briefingImages: Map<string, Uint8Array>;
+  /** Issues raised while parsing the Lua source (for example unknown node types). */
+  parseIssues?: MissionIssue[];
 }
 
 export type CoordinateFormat = 'DDM' | 'DMS' | 'MGRS' | 'DEC';
+export type CoordinateFormatSetting = CoordinateFormat | 'aircraft';
 export type UnitSystem = 'metric' | 'imperial';
+export type ThemeId = 'ffs' | 'standard' | 'night';
+export type Side = 'blue' | 'red';
 
+/** Display settings, schema version 5 (see src/hooks/useSettings.tsx). */
 export interface DisplaySettings {
-  coordinateFormat: CoordinateFormat;
+  language: 'ja' | 'en';                 // UI language
+  outputLanguage: 'ja' | 'en';           // language of exported briefing material (FR-99)
+  theme: ThemeId;                        // 'default' from v2-v4 is migrated to 'standard'
+  fontScale: 'standard' | 'large';
+  viewMode: 'creator' | 'pilot';
+  /** Displayed coalition. null means "not chosen": the side with more client flights is used (D2). */
+  side: Side | null;
+  coordinateFormat: CoordinateFormatSetting;
   unitSystem: UnitSystem;
   altitudeUnit: 'ft' | 'm';
   speedUnit: 'kt' | 'kmh';
   distanceUnit: 'nm' | 'km';
   pressureUnit: 'hPa' | 'inHg' | 'mmHg';
   temperatureUnit: 'C' | 'F';
-  viewMode: 'creator' | 'pilot';
-  language: 'ja' | 'en';
-  outputLanguage: 'ja' | 'en';
-  theme: 'default' | 'ffs';
+  windDisplay: 'from' | 'to' | 'both';
+  timeDisplay: 'local' | 'zulu' | 'both';
+  mapBackground: boolean;
+  kneeboardWidth: 1536 | 2048 | 3072;
   briefingSections: BriefingSection[];
   briefingPresets: BriefingPreset[];
 }

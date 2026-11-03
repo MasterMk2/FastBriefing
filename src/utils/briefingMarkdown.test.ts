@@ -13,7 +13,7 @@ function mission(): MissionData {
     weather: { temperature: 20, qnh: { hPa: 1013, mmHg: 760, inHg: 29.92 }, wind: [], clouds: { preset: '', label: 'Clear', base: 0 }, visibility: 10000, fog: { thickness: 0, visibility: 0, enabled: false }, dust: { density: 0, enabled: false }, turbulence: { ground: 0 } },
     coalitions: { blue: coalition, red: coalition, neutral: coalition },
     userNotes: { missionKey: 'fixture', smeac: { situation: 'Situation text', mission: '', execution: '', adminLogistics: '', commandSignal: '' }, perFlight: {}, waypoints: {}, mapAnnotations: [] },
-    warnings: [],
+    issues: [],
   };
 }
 

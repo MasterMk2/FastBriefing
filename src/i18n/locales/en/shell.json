@@ -1,0 +1,114 @@
+{
+  "app": {
+    "name": "FastBriefing"
+  },
+  "header": {
+    "side": "Side",
+    "view": "View",
+    "viewHint": "Also changes exported content",
+    "start": "Start briefing",
+    "settings": "Display settings",
+    "file": "File"
+  },
+  "side": {
+    "blue": "Blue",
+    "red": "Red",
+    "neutral": "Neutral",
+    "blueShape": "Blue (square)",
+    "redShape": "Red (diamond)",
+    "neutralShape": "Neutral (circle)"
+  },
+  "view": {
+    "creator": "Creator",
+    "pilot": "Pilot"
+  },
+  "nav": {
+    "overview": "Overview",
+    "flights": "Flights",
+    "map": "Map",
+    "comms": "Comms",
+    "support": "Support",
+    "threats": "Threats",
+    "notes": "Notes",
+    "export": "Export",
+    "more": "More",
+    "briefing": "Briefing",
+    "revision": "Compare revisions",
+    "initial": "Start"
+  },
+  "rail": {
+    "title": "Own-side flights",
+    "search": "Search flights",
+    "count": "{{count}}",
+    "empty": "No flights",
+    "noMatch": "No flights match the search",
+    "clearSearch": "Clear search",
+    "opponent": "Opposing side (creator view)",
+    "navLabel": "Screens"
+  },
+  "file": {
+    "label": "File",
+    "open": "Open",
+    "compare": "Compare revisions",
+    "close": "Close mission"
+  },
+  "settings": {
+    "title": "Display settings",
+    "reset": "Reset to defaults",
+    "close": "Close",
+    "language": "UI language",
+    "theme": "Theme",
+    "fontScale": "Text size",
+    "fontStandard": "Standard",
+    "fontLarge": "Large",
+    "themeFfs": "FFS dark",
+    "themeStandard": "Standard",
+    "themeNight": "Night red",
+    "languageJa": "日本語",
+    "languageEn": "English",
+    "partial": "Not all display settings are available yet. Language, theme and text size can be changed now."
+  },
+  "stub": {
+    "preparing": "In preparation",
+    "body": "This screen is being redesigned."
+  },
+  "unresolved": {
+    "label": "Unresolved",
+    "dcsXY": "DCS X/Y"
+  },
+  "notice": {
+    "info": "Info",
+    "warning": "Warning",
+    "error": "Error",
+    "success": "Done"
+  },
+  "bottom": {
+    "sheetTitle": "More"
+  },
+  "screens": {
+    "threatsPilot": {
+      "title": "Threats are not shown in pilot view",
+      "body": "Switch to creator view to see the threat list and crossings with the route."
+    },
+    "briefing": {
+      "title": "Briefing is in preparation",
+      "body": "The full-screen verbal briefing will be available in a later update."
+    },
+    "revision": {
+      "title": "Choose two files to compare revisions",
+      "body": "Use Compare revisions from the File menu, or choose a second .miz file."
+    }
+  },
+  "units": {
+    "time": {
+      "local": "{{value}} local",
+      "zulu": "{{value}} Z",
+      "both": "{{local}} local / {{zulu}} Z"
+    },
+    "wind": {
+      "from": "from {{deg}}°",
+      "to": "to {{deg}}°",
+      "both": "from {{from}}° / to {{to}}°"
+    }
+  }
+}

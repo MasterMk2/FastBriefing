@@ -20,7 +20,7 @@ const sections: (keyof SMEACNotes)[] = [
 export default function NotesTab({ mission, settings, onNotesChange, storageFailed }: NotesTabProps) {
   const { t } = useTranslation();
   const [status, setStatus] = useState('');
-  const viewMission = useMemo(() => applyViewMode(mission, settings.viewMode), [mission, settings.viewMode]);
+  const viewMission = useMemo(() => applyViewMode(mission, settings.viewMode, settings.side), [mission, settings.viewMode, settings.side]);
   const flights = [
     ...viewMission.coalitions.blue.flights.map(flight => ({ key: `blue:${flight.groupId}`, flight })),
     ...viewMission.coalitions.red.flights.map(flight => ({ key: `red:${flight.groupId}`, flight })),

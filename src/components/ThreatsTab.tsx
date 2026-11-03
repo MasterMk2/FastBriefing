@@ -5,6 +5,7 @@ import type { AIGroup, MissionData, DisplaySettings } from '../types/mission';
 import { dcsToLatLon, formatCoordinate } from '../utils/coordinates';
 import { formatDistance } from '../utils/units';
 import { applyViewMode } from '../utils/viewMode';
+import { issueTexts } from '../core/issueText';
 
 interface ThreatsTabProps {
   mission: MissionData;
@@ -13,13 +14,13 @@ interface ThreatsTabProps {
 
 export default function ThreatsTab({ mission, settings }: ThreatsTabProps) {
   const { t } = useTranslation();
-  const viewMission = useMemo(() => applyViewMode(mission, settings.viewMode), [mission, settings.viewMode]);
+  const viewMission = useMemo(() => applyViewMode(mission, settings.viewMode, settings.side), [mission, settings.viewMode, settings.side]);
   const allEnemies = viewMission.coalitions.red.aiGroups;
   const threats = allEnemies.filter(hasResolvedThreatRange);
   const unrecordedThreats = allEnemies.filter(isUnrecordedThreat);
   const otherEnemies = allEnemies.filter(g => !hasResolvedThreatRange(g) && !isUnrecordedThreat(g));
-  const threatWarnings = [...new Set(mission.warnings.filter(warning => warning.startsWith('脅威半径が未収録')))].sort();
-  const unknownUnitWarnings = [...new Set(mission.warnings.filter(warning => warning.startsWith('参照データに未収録のユニット')))].sort();
+  const threatWarnings = issueTexts(viewMission.issues, ['threat.rangeUnrecorded']);
+  const unknownUnitWarnings = issueTexts(viewMission.issues, ['unit.unknownType']);
   const showCreatorDetails = settings.viewMode === 'creator';
   
   return (

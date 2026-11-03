@@ -7,6 +7,7 @@ import { getMoonInfo, getSunTimes, type SunTimes } from '../utils/astro';
 import { buildMetar } from '../utils/metar';
 import { addSeconds, formatDateYMD, formatTimeHHMM, formatUtcOffset, missionLocalDate, missionZuluDate } from '../utils/time';
 import { applyViewMode } from '../utils/viewMode';
+import { issueTextList } from '../core/issueText';
 
 interface OverviewTabProps {
   mission: MissionData;
@@ -15,7 +16,7 @@ interface OverviewTabProps {
 
 export default function OverviewTab({ mission, settings }: OverviewTabProps) {
   const { t } = useTranslation();
-  const viewMission = useMemo(() => applyViewMode(mission, settings.viewMode), [mission, settings.viewMode]);
+  const viewMission = useMemo(() => applyViewMode(mission, settings.viewMode, settings.side), [mission, settings.viewMode, settings.side]);
   const { meta, weather, coalitions } = viewMission;
   const blueFlights = coalitions.blue.flights.length;
   const redFlights = coalitions.red.flights.length;
@@ -195,11 +196,11 @@ export default function OverviewTab({ mission, settings }: OverviewTabProps) {
         </section>
       )}
       
-      {mission.warnings.length > 0 && (
+      {viewMission.issues.length > 0 && (
         <section className="section warnings">
           <h2>{t('overview.warning')}</h2>
           <ul>
-            {mission.warnings.map((w, i) => <li key={i}>{w}</li>)}
+            {issueTextList(viewMission.issues).map(text => <li key={text}>{text}</li>)}
           </ul>
         </section>
       )}

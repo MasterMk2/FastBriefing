@@ -212,6 +212,27 @@ describe('ZIP展開ガード', () => {
     });
   });
 
+  it('accepts a commercial campaign archive with more than 100 entries (FIWOS M2 FINAL has 101)', async () => {
+    const entries: Record<string, Uint8Array> = {
+      mission: strToU8('mission = { coalition = {} }'),
+      theatre: strToU8('Caucasus'),
+    };
+    for (let index = 0; index < 100; index += 1) {
+      entries[`KNEEBOARD/page-${index}.txt`] = strToU8(`page ${index}`);
+    }
+
+    expect(ZIP_LIMITS.MAX_ENTRIES).toBeGreaterThanOrEqual(101);
+    const parsed = await parseMissionArchive(zipSync(entries));
+    expect(parsed.mission).toBeTypeOf('object');
+    expect(parsed.kneeboardFiles.size).toBe(100);
+  });
+
+  it('still rejects an archive whose expanded total size is over the limit, even with few entries', async () => {
+    const big = new Uint8Array(ZIP_LIMITS.MAX_ENTRY_SIZE + 1);
+    const archive = zipSync({ mission: strToU8('mission = { }'), 'KNEEBOARD/big.bin': big }, { level: 9 });
+    await expect(unzipWithLimits(archive)).rejects.toThrow();
+  });
+
   it('l10n/DEFAULT配下の許可拡張子画像を展開し、他のリソースは除外する', async () => {
     const archive = zipSync({
       'l10n/DEFAULT/brief.PNG': strToU8('png'),

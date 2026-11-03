@@ -1,0 +1,603 @@
+/* Application frame and shared parts (SPEC 1.1, 4.1, 4.4). Owner: P0. Colours come from tokens.css only. */
+
+.shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  width: 100%;
+  background: var(--surface-0);
+  color: var(--text);
+  font-size: var(--fs-body);
+  font-variant-numeric: tabular-nums;
+}
+
+.shell-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  min-height: var(--shell-header-height);
+  padding: 6px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-1);
+}
+
+.shell-header-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  flex: 1 1 220px;
+}
+
+.shell-app-name {
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.shell-mission-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 28ch;
+}
+
+.shell-file-name {
+  color: var(--text-muted);
+  font-size: var(--fs-note);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 24ch;
+}
+
+.shell-header-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.shell-view-hint {
+  color: var(--text-muted);
+  font-size: var(--fs-note);
+}
+
+.shell-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.shell-frame {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.shell-frame-initial {
+  justify-content: center;
+}
+
+.shell-rail {
+  display: none;
+}
+
+.shell-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 16px var(--shell-gutter) calc(var(--shell-bottom-height) + 16px);
+  outline: none;
+}
+
+.shell-initial .shell-main {
+  max-width: 640px;
+  margin: 0 auto;
+}
+
+/* Wide screens: left rail with items and the flight list (SPEC 1.1). */
+@media (min-width: 1280px) {
+  .shell-frame {
+    align-items: stretch;
+  }
+
+  .shell-rail {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    position: sticky;
+    top: var(--shell-header-height);
+    align-self: flex-start;
+    width: var(--shell-rail-width);
+    flex: 0 0 var(--shell-rail-width);
+    height: calc(100vh - var(--shell-header-height));
+    overflow-y: auto;
+    padding: 16px;
+    border-right: 1px solid var(--border);
+    background: var(--surface-1);
+  }
+
+  .shell-main {
+    padding-bottom: 16px;
+  }
+
+  .bottom-tabs,
+  .bottom-sheet {
+    display: none;
+  }
+}
+
+/* Left rail items */
+.workspace-nav-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.workspace-nav-item {
+  display: block;
+  width: 100%;
+  min-height: var(--target-desktop);
+  padding: 4px 10px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.workspace-nav-item:hover {
+  border-color: var(--border);
+}
+
+.workspace-nav-item.is-current {
+  border-color: var(--accent);
+  font-weight: 700;
+}
+
+.workspace-nav-item:focus-visible,
+.bottom-tab:focus-visible,
+.bottom-sheet-item:focus-visible,
+.segmented-option:focus-visible,
+.file-menu-item:focus-visible,
+.file-menu-trigger:focus-visible,
+.flight-row:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* Flight list in the rail */
+.flight-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+}
+
+.flight-rail-title {
+  margin: 0;
+  font-size: var(--fs-note);
+  color: var(--text-muted);
+  font-weight: 700;
+}
+
+.flight-rail-search {
+  min-height: var(--target-desktop);
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-0);
+  color: var(--text);
+  font: inherit;
+}
+
+.flight-rail-count,
+.flight-rail-empty {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--fs-note);
+}
+
+.flight-rail-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.flight-rail-opposing summary {
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: var(--fs-note);
+  min-height: var(--target-desktop);
+}
+
+.flight-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-height: var(--target-desktop);
+  padding: 4px 8px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.flight-row:hover {
+  border-color: var(--border);
+}
+
+.flight-row.is-selected {
+  border-color: var(--accent);
+}
+
+.flight-row-callsign {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.flight-row-type,
+.flight-row-freq {
+  color: var(--text-muted);
+  font-size: var(--fs-note);
+  white-space: nowrap;
+}
+
+/* Bottom tabs (under 1280px, SPEC 1.1) */
+.bottom-tabs {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 30;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  height: var(--shell-bottom-height);
+  border-top: 1px solid var(--border);
+  background: var(--surface-1);
+}
+
+.bottom-tab {
+  min-height: var(--target-touch);
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: var(--fs-note);
+  cursor: pointer;
+}
+
+.bottom-tab.is-current {
+  color: var(--text);
+  box-shadow: inset 0 2px 0 var(--accent);
+  font-weight: 700;
+}
+
+.bottom-sheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: var(--shell-bottom-height);
+  z-index: 31;
+  max-height: 60vh;
+  overflow-y: auto;
+  border-top: 1px solid var(--border);
+  background: var(--surface-1);
+  box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.25);
+}
+
+.bottom-sheet-list {
+  list-style: none;
+  margin: 0;
+  padding: 8px 16px;
+}
+
+.bottom-sheet-item {
+  display: block;
+  width: 100%;
+  min-height: var(--target-touch);
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+/* Segmented choice */
+.segmented {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.segmented-option {
+  min-height: var(--target-desktop);
+  padding: 2px 12px;
+  border: 0;
+  background: var(--surface-0);
+  color: var(--text-muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+.segmented-option + .segmented-option {
+  border-left: 1px solid var(--border);
+}
+
+.segmented-option.is-pressed {
+  background: var(--surface-2);
+  color: var(--text);
+  box-shadow: inset 0 -2px 0 var(--accent);
+  font-weight: 700;
+}
+
+/* Side mark: shape plus text (SPEC 1.4) */
+.side-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.side-mark-shape {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border: 2px solid currentColor;
+}
+
+.side-mark-blue .side-mark-shape {
+  border-radius: 0;
+}
+
+.side-mark-red .side-mark-shape {
+  transform: rotate(45deg);
+  width: 9px;
+  height: 9px;
+}
+
+.side-mark-neutral .side-mark-shape {
+  border-radius: 50%;
+}
+
+/* Notices and states (SPEC 4.2: symbol and text on every tone) */
+.notice {
+  display: flex;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--info-border);
+  border-radius: var(--radius);
+  background: var(--info-bg);
+  color: var(--info-text);
+}
+
+.notice-warning {
+  border-color: var(--warning-border);
+  background: var(--warning-bg);
+  color: var(--warning-text);
+}
+
+.notice-error {
+  border-color: var(--danger-border);
+  background: var(--danger-bg);
+  color: var(--danger-text);
+}
+
+.notice-success {
+  border-color: var(--success-border);
+  background: var(--success-bg);
+  color: var(--success-text);
+}
+
+.notice-symbol {
+  font-weight: 700;
+  line-height: 1.6;
+}
+
+.notice-body {
+  min-width: 0;
+}
+
+.notice-title {
+  margin: 0 0 4px;
+  font-weight: 700;
+}
+
+.empty-state {
+  padding: 32px 16px;
+  text-align: left;
+  color: var(--text-muted);
+}
+
+.empty-state-title {
+  margin: 0 0 8px;
+  font-size: 1.125rem;
+  color: var(--text);
+}
+
+.empty-state-body {
+  margin: 0 0 12px;
+}
+
+.unresolved {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-muted);
+  font-size: var(--fs-note);
+}
+
+.unresolved-mark {
+  display: inline-block;
+  padding: 0 6px;
+  border: 1px dashed var(--text-muted);
+  border-radius: var(--radius);
+}
+
+.unresolved-xy {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Form row: label above the control */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.field-label,
+.settings-drawer-row > .field-label {
+  font-weight: 700;
+  font-size: var(--fs-note);
+}
+
+.field-hint,
+.field-reason {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--fs-note);
+}
+
+.field-reason {
+  color: var(--warning-text);
+}
+
+/* File menu (header) */
+.file-menu {
+  position: relative;
+}
+
+.file-menu-list {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 40;
+  display: grid;
+  min-width: 220px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-1);
+}
+
+.file-menu-item {
+  min-height: var(--target-desktop);
+  padding: 4px 10px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.file-menu-item:disabled {
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
+
+/* Settings drawer (right, 360px; bottom sheet under 768px) */
+.settings-drawer {
+  position: fixed;
+  top: var(--shell-header-height);
+  right: 0;
+  bottom: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 360px;
+  max-width: 100vw;
+  padding: 16px;
+  overflow-y: auto;
+  border-left: 1px solid var(--border);
+  background: var(--surface-1);
+  box-shadow: -8px 0 24px rgba(0, 0, 0, 0.25);
+}
+
+.settings-drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.settings-drawer-header h2 {
+  margin: 0;
+  font-size: 1.125rem;
+}
+
+.settings-drawer-note {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--fs-note);
+}
+
+.settings-drawer-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+@media (max-width: 767px) {
+  .settings-drawer {
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: auto;
+    max-height: 70vh;
+    border-left: 0;
+    border-top: 1px solid var(--border);
+  }
+}
+
+/* Primary button (header "ブリーフィング開始"): the accent is not used for fills (SPEC 4.1) */
+.shell .btn-primary {
+  background: var(--primary-bg);
+  border-color: var(--primary-bg);
+  color: var(--primary-text);
+}
+
+/* Touch targets on narrow screens */
+@media (max-width: 767px) {
+  .shell .btn,
+  .shell .segmented-option,
+  .shell .flight-row,
+  .shell .workspace-nav-item {
+    min-height: var(--target-touch);
+  }
+}
+
+/* Print: only the briefing material remains. Chrome is hidden (SPEC 9.2: print from any screen). */
+@media print {
+  .shell-header,
+  .shell-rail,
+  .bottom-tabs,
+  .bottom-sheet,
+  .settings-drawer,
+  .file-menu,
+  .shell-frame > .shell-main {
+    display: none !important;
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "dropZone": ".miz mission file drop area",
+  "dropFile": "Drop a .miz file here",
+  "dropHint": "Select 1 file to open, or 2 files to compare (first: before, second: after).",
+  "point1": "Check the route and frequencies on the map",
+  "point2": "Send the verbal briefing screen by screen",
+  "point3": "Export material (print, PNG, Markdown)",
+  "compareHint": "Choose a second file to compare revisions"
+}

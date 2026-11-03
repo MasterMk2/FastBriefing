@@ -1,0 +1,19 @@
+/*
+ * Stylesheet entry (SPEC 7.2). Import order matters:
+ * 1. tokens.css overrides the legacy variables from src/index.css;
+ * 2. shell.css and the package files follow.
+ * Each package owns exactly one file here and adds its rules to it.
+ */
+@import './tokens.css';
+@import './shell.css';
+@import './overview.css';
+@import './flight.css';
+@import './lineup.css';
+@import './map.css';
+@import './export.css';
+@import './print.css';
+@import './briefing.css';
+@import './comms.css';
+@import './notes.css';
+@import './settings.css';
+@import './initial.css';

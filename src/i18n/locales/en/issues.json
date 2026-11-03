@@ -1,0 +1,34 @@
+{
+  "threat": {
+    "rangeUnrecorded": "Threat range not recorded; not drawn on the map: {{type}}"
+  },
+  "unit": {
+    "unknownType": "Unit not in reference data: {{type}}"
+  },
+  "weapon": {
+    "unknownClsid": "Unknown weapon CLSID: {{clsid}}"
+  },
+  "weather": {
+    "cloudPresetUnknown": "Unknown cloud preset: {{preset}}",
+    "qnhDefaulted": "QNH was filled with a default value",
+    "temperatureDefaulted": "Temperature was filled with a default value"
+  },
+  "airbase": {
+    "nameMissing": "Airbase name not recorded (ID: {{id}})"
+  },
+  "map": {
+    "unsupported": "Unsupported map: {{theatre}} (coordinates cannot be resolved)"
+  },
+  "time": {
+    "utcOffsetUnknown": "UTC offset not recorded: {{theatre}}"
+  },
+  "magvar": {
+    "unsupported": "No magnetic variation table for {{theatre}}; only true bearings are shown"
+  },
+  "parse": {
+    "unknownNode": "Skipped an unknown Lua node type ({{type}})"
+  },
+  "coord": {
+    "unresolved": "Some positions could not be resolved"
+  }
+}

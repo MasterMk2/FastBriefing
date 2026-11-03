@@ -1,24 +1,25 @@
 import { lazy, Suspense, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { DisplaySettings } from '../types/mission';
+import type { DisplaySettings, Side } from '../types/mission';
 import { compareMissionRevisions } from '../utils/missionRevision';
 import type { MissionRevision, RevisionCategory, RevisionValue } from '../utils/missionRevision';
 
 const RevisionMap = lazy(() => import('./RevisionMap'));
 export interface LoadedRevision { name: string; fingerprint: string; revision: MissionRevision }
-interface Props { revisions: [LoadedRevision, LoadedRevision]; settings: DisplaySettings; onClose: () => void }
+/** `side` is the displayed coalition (D2 resolved). Pilot view compares only that side's flights (D1). */
+interface Props { revisions: [LoadedRevision, LoadedRevision]; settings: DisplaySettings; side: Side; onClose: () => void }
 const categories: RevisionCategory[] = ['mission', 'route', 'loadout', 'radio', 'weather'];
 function display(value: RevisionValue | undefined, missing: string): string {
   return value === undefined || value === null ? missing : typeof value === 'object' ? JSON.stringify(value) : String(value);
 }
 
-export default function RevisionComparison({ revisions, settings, onClose }: Props) {
+export default function RevisionComparison({ revisions, settings, side, onClose }: Props) {
   const { t } = useTranslation();
   const [swapped, setSwapped] = useState(false);
   const [category, setCategory] = useState<RevisionCategory | 'all'>('all');
   const [limit, setLimit] = useState(100);
   const [before, after] = swapped ? [revisions[1], revisions[0]] : revisions;
-  const diff = useMemo(() => compareMissionRevisions(before.revision, after.revision, settings.viewMode), [before, after, settings.viewMode]);
+  const diff = useMemo(() => compareMissionRevisions(before.revision, after.revision, settings.viewMode, side), [before, after, settings.viewMode, side]);
   const changes = diff.changes.filter(change => category === 'all' || change.category === category);
   return (
     <section className="revision-comparison" aria-label={t('revision.title')}>

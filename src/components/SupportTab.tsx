@@ -12,7 +12,7 @@ interface SupportTabProps {
 
 export default function SupportTab({ mission, settings }: SupportTabProps) {
   const { t } = useTranslation();
-  const viewMission = useMemo(() => applyViewMode(mission, settings.viewMode), [mission, settings.viewMode]);
+  const viewMission = useMemo(() => applyViewMode(mission, settings.viewMode, settings.side), [mission, settings.viewMode, settings.side]);
   const allSupport = [...viewMission.coalitions.blue.support, ...viewMission.coalitions.red.support];
   
   if (allSupport.length === 0) {

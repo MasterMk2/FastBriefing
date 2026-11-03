@@ -23,7 +23,7 @@ interface ExportTabProps {
 export default function ExportTab({ mission, settings, sourceFile, whiteboard, printMapState }: ExportTabProps) {
   const { t } = useTranslation();
   const { setOutputLanguage } = useSettings();
-  const viewMission = useMemo(() => applyViewMode(mission, settings.viewMode), [mission, settings.viewMode]);
+  const viewMission = useMemo(() => applyViewMode(mission, settings.viewMode, settings.side), [mission, settings.viewMode, settings.side]);
   const [markdown, setMarkdown] = useState('');
   const [copyStatus, setCopyStatus] = useState('');
   const [pngStatus, setPngStatus] = useState('');
@@ -71,7 +71,7 @@ export default function ExportTab({ mission, settings, sourceFile, whiteboard, p
   };
 
   const exportGeospatial = (format: 'geojson' | 'kml') => {
-    const result = buildGeospatialExport(mission, settings.viewMode);
+    const result = buildGeospatialExport(mission, settings.viewMode, settings.side);
     if (result.features.length === 0) {
       setGeoStatus(t('export.geoEmpty', { skipped: result.skipped }));
       return;

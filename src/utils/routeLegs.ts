@@ -1,4 +1,4 @@
-import type { CoordinateFormat, MissionMeta, RoutePoint } from '../types/mission';
+import type { CoordinateFormatSetting, MissionMeta, RoutePoint } from '../types/mission';
 import { getMagneticVariation, trueToMagnetic } from './magvar';
 import { calculateBearing, calculateDistance, formatCoordinate } from './coordinates';
 
@@ -33,9 +33,10 @@ export function calculateRouteLegs(route: RoutePoint[], meta: MissionMeta): Rout
       ? undefined
       : cumulativeTime + time;
 
-    const magneticBearing = hasPosition
-      ? trueToMagnetic(trueBearing, getMagneticVariation(meta.theatre, lat, lon, missionDate))
-      : undefined;
+    // No magnetic table for this theatre: leave the magnetic bearing undefined
+    // so the UI shows the true bearing only (FR-03 "真のみ").
+    const variation = hasPosition ? getMagneticVariation(meta.theatre, lat, lon, missionDate) : null;
+    const magneticBearing = variation === null ? undefined : trueToMagnetic(trueBearing, variation);
 
     return {
       ...point,
@@ -55,7 +56,7 @@ export function formatLegDuration(seconds: number | undefined): string {
     : `${String(minutes).padStart(2, '0')}:${String(remainingSeconds).padStart(2, '0')}`;
 }
 
-export function formatRouteCoordinate(point: RoutePoint, format: CoordinateFormat): string {
+export function formatRouteCoordinate(point: RoutePoint, format: CoordinateFormatSetting): string {
   return point.latlonResolved === false
     ? `DCS X ${point.xy[0].toFixed(0)} m / Y ${point.xy[1].toFixed(0)} m`
     : formatCoordinate(point.latlon[0], point.latlon[1], format);

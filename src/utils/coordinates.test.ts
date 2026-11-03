@@ -1,11 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  dcsToLatLon,
-  formatCoordinate,
-  formatMGRS,
-  getDefaultCoordinateFormat,
-  latLonToDCS,
-} from './coordinates';
+import { dcsToLatLon, formatCoordinate, formatMGRS, getDefaultCoordinateFormat, latLonToDCS, resolveCoordinateFormat } from './coordinates';
 
 // These WGS84 points are the (0, 0) DCS origins obtained independently from
 // each pydcs projection.py definition (https://github.com/pydcs/dcs/tree/master/dcs/terrain).
@@ -116,5 +110,18 @@ describe('Afghanistan and Iraq verified projections', () => {
     const back = latLonToDCS(theatre, result[0], result[1])!;
     expect(Math.abs(back[0] - x)).toBeLessThan(0.001);
     expect(Math.abs(back[1] - y)).toBeLessThan(0.001);
+  });
+});
+
+describe('resolveCoordinateFormat', () => {
+  it('returns a fixed setting unchanged', () => {
+    expect(resolveCoordinateFormat('MGRS', 'F-16C_50')).toBe('MGRS');
+    expect(resolveCoordinateFormat('DMS')).toBe('DMS');
+  });
+
+  it('uses the aircraft default for the aircraft setting and falls back to DDM when the type is unknown', () => {
+    expect(resolveCoordinateFormat('aircraft', 'F-16C_50')).toBe(getDefaultCoordinateFormat('F-16C_50'));
+    expect(resolveCoordinateFormat('aircraft', 'NoSuchAircraft')).toBe('DDM');
+    expect(resolveCoordinateFormat('aircraft', null)).toBe('DDM');
   });
 });

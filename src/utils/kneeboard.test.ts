@@ -21,8 +21,8 @@ function fixture(): MissionData {
       visibility: 10000, clouds: { label: 'Clear', base: 2000 }, wind: [],
     },
     coalitions: {
-      blue: { ...coalition, flights: [flight('Visible', 1, false, 'F-16C_50'), flight('Hidden', 2, true, 'F-16C_50')] },
-      red: { ...coalition, flights: [flight('Other', 3, false, 'FA-18C_hornet')] },
+      blue: { ...coalition, flights: [flight('Visible', 1, false, 'F-16C_50'), flight('Hidden', 2, true, 'F-16C_50'), flight('Other', 3, false, 'FA-18C_hornet')] },
+      red: { ...coalition, flights: [flight('Enemy', 4, false, 'MiG-29A')] },
       neutral: coalition,
     },
     userNotes: {
@@ -32,10 +32,11 @@ function fixture(): MissionData {
       waypoints: {},
       mapAnnotations: [],
     },
+    issues: [],
   } as unknown as MissionData;
 }
 
-const settings = { ...DEFAULT_SETTINGS, viewMode: 'pilot' as const };
+const settings = { ...DEFAULT_SETTINGS, viewMode: 'pilot' as const, side: 'blue' as const };
 const translate = (key: string) => key;
 
 describe('kneeboard plan', () => {
@@ -64,7 +65,7 @@ describe('kneeboard plan', () => {
     const maps = planKneeboardPages(mission, settings, translate).filter(page => page.kind === 'map');
     expect(maps.map(page => page.title)).toEqual(['kneeboard.map 1/2', 'kneeboard.map 2/2']);
     expect(maps.flatMap(page => page.scene.routes.map(route => route.label))).toEqual([
-      'Visible', 'Extra 1', 'Extra 2', 'Extra 3', 'Extra 4', 'Other',
+      'Visible', 'Other', 'Extra 1', 'Extra 2', 'Extra 3', 'Extra 4',
     ]);
   });
 
@@ -80,5 +81,11 @@ describe('kneeboard plan', () => {
     const pages = planKneeboardPages(mission, { ...settings, briefingSections: ['flights'] }, translate);
     expect(JSON.stringify(pages)).toContain('waypoints.purpose: Initial point');
     expect(JSON.stringify(pages)).toContain('Push south');
+  });
+  it('keeps the opposing side out of a pilot kneeboard (D1)', () => {
+    const pages = planKneeboardPages(fixture(), settings, translate);
+    const text = JSON.stringify(pages);
+    expect(text).not.toContain('Enemy');
+    expect(text).toContain('Visible');
   });
 });

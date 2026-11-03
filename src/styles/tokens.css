@@ -1,0 +1,166 @@
+/*
+ * Design tokens (SPEC 4.1 and 4.2). Colours are semantic: a surface, a text role or a
+ * status. Each status has -text (words and symbols), -bg and -border. Pick values only
+ * through these tokens; do not write hex colours in package stylesheets.
+ *
+ * Themes: FFS dark is the default (no data-theme needed). data-theme="standard" is the
+ * white theme with one blue. data-theme="night" is a red-only theme for night use:
+ * status is shown by symbols and words, never by hue alone.
+ *
+ * Legacy variables (--color-*, defined in src/index.css for the old tabs) are overridden
+ * here so the old tabs follow the selected theme until they are replaced (SPEC 8).
+ */
+
+:root,
+:root[data-theme="ffs"] {
+  color-scheme: dark;
+
+  --surface-0: #101113;
+  --surface-1: #17191d;
+  --surface-2: #202329;
+  --text: #e8e6e1;
+  --text-muted: #a9a7a1;
+  --border: #2c2f36;
+  /* Accent is a border and a brand mark only; primary buttons use the primary pair. */
+  --accent: #c2a76c;
+  --accent-text: #101113;
+  --primary-bg: #e8e6e1;
+  --primary-text: #101113;
+
+  --info-text: #9cc3ea;
+  --info-bg: #15263a;
+  --info-border: #2c4a6e;
+  --success-text: #8fd19e;
+  --success-bg: #15281c;
+  --success-border: #2e5a3c;
+  --warning-text: #f0b36b;
+  --warning-bg: #2e2212;
+  --warning-border: #6b4a1f;
+  --danger-text: #ff8a80;
+  --danger-bg: #2e1514;
+  --danger-border: #6e2b28;
+
+  /* Legacy names used by src/index.css for the old tabs (FFS values). */
+  --color-page-background: var(--surface-0);
+  --color-surface: var(--surface-1);
+  --color-text: var(--text);
+  --color-heading: var(--text);
+  --color-border: var(--border);
+  --color-accent: var(--accent);
+  --color-text-muted: var(--text-muted);
+}
+
+:root[data-theme="standard"] {
+  color-scheme: light;
+
+  --surface-0: #ffffff;
+  --surface-1: #f5f6f8;
+  --surface-2: #eceef2;
+  --text: #1d2330;
+  --text-muted: #5b6270;
+  --border: #d0d5dd;
+  --accent: #1f5fbf;
+  --accent-text: #ffffff;
+  --primary-bg: #1f5fbf;
+  --primary-text: #ffffff;
+
+  --info-text: #1f5fbf;
+  --info-bg: #e7f0fb;
+  --info-border: #9dbde8;
+  --success-text: #137a3a;
+  --success-bg: #e8f5ec;
+  --success-border: #8dc7a2;
+  --warning-text: #8a4b00;
+  --warning-bg: #fdf3e4;
+  --warning-border: #e2b77a;
+  --danger-text: #b42318;
+  --danger-bg: #fdecea;
+  --danger-border: #e8a39d;
+
+  --color-page-background: var(--surface-0);
+  --color-surface: var(--surface-1);
+  --color-text: var(--text);
+  --color-heading: var(--text);
+  --color-border: var(--border);
+  --color-accent: var(--accent);
+  --color-accent-hover: #174a96;
+  --color-text-muted: var(--text-muted);
+  --color-text-secondary: var(--text-muted);
+  --color-text-tertiary: var(--text-muted);
+  --color-control-background: var(--surface-0);
+  --color-control-border: var(--border);
+  --color-control-text: var(--text);
+}
+
+:root[data-theme="night"] {
+  color-scheme: dark;
+
+  --surface-0: #000000;
+  --surface-1: #140000;
+  --surface-2: #1f0000;
+  --text: #ff5a4e;
+  /* SPEC 4.2 listed #c0453c, which measures 4.16:1 on black; raised to keep 4.5:1 (SPEC 4.2 asks for this). */
+  --text-muted: #d4574b;
+  --border: #5a1410;
+  --accent: #ff5a4e;
+  --accent-text: #000000;
+  --primary-bg: #ff5a4e;
+  --primary-text: #000000;
+
+  --info-text: #ff5a4e;
+  --info-bg: #1f0000;
+  --info-border: #5a1410;
+  --success-text: #ff5a4e;
+  --success-bg: #1f0000;
+  --success-border: #5a1410;
+  --warning-text: #ff5a4e;
+  --warning-bg: #1f0000;
+  --warning-border: #5a1410;
+  --danger-text: #ff5a4e;
+  --danger-bg: #1f0000;
+  --danger-border: #5a1410;
+
+  --color-page-background: var(--surface-0);
+  --color-surface: var(--surface-1);
+  --color-text: var(--text);
+  --color-heading: var(--text);
+  --color-border: var(--border);
+  --color-accent: var(--accent);
+  --color-accent-hover: #ff7a70;
+  --color-text-muted: var(--text-muted);
+  --color-text-secondary: var(--text-muted);
+  --color-text-tertiary: var(--text-muted);
+  --color-on-accent: #000000;
+  --color-control-background: var(--surface-1);
+  --color-control-border: var(--border);
+  --color-control-text: var(--text);
+  --color-control-option-background: var(--surface-1);
+  --color-control-option-text: var(--text);
+  --color-info-text: var(--info-text);
+  --color-warning-text: var(--warning-text);
+  --color-error-text: var(--danger-text);
+  --color-danger-text: var(--danger-text);
+  --color-code-background: var(--surface-1);
+  --color-code-text: var(--text);
+}
+
+/* Shared, theme-independent tokens. */
+:root {
+  --radius: 4px;
+  --fs-body: 1rem;
+  --fs-table: 0.875rem;
+  --fs-note: 0.8125rem;
+  --fs-small: 0.8125rem;
+  --target-desktop: 28px;
+  --target-touch: 44px;
+  --focus-ring: 2px solid var(--accent);
+  --shell-header-height: 52px;
+  --shell-rail-width: 240px;
+  --shell-bottom-height: 56px;
+  --shell-gutter: 16px;
+}
+
+/* Large text: the whole UI scales by 112% (SPEC 4.1). */
+html[data-font-scale="large"] {
+  font-size: 112%;
+}

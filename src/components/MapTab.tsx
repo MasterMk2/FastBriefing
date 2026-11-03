@@ -60,7 +60,7 @@ function getThemeColor(token: string): string {
 
 export default function MapTab({ mission, settings, onNotesChange }: MapTabProps) {
   const { t } = useTranslation();
-  const viewMission = useMemo(() => applyViewMode(mission, settings.viewMode), [mission, settings.viewMode]);
+  const viewMission = useMemo(() => applyViewMode(mission, settings.viewMode, settings.side), [mission, settings.viewMode, settings.side]);
   const [layers, setLayers] = useState({
     flights: true,
     zones: true,
