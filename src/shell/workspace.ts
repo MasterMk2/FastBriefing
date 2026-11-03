@@ -5,6 +5,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 import type { Dispatch, ReactNode, SetStateAction } from 'react';
@@ -77,6 +78,11 @@ export interface WorkspaceValue {
   /** Whether the display settings drawer is open. */
   settingsOpen: boolean;
   setSettingsOpen: (open: boolean) => void;
+  /**
+   * The element that had the focus when the oral briefing was opened (document.activeElement at that moment),
+   * or null when none did. Reading it clears it. The shell returns the focus there when the briefing ends (A11Y-2).
+   */
+  takeBriefingOpener: () => HTMLElement | null;
 }
 
 const WorkspaceContext = createContext<WorkspaceValue | null>(null);
@@ -169,9 +175,25 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [mapUi, setMapUi] = useState<MapUi>(DEFAULT_MAP_UI);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
+  const briefingOpener = useRef<HTMLElement | null>(null);
+
   const navigate = useCallback((next: ScreenId, anchor: string | null) => {
+    // Read before the commit: the briefing replaces the screen, so the button that opened it leaves the DOM (A11Y-2).
+    // A call from inside the open briefing keeps the first opener.
+    if (next === 'briefing' && typeof document !== 'undefined') {
+      const active = document.activeElement;
+      if (active instanceof HTMLElement && active !== document.body && !active.closest('.shell-briefing-layer')) {
+        briefingOpener.current = active;
+      }
+    }
     setNav(current => (current.screen === next ? current : { screen: next, previous: current.screen }));
     setFocusAnchor(anchor);
+  }, []);
+
+  const takeBriefingOpener = useCallback(() => {
+    const opener = briefingOpener.current;
+    briefingOpener.current = null;
+    return opener;
   }, []);
 
   const setScreen = useCallback((next: ScreenId) => navigate(next, null), [navigate]);
@@ -240,6 +262,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     setMapUi,
     settingsOpen,
     setSettingsOpen,
+    takeBriefingOpener,
   }), [
     nav,
     setScreen,
@@ -252,6 +275,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     setRouteFocus,
     mapUi,
     settingsOpen,
+    takeBriefingOpener,
   ]);
 
   return createElement(WorkspaceContext.Provider, { value }, children);

@@ -13,6 +13,7 @@ import { flightKey } from '../../utils/flightKey';
 import { MAX_FLIGHT_SHORT_TEXT_LENGTH, MAX_FLIGHT_TEXT_LENGTH, draftFromFlightNotes, flightNotesFromDraft, formatMegahertz, formatModulation, link16DiffersFromLead, radioDiffersFromLead } from './flightModel';
 import type { FlightNotesDraft, FlightNotesDraftEdits, FuelParseResult } from './flightModel';
 import LineupCard from './LineupCard';
+import { pendingEdits } from './noteDrafts';
 
 /** Radios of each aircraft. A radio that differs from the lead on the same channel is marked (SPEC 1.3). */
 export function CommsView({ flight }: { flight: Flight }) {
@@ -180,11 +181,10 @@ export function FlightNotesView({ side, flight, draft, onDraftChange }: FlightNo
 
   const update = (field: keyof FlightNotesDraft, value: string) => {
     setStatus('idle');
-    const next: FlightNotesDraft = { ...current, [field]: value };
-    // Only the fields that differ from the saved values are kept, so a later change of another field is not hidden.
-    const edits: FlightNotesDraftEdits = {};
-    for (const name of DRAFT_FIELDS) if (next[name] !== savedDraft[name]) edits[name] = next[name];
-    onDraftChange(key, Object.keys(edits).length === 0 ? null : edits);
+    // Only the fields that differ from the saved values are kept: a field typed back to its saved value leaves the
+    // draft, so a later change of that field elsewhere shows and is not written over on 保存 (W1). The same rule
+    // drops a field when the saved value catches up from elsewhere (pruneNoteDrafts, called by the mission provider).
+    onDraftChange(key, pendingEdits({ ...draft, [field]: value }, savedDraft));
   };
 
   const parsed = flightNotesFromDraft(current);

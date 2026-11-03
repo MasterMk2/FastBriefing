@@ -122,12 +122,49 @@ function pilotCoalition(coalition: Coalition, options: PilotOptions): Coalition 
   return {
     ...coalition,
     airbases,
-    flights: coalition.flights.filter(item => !hasHiddenFlag(item)),
-    support: coalition.support.filter(item => !hasHiddenFlag(item)),
-    aiGroups: coalition.aiGroups.filter(item => !hasHiddenFlag(item) && !item.lateActivation),
+    flights: coalition.flights.filter(pilotKeepsFlight),
+    support: coalition.support.filter(pilotKeepsSupport),
+    aiGroups: coalition.aiGroups.filter(pilotKeepsAIGroup),
     zones: [],
     drawings: coalition.drawings.filter(keepDrawing),
   };
+}
+
+/** Pilot view keeps a flight (a group with a Client or Player unit) unless it is hidden; late activation does not matter (G11). */
+function pilotKeepsFlight(flight: { hidden?: boolean }): boolean {
+  return !hasHiddenFlag(flight);
+}
+
+/** Pilot view keeps a support asset (tanker, AWACS, carrier, JTAC) unless it is hidden, late activation or not (G11). */
+function pilotKeepsSupport(asset: { hidden?: boolean }): boolean {
+  return !hasHiddenFlag(asset);
+}
+
+/** Pilot view removes hidden and late-activation AI groups (G11, FR-70). */
+function pilotKeepsAIGroup(group: { hidden?: boolean; lateActivation: boolean }): boolean {
+  return !hasHiddenFlag(group) && !group.lateActivation;
+}
+
+/** What a source group is, in terms of the pilot view lists it lands in. */
+export interface PilotGroupFacts {
+  hidden: boolean;
+  lateActivation: boolean;
+  /** A unit is a Client or Player slot: the group is in the flights list. */
+  client: boolean;
+  /** The group is a support asset (see `supportKindOf`): it is in the support list. */
+  support: boolean;
+}
+
+/**
+ * True when pilot view shows the group in at least one of its lists (flights, support, AI groups), by the
+ * same filters applyViewMode uses. The revision comparison reads it, so a pilot comparison lists the groups
+ * the pilot view shows: a late-activation tanker stays (the support and comms screens show it), a
+ * late-activation AI strike group does not.
+ */
+export function shownInPilotView(group: PilotGroupFacts): boolean {
+  return (group.client && pilotKeepsFlight(group))
+    || (group.support && pilotKeepsSupport(group))
+    || pilotKeepsAIGroup(group);
 }
 
 function hasClientUnit(flight: Flight): boolean {

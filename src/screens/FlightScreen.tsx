@@ -1,7 +1,7 @@
 // Owner: P1 (フライト作業画面). Flight screen (SPEC 1.3 flights, F3, F4). Default export, no props (lazy).
 // The selected flight is useWorkspace().flightKey. Data is read through useMission().view only, so a flight
 // that is not in the displayed view (the opposing side in pilot view) is never shown (D1).
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
 import type { ChangeEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { EmptyState } from '../shell/EmptyState';
@@ -14,7 +14,7 @@ import { flightKey } from '../utils/flightKey';
 import FlightDetail from './flight/FlightDetail';
 import { findSelectedFlight, isClientFlight } from './flight/flightModel';
 import type { FlightNotesDraftEdits } from './flight/flightModel';
-import { readNoteDrafts, writeNoteDraft } from './flight/noteDrafts';
+import { readNoteDrafts, subscribeNoteDrafts, writeNoteDraft } from './flight/noteDrafts';
 import type { NoteDraftMap } from './flight/noteDrafts';
 
 /** The map pane sits beside the flight at this width and wider (SPEC 1.1, 1.3). */
@@ -33,9 +33,10 @@ function FlightScreenBody() {
   // Unsaved notes drafts by flight key. They live outside this component (noteDrafts.ts), so they survive a change
   // of flight and a change of screen, which unmounts this component.
   const fingerprint = mission.sourceFingerprint;
-  const [noteDrafts, setNoteDrafts] = useState<NoteDraftMap>(() => readNoteDrafts(fingerprint));
+  // The store is read on every change, so a draft field dropped when its saved value caught up (W1) goes here too.
+  const noteDrafts: NoteDraftMap = useSyncExternalStore(subscribeNoteDrafts, () => readNoteDrafts(fingerprint));
   const setNoteDraft = useCallback((key: string, draft: FlightNotesDraftEdits | null) => {
-    setNoteDrafts(writeNoteDraft(fingerprint, key, draft));
+    writeNoteDraft(fingerprint, key, draft);
   }, [fingerprint]);
   const wide = useMediaQuery(WIDE_MAP_QUERY);
   const selected = findSelectedFlight(view, selectedKey);

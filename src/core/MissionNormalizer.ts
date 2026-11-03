@@ -759,26 +759,40 @@ function normalizeSupport(
     // be appended a second time by a separate ship pass.
     for (const group of groups) {
       const groupData = group as Record<string, unknown>;
-      const task = getString(groupData, ['task']);
       const units = getArray(groupData, ['units']);
       const unitType = getString(units[0], ['type']) || getString(groupData, ['type']);
       const signals = extractSupportSignals(groupData);
-      const carrier = isCarrierType(unitType);
-      const jtac = isJTACGroup(unitType, signals.hasFacTask || /JTAC|FAC/i.test(task));
+      const kind = supportKindOf(groupData, signals);
 
-      if (task === 'Tanker' || task === 'Refueling') {
+      if (kind === 'tanker') {
         support.push(withHiddenFlag(groupData, normalizeTanker(groupData, dictionary, theatre, signals)));
-      } else if (task === 'AWACS') {
+      } else if (kind === 'awacs') {
         support.push(withHiddenFlag(groupData, normalizeAWACS(groupData, dictionary, theatre, signals)));
-      } else if (carrier) {
+      } else if (kind === 'carrier') {
         support.push(withHiddenFlag(groupData, normalizeCarrier(groupData, dictionary, theatre, signals)));
-      } else if (jtac) {
+      } else if (kind === 'jtac') {
         support.push(withHiddenFlag(groupData, normalizeJTAC(groupData, dictionary, theatre, signals, unitType)));
       }
     }
   }
-  
+
   return support;
+}
+
+/**
+ * The support kind of a source group, or null when the group is not a support asset. The one rule for
+ * which groups the support list holds: the revision comparison reads it too, so that the pilot comparison
+ * keeps the same late-activation support groups that pilot view keeps (G11).
+ */
+export function supportKindOf(groupData: Record<string, unknown>, signals: ExtractedSupportSignals = extractSupportSignals(groupData)): SupportAsset['kind'] | null {
+  const task = getString(groupData, ['task']);
+  const units = getArray(groupData, ['units']);
+  const unitType = getString(units[0], ['type']) || getString(groupData, ['type']);
+  if (task === 'Tanker' || task === 'Refueling') return 'tanker';
+  if (task === 'AWACS') return 'awacs';
+  if (isCarrierType(unitType)) return 'carrier';
+  if (isJTACGroup(unitType, signals.hasFacTask || /JTAC|FAC/i.test(task))) return 'jtac';
+  return null;
 }
 
 /** Copy the DCS group `hidden` flag onto a support asset (G11). */

@@ -130,6 +130,28 @@ describe('mission revision matching and changes', () => {
     expect(compareMissionRevisions(snapshot([lateClient(0)]), snapshot([lateClient(999)]), 'pilot', 'blue').changes)
       .not.toHaveLength(0);
   });
+  it('keeps a late-activation tanker and AWACS in the pilot comparison, as pilot view keeps them on the support and comms screens (G11)', () => {
+    const late = (name: string, task: string, type: string, frequency: number, x = 0) => ({
+      ...group(name === 'Texaco' ? 5 : name === 'Darkstar' ? 6 : 7, name), task, lateActivation: true, frequency,
+      route: { points: [point('START', x), point('IP', 100), point('LAND', 200)] },
+      units: [{ ...group().units[0], type, skill: 'High' }],
+    });
+    const before = snapshot([late('Texaco', 'Refueling', 'KC-135', 251), late('Darkstar', 'AWACS', 'E-3A', 260), late('Strike', 'Ground Attack', 'Su-25T', 270)]);
+    const after = snapshot([late('Texaco', 'Refueling', 'KC-135', 255), late('Darkstar', 'AWACS', 'E-3A', 260, 900), late('Strike', 'Ground Attack', 'Su-25T', 275, 900)]);
+    const pilot = compareMissionRevisions(before, after, 'pilot', 'blue');
+
+    expect(pilot.changes).toContainEqual(expect.objectContaining({
+      category: 'radio', entity: 'blue / Texaco', field: 'group.frequency', before: 251, after: 255,
+    }));
+    expect(pilot.routes.map(route => route.name)).toEqual(['blue / Darkstar']);
+    // The late-activation AI strike group is not in the pilot view, so neither its frequency nor its route is listed.
+    expect(pilot.changes.some(change => change.entity.includes('Strike'))).toBe(false);
+    expect(compare(before, after).changes.some(change => change.entity.includes('Strike'))).toBe(true);
+
+    // A hidden tanker is not in the pilot view, late activation or not.
+    const hidden = (frequency: number) => snapshot([{ ...late('Texaco', 'Refueling', 'KC-135', frequency), hidden: true }]);
+    expect(compareMissionRevisions(hidden(251), hidden(255), 'pilot', 'blue').changes).toEqual([]);
+  });
   it('compares only the displayed side in pilot view and never lists the opposing flights (D1)', () => {
     const build = (enemyX: number, withEnemy = true) => {
       const own = group(1, 'Own');

@@ -1,10 +1,11 @@
-import { createContext, useContext, useMemo } from 'react';
+import { createContext, useContext, useEffect, useMemo } from 'react';
 import type { ReactNode } from 'react';
 import type { DisplaySettings, MissionData, Side, UserNotes } from '../types/mission';
 import { useSettings } from '../hooks/useSettings';
 import { useWhiteboard } from '../hooks/useWhiteboard';
 import type { LoadedRevision } from '../components/RevisionComparison';
 import { applyViewMode, resolveSide } from '../utils/viewMode';
+import { pruneNoteDrafts } from '../screens/flight/noteDrafts';
 
 /**
  * Everything a screen reads about the loaded mission. Screens never call the
@@ -60,6 +61,13 @@ export function MissionProvider({
     () => applyViewMode(mission, settings.viewMode, settings.side),
     [mission, settings.viewMode, settings.side],
   );
+
+  // A flight-note draft field that the saved notes now equal is dropped (W1). This provider stays mounted while
+  // the flight screen is not, so a value saved on the notes screen is seen even when it changes again later.
+  const perFlight = mission.userNotes.perFlight;
+  useEffect(() => {
+    pruneNoteDrafts(mission.sourceFingerprint, perFlight);
+  }, [mission.sourceFingerprint, perFlight]);
 
   const value: MissionContextValue = {
     mission,

@@ -4,6 +4,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { RefObject } from 'react';
 import { useTranslation } from 'react-i18next';
+import { usePrintPreviewOpen } from '../export/printPreview';
 import type { ScreenId } from '../types/screen';
 import { useMission } from './MissionContext';
 import { useWorkspace } from './workspace';
@@ -52,9 +53,11 @@ export function BottomTabs({ onOpenSettings, onOpenFiles, onCompare, onCloseMiss
     };
   }, [sheetOpen]);
 
+  // The print preview covers the page too, and makes the sheet inert under it, so it closes the sheet (A11Y-7).
+  const previewOpen = usePrintPreviewOpen();
   useEffect(() => {
-    if (screen === 'briefing') setSheetOpen(false);
-  }, [screen]);
+    if (screen === 'briefing' || previewOpen) setSheetOpen(false);
+  }, [screen, previewOpen]);
 
   const go = (id: ScreenId) => {
     setSheetOpen(false);

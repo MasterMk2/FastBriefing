@@ -7,6 +7,7 @@ import { SettingsProvider } from '../../hooks/useSettings';
 import { i18nReady } from '../../i18n';
 import shellJa from '../../i18n/locales/ja/shell.json';
 import briefingJa from '../../i18n/locales/ja/briefing.json';
+import overviewJa from '../../i18n/locales/ja/overview.json';
 import type { MissionData } from '../../types/mission';
 import { NAV_SCREENS } from '../../types/screen';
 import AppShell from '../AppShell';
@@ -167,6 +168,44 @@ describe('AppShell verbal briefing layer', () => {
     expect(container.querySelector('.shell-header')?.hasAttribute('inert')).toBe(false);
     expect(container.querySelector('.shell-frame')?.hasAttribute('inert')).toBe(false);
     expect(container.querySelector('.bottom-tabs')?.hasAttribute('inert')).toBe(false);
+  });
+
+  /** Opens the briefing from a focused button, as a keyboard user does, and ends it with やめる. */
+  async function openAndEnd(opener: HTMLButtonElement) {
+    opener.focus();
+    await click(opener);
+    await settle();
+    expect(container.querySelector('.shell-briefing-layer')).not.toBeNull();
+    await click(buttonByText('.shell-briefing-layer button', briefingJa.start.cancel));
+    await settle();
+  }
+
+  it('returns the focus to the overview start button that opened it (A11Y-2)', async () => {
+    await renderShell();
+    await settle();
+    await openAndEnd(buttonByText('.overview-actions button', overviewJa.actions.briefing));
+
+    // The overview is drawn again, so the button is a new element with the same label.
+    expect(document.activeElement).toBe(buttonByText('.overview-actions button', overviewJa.actions.briefing));
+  });
+
+  it('returns the focus to the header button when the briefing was opened there (A11Y-2)', async () => {
+    await renderShell();
+    await settle();
+    await openAndEnd(buttonByText('.shell-header-actions button', shellJa.header.start));
+
+    expect(document.activeElement?.id).toBe('shell-briefing-trigger');
+  });
+
+  it('falls back to the header button when the opener is no longer in the page (A11Y-2)', async () => {
+    await renderShell();
+    await settle();
+    const opener = buttonByText('.overview-actions button', overviewJa.actions.briefing);
+    // Without its id the opener cannot be found again after the overview is drawn again.
+    opener.removeAttribute('id');
+    await openAndEnd(opener);
+
+    expect(document.activeElement?.id).toBe('shell-briefing-trigger');
   });
 });
 

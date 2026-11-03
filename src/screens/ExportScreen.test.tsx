@@ -379,6 +379,30 @@ describe('export screen actions', { timeout: 60_000 }, () => {
     outside.remove();
   });
 
+  it('closes the settings drawer and the "その他" sheet when the preview opens, and one Escape closes the preview only (A11Y-7)', async () => {
+    await renderShell();
+    await openExport();
+    await act(async () => { document.getElementById('shell-settings-trigger')?.click(); });
+    await act(async () => { buttonByText(shellJa.nav.more).click(); });
+    expect(container.querySelector('.settings-drawer')).not.toBeNull();
+    expect(container.querySelector('.bottom-sheet')).not.toBeNull();
+
+    const previewButton = buttonByText(exportJa.ui.printPreview);
+    await act(async () => { previewButton.click(); });
+    expect(container.querySelector('.print-preview-bar')).not.toBeNull();
+    expect(container.querySelector('.settings-drawer')).toBeNull();
+    expect(container.querySelector('.bottom-sheet')).toBeNull();
+
+    // A keyboard Escape reaches the document listeners (file menu, sheet) and then the window ones (drawer).
+    const escape = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+    await act(async () => { document.body.dispatchEvent(escape); });
+    expect(escape.defaultPrevented).toBe(true);
+    expect(container.querySelector('.print-preview-bar')).toBeNull();
+    expect(container.querySelector('.settings-drawer')).toBeNull();
+    expect(container.querySelector('.bottom-sheet')).toBeNull();
+    expect(document.activeElement).toBe(previewButton);
+  });
+
   it('returns focus to the preview button when the close button is used', async () => {
     await renderShell();
     await openExport();

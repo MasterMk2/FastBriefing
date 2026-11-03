@@ -1,4 +1,6 @@
+import { supportKindOf } from '../core/MissionNormalizer';
 import type { DisplaySettings, ParsedMissionFile, Side } from '../types/mission';
+import { shownInPilotView } from './viewMode';
 
 export type RevisionValue = string | number | boolean | null | RevisionValue[] | { [key: string]: RevisionValue };
 type RecordValue = Record<string, unknown>;
@@ -11,10 +13,12 @@ export interface RevisionFlight {
   side: string;
   category: string;
   hidden: boolean;
-  /** Late activation of the group. With `client` false it is a late-activation AI group, which pilot view leaves out (G11). */
+  /** Late activation of the group. Pilot view leaves out a late-activation AI group, but not a flight or a support asset (G11). */
   lateActivation?: boolean;
   /** True when a unit of the group is a Client or Player slot. */
   client?: boolean;
+  /** True when the normalizer lists the group as a support asset (tanker, AWACS, carrier, JTAC). */
+  support?: boolean;
   route: RevisionPoint[];
   units: RevisionUnit[];
   radio: RevisionValue;
@@ -89,10 +93,15 @@ function resolveName(value: unknown, dictionary: Record<string, string>): string
   return Object.prototype.hasOwnProperty.call(dictionary, name) ? dictionary[name] : name;
 }
 
-/** Hidden flights and late-activation AI groups are not in the pilot view (G11). */
+/** A group that pilot view does not show (G11), by the rule applyViewMode applies (`shownInPilotView`). */
 function withheldFromPilot(flight: RevisionFlight | undefined): boolean {
   if (!flight) return false;
-  return flight.hidden || (flight.lateActivation === true && flight.client !== true);
+  return !shownInPilotView({
+    hidden: flight.hidden,
+    lateActivation: flight.lateActivation === true,
+    client: flight.client === true,
+    support: flight.support === true,
+  });
 }
 
 /** Compare source values, before display defaults erase missing-vs-zero differences. */
@@ -131,6 +140,7 @@ export function createMissionRevision(parsed: Pick<ParsedMissionFile, 'mission' 
           hidden: source.hidden === true,
           lateActivation: source.lateActivation === true,
           client,
+          support: supportKindOf(source) !== null,
           radio: { ...pick(source, ['modulation', 'communication'], true),
             ...(source.frequency !== undefined ? { frequency: frequency(source.frequency)! } : {}) },
           route: entries(record(source.route).points).map(([key, item]) => {
@@ -233,8 +243,11 @@ function pointPairs(before: RevisionPoint[], after: RevisionPoint[]) {
  * neutral flights are left out before matching, so their added, removed or
  * changed fields never appear, the same rule applyViewMode applies to the
  * mission. A pilot comparison without a side lists no flights (fail closed).
- * Hidden flights and late-activation AI groups are also left out in pilot view
- * (G11), the same as applyViewMode. A late-activation client flight is kept.
+ * In pilot view the groups that applyViewMode does not show are also left out
+ * (G11): hidden groups, and late-activation AI groups. A late-activation client
+ * flight and a late-activation support asset (tanker, AWACS) are kept, since the
+ * flight, support and comms screens show them. The rule is `shownInPilotView`,
+ * shared with applyViewMode; the values compared stay the source values.
  */
 export function compareMissionRevisions(before: MissionRevision, after: MissionRevision, viewMode: DisplaySettings['viewMode'], side?: Side): MissionRevisionDiff {
   const visibleFlights = (flights: RevisionFlight[]) => viewMode === 'creator'

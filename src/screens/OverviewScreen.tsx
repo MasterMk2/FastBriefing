@@ -155,7 +155,8 @@ export default function OverviewScreen() {
           <button type="button" className="overview-button" onClick={() => setScreen('flights')}>
             {t('overview:actions.flights')}
           </button>
-          <button type="button" className="overview-button is-primary" onClick={() => setScreen('briefing')}>
+          {/* The id lets the shell return the focus here when the briefing ends, after this screen is drawn again (A11Y-2). */}
+          <button id="overview-briefing-start" type="button" className="overview-button is-primary" onClick={() => setScreen('briefing')}>
             {t('overview:actions.briefing')}
           </button>
           <button type="button" className="overview-button" onClick={() => setScreen('export')}>

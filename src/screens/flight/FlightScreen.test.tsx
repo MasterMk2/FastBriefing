@@ -472,6 +472,87 @@ describe('flight screen: notes', () => {
     expect(saved.at(-1)?.perFlight['blue:1']).toMatchObject({ jokerFuel: 12, customNotes: 'Saved elsewhere' });
   });
 
+  it('drops a field typed back to its saved value, then shows that field changed elsewhere and does not write over it (W1)', async () => {
+    const { blue, red } = makeFlights();
+    const controls: Controls = { updateNotes: null };
+    const saved: UserNotes[] = [];
+    await render({
+      initial: makeMission(blue, red),
+      viewMode: 'creator',
+      selectedKey: 'blue:1',
+      controls,
+      onNotesChange: notes => saved.push(notes),
+    });
+
+    await click(buttonByText(flightJa.subview.notes));
+    await typeInto(fuelInputs()[0], '12');
+    await typeInto(fuelInputs()[0], '');
+    expect(buttonByText(flightJa.notes.save).disabled).toBe(true);
+
+    await act(async () => {
+      controls.updateNotes?.(notes => ({ ...notes, perFlight: { ...notes.perFlight, 'blue:1': { ...EMPTY_NOTE, jokerFuel: 15 } } }));
+    });
+    expect(fuelInputs()[0].value).toBe('15');
+
+    await typeInto(container.querySelector<HTMLTextAreaElement>('textarea')!, 'Brief at 0800');
+    await click(buttonByText(flightJa.notes.save));
+    expect(saved.at(-1)?.perFlight['blue:1']).toMatchObject({ jokerFuel: 15, customNotes: 'Brief at 0800' });
+  });
+
+  it('drops a draft field when the value saved elsewhere catches up with it, so a later change there shows (W1)', async () => {
+    const { blue, red } = makeFlights();
+    const controls: Controls = { updateNotes: null };
+    const saved: UserNotes[] = [];
+    const setJoker = (jokerFuel: number) => act(async () => {
+      controls.updateNotes?.(notes => ({ ...notes, perFlight: { ...notes.perFlight, 'blue:1': { ...EMPTY_NOTE, jokerFuel } } }));
+    });
+    await render({
+      initial: makeMission(blue, red),
+      viewMode: 'creator',
+      selectedKey: 'blue:1',
+      controls,
+      onNotesChange: notes => saved.push(notes),
+    });
+
+    await click(buttonByText(flightJa.subview.notes));
+    await typeInto(fuelInputs()[0], '12');
+    // The notes screen saves the same value, then a different one.
+    await setJoker(12);
+    await setJoker(15);
+
+    expect(fuelInputs()[0].value).toBe('15');
+    expect(buttonByText(flightJa.notes.save).disabled).toBe(true);
+    await typeInto(container.querySelector<HTMLTextAreaElement>('textarea')!, 'Brief at 0800');
+    await click(buttonByText(flightJa.notes.save));
+    expect(saved.at(-1)?.perFlight['blue:1']).toMatchObject({ jokerFuel: 15, customNotes: 'Brief at 0800' });
+  });
+
+  it('drops the caught-up draft field while the flight screen is not shown (W1)', async () => {
+    const { blue, red } = makeFlights();
+    const controls: Controls = { updateNotes: null };
+    const initial = makeMission(blue, red);
+    const setJoker = (jokerFuel: number) => act(async () => {
+      controls.updateNotes?.(notes => ({ ...notes, perFlight: { ...notes.perFlight, 'blue:1': { ...EMPTY_NOTE, jokerFuel } } }));
+    });
+    await render({ initial, viewMode: 'creator', selectedKey: 'blue:1', controls });
+    await click(buttonByText(flightJa.subview.notes));
+    await typeInto(fuelInputs()[0], '12');
+
+    // Another screen is shown: the flight screen unmounts, the providers stay.
+    await act(async () => {
+      root.render(<Harness initial={initial} viewMode="creator" selectedKey="blue:1" controls={controls} showScreen={false} />);
+    });
+    await setJoker(12);
+    await setJoker(15);
+    await act(async () => {
+      root.render(<Harness initial={initial} viewMode="creator" selectedKey="blue:1" controls={controls} showScreen />);
+    });
+    await settle();
+    await click(buttonByText(flightJa.subview.notes));
+
+    expect(fuelInputs()[0].value).toBe('15');
+  });
+
   it('keeps an unsaved draft when the selection moves to another flight and back', async () => {
     const { blue, red } = makeFlights();
     await render({ initial: makeMission(blue, red), viewMode: 'creator', selectedKey: 'blue:1' });

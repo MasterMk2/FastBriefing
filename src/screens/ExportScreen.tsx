@@ -45,7 +45,7 @@ export default function ExportScreen() {
   const { mission, settings, side, sourceFile, view } = useMission();
   const { setBriefingSections, setBriefingPresets, setOutputLanguage, setViewMode, setKneeboardWidth } = useSettings();
   const { model, scope, outT, title, viewLabel } = useExportModel();
-  const { focusAnchor, flightKey, clearFocusAnchor } = useWorkspace();
+  const { focusAnchor, flightKey, clearFocusAnchor, setSettingsOpen } = useWorkspace();
   const [format, setFormat] = useState<FormatId>('print');
   const [markdownStyle, setMarkdownStyle] = useState<MarkdownStyle>('table');
   const [status, setStatus] = useState<Partial<Record<FormatId, { tone: 'info' | 'error'; text: string }>>>({});
@@ -114,21 +114,28 @@ export default function ExportScreen() {
     if (previewOpen) root.dataset.printPreview = 'on';
     else delete root.dataset.printPreview;
     if (!previewOpen) return undefined;
+    // The settings drawer would stay open, inert, under the preview, and come back when it closes: it is closed
+    // (the bottom sheet "その他" closes itself on the same signal). A11Y-7.
+    setSettingsOpen(false);
     // Everything outside the preview bar and the previewed document is inert: this screen, and also the header, the
     // left rail, the bottom tabs and the settings drawer, which the preview covers (A11Y-3).
     const bar = screenRef.current?.querySelector('.print-preview-bar');
     const restore = bar ? inertOutside(bar, element => element.classList.contains('print-briefing')) : () => {};
     previewPrintRef.current?.focus();
+    // One Escape closes the preview only. It is the top layer, so it is read first (capture phase) and marked as
+    // handled; the drawer, the sheet and the file menu leave a handled Escape alone (A11Y-7).
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setPreviewOpen(false);
+      if (event.key !== 'Escape' || event.defaultPrevented) return;
+      event.preventDefault();
+      setPreviewOpen(false);
     };
-    window.addEventListener('keydown', onKey);
+    window.addEventListener('keydown', onKey, true);
     return () => {
-      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('keydown', onKey, true);
       restore();
       delete root.dataset.printPreview;
     };
-  }, [previewOpen]);
+  }, [previewOpen, setSettingsOpen]);
 
   // Closing the preview returns the focus to the button that opened it. This runs after the effect above has
   // removed the inert mark, so the focus can land.

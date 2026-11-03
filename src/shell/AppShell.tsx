@@ -158,15 +158,26 @@ function InitialShell({ loading, isDragging, onPickFiles, onCompare, onCloseMiss
   );
 }
 
-/** The header button that opens the oral briefing; the focus returns to it when the briefing ends. */
+/** The header button that opens the oral briefing; the focus returns to it when the opener cannot take it. */
 const BRIEFING_TRIGGER_ID = 'shell-briefing-trigger';
+
+/**
+ * The element to focus in place of the briefing's opener: the opener itself while it is in the document, or else
+ * the element that now has its id (the screen was drawn again). null when there is none, or it is inert.
+ */
+function focusableAgain(opener: HTMLElement | null): HTMLElement | null {
+  if (!opener) return null;
+  const target = opener.isConnected ? opener : opener.id ? document.getElementById(opener.id) : null;
+  if (!target || target.closest('[inert]')) return null;
+  return target;
+}
 
 function MissionShell({ onPickFiles, onCompare, onCloseMission }: {
   onPickFiles: () => void;
   onCompare: () => void;
   onCloseMission: () => void;
 }) {
-  const { settingsOpen, setSettingsOpen, screen } = useWorkspace();
+  const { settingsOpen, setSettingsOpen, screen, takeBriefingOpener } = useWorkspace();
   const briefingOpen = screen === 'briefing';
   const headerRef = useRef<HTMLElement>(null);
   const frameRef = useRef<HTMLDivElement>(null);
@@ -177,12 +188,15 @@ function MissionShell({ onPickFiles, onCompare, onCloseMission }: {
   // While the briefing covers the page, everything outside its layer is inert: the shell chrome, and also the
   // hidden file inputs, the error band, the bottom sheet and the settings drawer (A11Y-1). The attribute is set on
   // the elements themselves (React 18 has no typed inert prop). The settings drawer is closed, since it would stay
-  // hidden under the layer. When the briefing ends, the focus goes back to the button that opened it (A11Y-2).
+  // hidden under the layer. When the briefing ends, the focus goes back to the element that opened it (A11Y-2):
+  // the overview's start button, for example, or the header button. The screen behind the briefing is drawn again,
+  // so an opener with an id is found again by that id. An opener that is gone or inert gives the header button.
   useLayoutEffect(() => {
     if (!briefingOpen) {
       if (wasBriefingOpen.current) {
         wasBriefingOpen.current = false;
-        document.getElementById(BRIEFING_TRIGGER_ID)?.focus();
+        const target = focusableAgain(takeBriefingOpener()) ?? document.getElementById(BRIEFING_TRIGGER_ID);
+        target?.focus();
       }
       return undefined;
     }
@@ -190,7 +204,7 @@ function MissionShell({ onPickFiles, onCompare, onCloseMission }: {
     setSettingsOpen(false);
     const layer = layerRef.current;
     return layer ? inertOutside(layer) : undefined;
-  }, [briefingOpen, setSettingsOpen]);
+  }, [briefingOpen, setSettingsOpen, takeBriefingOpener]);
 
   const closeSettings = () => {
     setSettingsOpen(false);

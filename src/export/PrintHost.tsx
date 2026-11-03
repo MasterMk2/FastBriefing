@@ -2,31 +2,19 @@
 // any screen prints the export plan (SPEC 5.1, F9). Its maps are drawn only once the export screen has been
 // opened or printing starts (decision 7). Reading the mission alone draws nothing and requests no tile.
 // Maps that are not drawn yet print as "準備中", so printing is never blocked.
-import { useEffect, useState, useSyncExternalStore } from 'react';
+import { useEffect, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { useWorkspace } from '../shell/workspace';
 import PrintDocument from './printDocument';
+import { usePrintPreviewOpen } from './printPreview';
 import { useExportModel } from './useExportModel';
-
-/**
- * The export screen sets html[data-print-preview="on"] while the print preview is open. The preview shows
- * this copy full screen, so only then is it visible to assistive technology. Otherwise it is an off-screen
- * duplicate of the export screen, and is hidden from assistive technology.
- */
-function subscribePrintPreview(onChange: () => void): () => void {
-  const observer = new MutationObserver(onChange);
-  observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-print-preview'] });
-  return () => observer.disconnect();
-}
-
-function isPrintPreviewOpen(): boolean {
-  return document.documentElement.dataset.printPreview === 'on';
-}
 
 export default function PrintHost() {
   const { model, title, viewLabel, outT } = useExportModel();
   const { screen } = useWorkspace();
-  const previewOpen = useSyncExternalStore(subscribePrintPreview, isPrintPreviewOpen, () => false);
+  // The preview shows this copy full screen, so only then is it visible to assistive technology. Otherwise it is
+  // an off-screen duplicate of the export screen, and is hidden from assistive technology.
+  const previewOpen = usePrintPreviewOpen();
   // Once true it stays true, so leaving the export screen does not take the drawn maps away.
   const [drawMaps, setDrawMaps] = useState(false);
 
