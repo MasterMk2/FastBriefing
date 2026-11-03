@@ -31,6 +31,7 @@ afterEach(async () => {
   await act(async () => root.unmount());
   container.remove();
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
   localStorage.clear();
 });
 
@@ -63,18 +64,55 @@ describe('whiteboard protection (F11)', () => {
     expect(localStorage.getItem(key)).toBe('{"version":1,"notes":5,"strokes":"x"}');
   });
 
-  it('sets the broken board aside, then saves the empty board under the mission key', async () => {
+  it('sets the broken board aside, then saves the board on screen under the mission key', async () => {
     localStorage.setItem(key, '{"broken":');
-    const board = await render();
+    await render();
+    await act(async () => { latest!.setNotes('typed on screen'); });
+    // Typing does not overwrite the broken record while it is blocked.
+    expect(localStorage.getItem(key)).toBe('{"broken":');
 
-    let backupKey: string | null = null;
-    await act(async () => { backupKey = latest!.setAside(); });
+    const outcome = { current: null as ReturnType<Board['setAside']> | null };
+    await act(async () => { outcome.current = latest!.setAside(); });
 
-    expect(backupKey).toContain('fastbriefing-whiteboard-backup:');
-    expect(localStorage.getItem(backupKey as unknown as string)).toBe('{"broken":');
+    const result = outcome.current!;
+    expect(result.saved).toBe(true);
+    expect(result.backupKey).toContain('fastbriefing-whiteboard-backup:');
+    expect(localStorage.getItem(result.backupKey ?? '')).toBe('{"broken":');
     expect(latest!.persistenceStatus).toBe('saved');
-    expect(JSON.parse(localStorage.getItem(key) ?? '{}')).toMatchObject({ version: 1, notes: '', strokes: [] });
-    expect(board.data.notes).toBe('');
+    expect(JSON.parse(localStorage.getItem(key) ?? '{}')).toMatchObject({ version: 1, notes: 'typed on screen', strokes: [] });
+    expect(latest!.data.notes).toBe('typed on screen');
+  });
+
+  it('keeps the board on screen and reports no save when the store refuses the write', async () => {
+    localStorage.setItem(key, '{"broken":');
+    await render();
+    await act(async () => { latest!.setNotes('kept'); });
+    const nativeSetItem = Storage.prototype.setItem;
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (this: Storage, name: string, value: string) {
+      if (name === key) throw new Error('QuotaExceededError');
+      nativeSetItem.call(this, name, value);
+    });
+
+    const outcome = { current: null as ReturnType<Board['setAside']> | null };
+    await act(async () => { outcome.current = latest!.setAside(); });
+
+    expect(outcome.current!.saved).toBe(false);
+    expect(localStorage.getItem(key)).toBeNull();
+    expect(latest!.data.notes).toBe('kept');
+  });
+
+  it('reports a replaced board as saved only when the store keeps it', async () => {
+    const outcome = { current: null as boolean | null };
+    const board = await render();
+    await act(async () => { outcome.current = board.replaceData({ notes: 'Replaced', strokes: [] }); });
+    expect(outcome.current).toBe(true);
+    expect(JSON.parse(localStorage.getItem(key) ?? '{}')).toMatchObject({ notes: 'Replaced' });
+
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('QuotaExceededError'); });
+    await act(async () => { outcome.current = latest!.replaceData({ notes: 'Refused', strokes: [] }); });
+
+    expect(outcome.current).toBe(false);
+    expect(latest!.data.notes).toBe('Refused');
   });
 
   it('saves normally when nothing is stored yet', async () => {

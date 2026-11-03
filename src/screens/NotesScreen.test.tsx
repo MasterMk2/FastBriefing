@@ -4,8 +4,9 @@ import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { normalizeMission } from '../core/MissionNormalizer';
 import { SETTINGS_STORAGE_KEY, SETTINGS_VERSION, SettingsProvider } from '../hooks/useSettings';
-import { getMissionWhiteboardId } from '../hooks/useWhiteboard';
+import { createEmptyWhiteboard, getMissionWhiteboardId, serializeWhiteboardSidecar } from '../hooks/useWhiteboard';
 import { i18nReady } from '../i18n';
+import notesJa from '../i18n/locales/ja/notes.json';
 import { MissionProvider } from '../shell/MissionContext';
 import { WorkspaceProvider } from '../shell/workspace';
 import type { Flight, MapAnnotation, MissionData, UserNotes } from '../types/mission';
@@ -140,6 +141,41 @@ function readBlob(blob: Blob): Promise<string> {
   });
 }
 
+function notesWith(situation: string): UserNotes {
+  const notes = emptyUserNotes(KEY);
+  notes.smeac.situation = situation;
+  return notes;
+}
+
+/** Makes the browser store refuse writes to one key; other keys are written as usual. */
+function refuseWritesTo(key: string) {
+  const nativeSetItem = Storage.prototype.setItem;
+  vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (this: Storage, name: string, value: string) {
+    if (name === key) throw new Error('QuotaExceededError');
+    nativeSetItem.call(this, name, value);
+  });
+}
+
+/** Chooses a file in a hidden file input and fires its change event, as the browser does after the picker closes. */
+async function chooseFile(input: HTMLInputElement, text: string) {
+  const file = { size: text.length, text: () => Promise.resolve(text) } as unknown as File;
+  Object.defineProperty(input, 'files', { configurable: true, value: [file] });
+  await act(async () => {
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    await new Promise(resolve => setTimeout(resolve, 0));
+  });
+}
+
+function fileInput(): HTMLInputElement {
+  const input = container.querySelector<HTMLInputElement>('input[type="file"]');
+  if (!input) throw new Error('file input not rendered');
+  return input;
+}
+
+function messageText(): string | null | undefined {
+  return container.querySelector('.notes-message')?.textContent;
+}
+
 describe('notes screen', () => {
   it('lists only the displayed side in pilot view (D1)', async () => {
     await renderNotes();
@@ -212,14 +248,175 @@ describe('notes screen', () => {
     await renderNotes({ storageFailed: true, onNotesChange: notes => changes.push(notes) });
 
     expect(container.textContent).toContain('保存された注記を読めないため');
-    expect(container.textContent).toContain('画面で入力した内容は退避すると消えるので');
-    await click(button('退避して空から始める'));
+    expect(container.textContent).toContain('いま画面にある内容をこの端末に保存し直します');
+    await click(button('退避して保存し直す'));
 
     expect(changes[changes.length - 1]).toEqual(emptyUserNotes(KEY));
     const names = Array.from({ length: localStorage.length }, (_, index) => localStorage.key(index) ?? '');
     const backup = names.find(name => name.startsWith(`fastbriefing-notes-backup:${KEY}:`));
     expect(backup).toBeDefined();
     expect(localStorage.getItem(backup ?? '')).toBe('{"broken":');
+  });
+
+  it('keeps the notes on screen and saves them again after the broken record is set aside (F11)', async () => {
+    localStorage.setItem(STORAGE_KEY, '{"broken":');
+    const notes = emptyUserNotes(KEY);
+    notes.smeac.situation = 'Typed on screen';
+    await renderNotes({ mission: fixtureMission(notes), storageFailed: true });
+
+    await click(button('退避して保存し直す'));
+
+    expect(container.querySelector<HTMLTextAreaElement>('textarea.notes-textarea')?.value).toBe('Typed on screen');
+    expect(JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}')).toMatchObject({ smeac: { situation: 'Typed on screen' } });
+    expect(container.textContent).toContain('元のデータを');
+    expect(container.textContent).toContain('に退避しました');
+  });
+
+  it('does not report the set-aside as done when the store refuses the save (F11)', async () => {
+    localStorage.setItem(STORAGE_KEY, '{"broken":');
+    const notes = emptyUserNotes(KEY);
+    notes.smeac.situation = 'Typed on screen';
+    const nativeSetItem = Storage.prototype.setItem;
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (this: Storage, name: string, value: string) {
+      if (name === STORAGE_KEY) throw new Error('QuotaExceededError');
+      nativeSetItem.call(this, name, value);
+    });
+    await renderNotes({ mission: fixtureMission(notes), storageFailed: true });
+
+    await click(button('退避して保存し直す'));
+
+    expect(container.textContent).toContain('いまの内容を保存できませんでした');
+    expect(container.textContent).not.toContain('に退避しました');
+  });
+
+  it('stops the import while the saved notes cannot be read, and says why (F11)', async () => {
+    localStorage.setItem(STORAGE_KEY, '{"broken":');
+    await renderNotes({ storageFailed: true });
+    await click(button('保存'));
+
+    expect(button('JSON から読み込む').disabled).toBe(true);
+    expect(container.textContent).toContain('読み込みは止めています');
+  });
+
+  it('stops the board import while the saved board cannot be read, and keeps the board on screen (F11)', async () => {
+    const mission = fixtureMission();
+    const boardKey = `fastbriefing-whiteboard:${getMissionWhiteboardId(mission)}`;
+    localStorage.setItem(boardKey, '{"broken":');
+    await renderNotes({ mission });
+    await click(button('白板'));
+
+    expect(button('JSON から読み込む').disabled).toBe(true);
+    expect(container.querySelector('#notes-board-import-blocked')?.textContent).toContain(notesJa.whiteboard.importBlocked);
+    await type(container.querySelector<HTMLTextAreaElement>('#notes-board-text-input')!, 'Kept on board');
+    await click(button('退避して白板を保存し直す'));
+
+    expect(JSON.parse(localStorage.getItem(boardKey) ?? '{}')).toMatchObject({ notes: 'Kept on board' });
+    expect(container.querySelector<HTMLTextAreaElement>('#notes-board-text-input')!.value).toBe('Kept on board');
+  });
+
+  it('does not report the board set-aside as done when the store refuses the board save (F11)', async () => {
+    const mission = fixtureMission();
+    const boardKey = `fastbriefing-whiteboard:${getMissionWhiteboardId(mission)}`;
+    localStorage.setItem(boardKey, '{"broken":');
+    const nativeSetItem = Storage.prototype.setItem;
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (this: Storage, name: string, value: string) {
+      if (name === boardKey) throw new Error('QuotaExceededError');
+      nativeSetItem.call(this, name, value);
+    });
+    await renderNotes({ mission });
+    await click(button('白板'));
+
+    await click(button('退避して白板を保存し直す'));
+
+    expect(container.textContent).toContain('いまの白板を保存できませんでした');
+    expect(container.textContent).not.toContain('退避しました');
+  });
+
+  it('does not take a notes file while the saved notes cannot be read, even through the hidden input (F11)', async () => {
+    localStorage.setItem(STORAGE_KEY, '{"broken":');
+    await renderNotes({ storageFailed: true });
+    await click(button('保存'));
+    expect(fileInput().disabled).toBe(true);
+
+    await chooseFile(fileInput(), serializeNotesSidecar(notesWith('Imported text')));
+
+    expect(messageText()).toBeFalsy();
+    expect(container.textContent).not.toContain(notesJa.storage.imported);
+    expect(localStorage.getItem(STORAGE_KEY)).toBe('{"broken":');
+  });
+
+  it('reports the notes import as done when the store keeps it (F11)', async () => {
+    await renderNotes();
+    await click(button('保存'));
+
+    await chooseFile(fileInput(), serializeNotesSidecar(notesWith('Imported text')));
+
+    expect(messageText()).toBe(notesJa.storage.imported);
+    expect(JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}')).toMatchObject({ smeac: { situation: 'Imported text' } });
+  });
+
+  it('says the notes import is not saved when the store refuses the write, and keeps the notes on screen (F11)', async () => {
+    refuseWritesTo(STORAGE_KEY);
+    await renderNotes();
+    await click(button('保存'));
+
+    await chooseFile(fileInput(), serializeNotesSidecar(notesWith('Imported text')));
+
+    expect(messageText()).toBe(notesJa.storage.importedUnsaved);
+    await click(button(notesJa.sections.situation));
+    expect(container.querySelector<HTMLTextAreaElement>('textarea.notes-textarea')?.value).toBe('Imported text');
+  });
+
+  it('does not take a board file while the saved board cannot be read, even through the hidden input (F11)', async () => {
+    const mission = fixtureMission();
+    const boardKey = `fastbriefing-whiteboard:${getMissionWhiteboardId(mission)}`;
+    localStorage.setItem(boardKey, '{"broken":');
+    await renderNotes({ mission });
+    await click(button('白板'));
+    expect(fileInput().disabled).toBe(true);
+    expect(container.querySelector('#notes-board-import-blocked')?.textContent).toContain(notesJa.whiteboard.importBlocked);
+
+    await chooseFile(fileInput(), serializeWhiteboardSidecar(mission.sourceFingerprint, { ...createEmptyWhiteboard(), notes: 'Imported board' }));
+
+    expect(container.textContent).not.toContain(notesJa.whiteboard.imported);
+    expect(localStorage.getItem(boardKey)).toBe('{"broken":');
+  });
+
+  it('reports the board import as done when the store keeps it (F11)', async () => {
+    const mission = fixtureMission();
+    const boardKey = `fastbriefing-whiteboard:${getMissionWhiteboardId(mission)}`;
+    await renderNotes({ mission });
+    await click(button('白板'));
+
+    await chooseFile(fileInput(), serializeWhiteboardSidecar(mission.sourceFingerprint, { ...createEmptyWhiteboard(), notes: 'Imported board' }));
+
+    expect(messageText()).toBe(notesJa.whiteboard.imported);
+    expect(JSON.parse(localStorage.getItem(boardKey) ?? '{}')).toMatchObject({ notes: 'Imported board' });
+  });
+
+  it('says the board import is not saved when the store refuses the write, and keeps the board on screen (F11)', async () => {
+    const mission = fixtureMission();
+    refuseWritesTo(`fastbriefing-whiteboard:${getMissionWhiteboardId(mission)}`);
+    await renderNotes({ mission });
+    await click(button('白板'));
+
+    await chooseFile(fileInput(), serializeWhiteboardSidecar(mission.sourceFingerprint, { ...createEmptyWhiteboard(), notes: 'Imported board' }));
+
+    expect(messageText()).toBe(notesJa.whiteboard.importedUnsaved);
+    expect(container.querySelector<HTMLTextAreaElement>('#notes-board-text-input')?.value).toBe('Imported board');
+  });
+
+  it('keys the notes of a neutral flight as neutral:<groupId>, the same key as its selection', async () => {
+    localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify({ settingsVersion: SETTINGS_VERSION, viewMode: 'creator' }));
+    const mission = fixtureMission();
+    mission.coalitions.neutral.flights = [flight(3, 'NEU1')];
+    const changes: UserNotes[] = [];
+    await renderNotes({ mission, onNotesChange: next => changes.push(next) });
+    await click(button('フライト別'));
+    await click(button('NEU1 — NEU1 group'));
+    await type(container.querySelector<HTMLInputElement>('input[type="text"]')!, 'Neutral pilot');
+
+    expect(changes[changes.length - 1]?.perFlight['neutral:3']?.pilotName).toBe('Neutral pilot');
   });
 
   it('exports only the flights shown in pilot view, and no map notes (D1)', async () => {

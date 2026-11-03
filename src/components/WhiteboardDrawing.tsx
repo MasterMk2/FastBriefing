@@ -10,6 +10,9 @@ interface WhiteboardDrawingProps {
 
 export default function WhiteboardDrawing({ strokes, draft, label, className = '' }: WhiteboardDrawingProps) {
   const displayedStrokes = draft ? [...strokes, draft] : strokes;
+  // The paper and its grid keep these fixed colours in every theme, on purpose. The board is a writing surface whose
+  // ink colours are stored as data, and the print document draws it too, so the paper must stay light in a dark
+  // theme. tokens.css has no paper token; a theme-independent paper token would replace these two values.
 
   return (
     <svg

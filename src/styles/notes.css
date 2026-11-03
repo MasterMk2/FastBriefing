@@ -69,10 +69,9 @@
 .notes-screen input:focus-visible,
 .notes-screen select:focus-visible,
 .notes-screen textarea:focus-visible,
-.notes-screen label.btn:focus-within,
 .revision-comparison button:focus-visible,
 .revision-comparison select:focus-visible {
-  outline: 2px solid var(--focus-ring);
+  outline: var(--focus-ring);
   outline-offset: 2px;
 }
 
@@ -422,4 +421,11 @@
     aspect-ratio: auto;
     min-height: 220px;
   }
+}
+
+.notes-screen .btn:disabled {
+  border-color: var(--border);
+  background: var(--surface-1);
+  color: var(--text-muted);
+  cursor: not-allowed;
 }
