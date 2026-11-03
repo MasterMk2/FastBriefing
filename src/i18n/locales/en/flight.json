@@ -1,1 +1,106 @@
-{}
+{
+  "row": {
+    "type": "{{type}} × {{count}}"
+  },
+  "screen": {
+    "choose": "Choose a flight",
+    "chooseNone": "None",
+    "noFlights": "No flights",
+    "noFlightsBody": "This mission has no flights for this side.",
+    "noClient": "No client aircraft",
+    "noClientBody": "This side has no Client or Player aircraft. The route and comms can still be viewed.",
+    "pickFlight": "Choose a flight",
+    "pickFlightBody": "Choose one from the list on the left (or the picker above on narrow screens) to show its route, comms and notes.",
+    "mapPane": "Map"
+  },
+  "header": {
+    "hidden": "Hidden (creator only)",
+    "aiOnly": "AI only",
+    "aircraft": "Aircraft",
+    "unitCount": "{{count}} aircraft",
+    "task": "Task",
+    "frequency": "Main frequency",
+    "firstEta": "First ETA",
+    "export": "Make this material"
+  },
+  "subview": {
+    "label": "Flight view",
+    "nav": "Navigation log",
+    "comms": "Comms",
+    "lineup": "Lineup",
+    "notes": "Notes"
+  },
+  "route": {
+    "title": "Route table",
+    "columns": "Add columns",
+    "empty": "No route points",
+    "coordFormat": "Coordinate format: {{format}} (aircraft default: {{defaultFormat}})",
+    "altBaro": "BARO",
+    "altRadio": "RADIO",
+    "trueOnly": "True only {{bearing}}°",
+    "selectPoint": "Select route point {{index}}",
+    "annotationTitle": "Route point notes",
+    "annotationFor": "Route point {{index}} ({{name}})",
+    "annotationHint": "Select a route point row to write its notes here.",
+    "col": {
+      "no": "No.",
+      "name": "Name",
+      "coord": "Coordinates",
+      "alt": "Altitude",
+      "speed": "Speed",
+      "eta": "ETA",
+      "leg": "Leg distance",
+      "bearing": "Magnetic bearing",
+      "cumDistance": "Cumulative distance",
+      "cumTime": "Cumulative time",
+      "trueBearing": "True bearing",
+      "annotations": "Notes count"
+    }
+  },
+  "comms": {
+    "noUnits": "No aircraft",
+    "lead": "Lead",
+    "noRadio": "No radio settings",
+    "channel": "CH",
+    "frequency": "Frequency",
+    "modulation": "Modulation",
+    "name": "Name",
+    "difference": "Difference from lead",
+    "differs": "Differs from lead",
+    "link16Flight": "Flight lead",
+    "link16Team": "Team",
+    "yes": "Yes",
+    "no": "No",
+    "singleAircraft": "This flight has one aircraft."
+  },
+  "lineup": {
+    "noUnits": "No aircraft",
+    "showRoster": "Show wingmen ({{count}} aircraft)",
+    "hideRoster": "Hide the roster",
+    "tail": "Tail",
+    "callsign": "Callsign",
+    "skill": "Skill",
+    "livery": "Livery",
+    "fuel": "Fuel",
+    "chaffFlare": "Chaff / Flare",
+    "fuelUnitUnverified": "The fuel unit is not verified.",
+    "aircraftSettings": "Aircraft settings (lead)"
+  },
+  "notes": {
+    "joker": "Joker fuel (kg, provisional)",
+    "bingo": "Bingo fuel (kg, provisional)",
+    "fuelHint": "Leave empty when not entered.",
+    "tot": "TOT",
+    "pilotName": "Pilot",
+    "customNotes": "Free notes",
+    "save": "Save",
+    "saved": "Saved",
+    "limit": "The number of notes has reached the limit. Remove unneeded notes, then save.",
+    "noChanges": "No changes",
+    "fixBeforeSave": "Fix the entries to save",
+    "negative": "A negative value cannot be saved. Enter 0 or more.",
+    "notNumber": "Enter a number.",
+    "storageFailedTitle": "This device cannot save",
+    "storageFailedBody": "Notes stay only while this page is open."
+  }
+}
