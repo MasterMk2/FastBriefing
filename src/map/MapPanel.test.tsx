@@ -20,6 +20,8 @@ const mocks = vi.hoisted(() => ({
   setNotes: vi.fn(),
   fitBounds: vi.fn(),
   setView: vi.fn(),
+  panTo: vi.fn(),
+  inView: true,
   dragEnable: vi.fn(),
   dragDisable: vi.fn(),
   zoomIn: vi.fn(),
@@ -38,6 +40,8 @@ vi.mock('react-leaflet', () => {
     distance: (a: number[], b: number[]) => Math.hypot(a[0] - b[0], a[1] - b[1]) * 111_000,
     getContainer: () => mocks.container,
     getCenter: () => ({ lat: 40, lng: 41 }),
+    getBounds: () => ({ contains: () => mocks.inView }),
+    panTo: (...args: unknown[]) => mocks.panTo(...args),
     mouseEventToLatLng: (event: { clientX: number; clientY: number }) => ({
       lat: 40 + event.clientY / 1000,
       lng: 40 + event.clientX / 1000,
@@ -59,16 +63,30 @@ vi.mock('react-leaflet', () => {
       return <div data-testid="tile" />;
     },
     // Leaflet gives an interactive marker the class leaflet-marker-icon, which the pointer code relies on.
-    Marker: ({ children, title }: { children?: unknown; title?: string }) => (
-      <div data-testid="marker" className="leaflet-marker-icon" data-title={title}>{children as never}</div>
+    // A click on a marker or a line runs its eventHandlers, as Leaflet does; the panel's route picks rely on it.
+    Marker: ({ children, title, eventHandlers, icon }: {
+      children?: unknown;
+      title?: string;
+      eventHandlers?: { click?: () => void };
+      icon?: { options?: { className?: string } };
+    }) => (
+      <div
+        data-testid="marker"
+        className={`leaflet-marker-icon ${icon?.options?.className ?? ''}`}
+        data-title={title}
+        onClick={() => eventHandlers?.click?.()}
+      >
+        {children as never}
+      </div>
     ),
     Popup: ({ children }: { children?: unknown }) => <div>{children as never}</div>,
     // Stroke colour and width arrive as pathOptions, as in the real panel; the fake shows them as data attributes.
-    Polyline: ({ positions, className, children, pathOptions }: {
+    Polyline: ({ positions, className, children, pathOptions, eventHandlers }: {
       positions: unknown[];
       className?: string;
       children?: unknown;
       pathOptions?: { color?: string; weight?: number };
+      eventHandlers?: { click?: () => void };
     }) => (
       <div
         data-testid="polyline"
@@ -76,9 +94,13 @@ vi.mock('react-leaflet', () => {
         data-count={positions.length}
         data-color={pathOptions?.color}
         data-weight={pathOptions?.weight}
+        onClick={() => eventHandlers?.click?.()}
       >
         {children as never}
       </div>
+    ),
+    Polygon: ({ positions, className, children }: { positions: unknown[]; className?: string; children?: unknown }) => (
+      <div data-testid="polygon" className={className} data-count={positions.length}>{children as never}</div>
     ),
     Circle: ({ children, className, radius }: { children?: unknown; className?: string; radius?: number }) => (
       <div data-testid="circle" className={className} data-radius={radius}>{children as never}</div>
@@ -171,7 +193,7 @@ function makeMission(options: { theatre?: string; annotations?: MapAnnotation[] 
         bullseye: { xy: [1, 1], latlon: [42, 43], latlonResolved: true },
       }),
       red: coalition({
-        flights: [flight(2, 'RED1', [point(1, [43, 43])])],
+        flights: [flight(2, 'RED1', [point(1, [43, 43]), point(2, [43.1, 43.1])])],
         aiGroups: [aiGroup('RED-SAM', [43.2, 43.2], 30000)],
       }),
       neutral: coalition(),
@@ -212,14 +234,30 @@ function FlightPicker({ value }: { value: string }) {
   return <button type="button" onClick={() => setFlightKey(value)}>フライト選択</button>;
 }
 
+/**
+ * Stands in for the flight list and the route table: each button sets one workspace value, as a click there does.
+ */
+function WorkspaceControls() {
+  const { setFlightKey, setRouteFocus, setMapUi } = useWorkspace();
+  return (
+    <>
+      <button type="button" onClick={() => setFlightKey(null)}>選択なし</button>
+      <button type="button" onClick={() => setRouteFocus({ flightKey: 'blue:1', routeIndex: 1 })}>経路点を選ぶ</button>
+      <button type="button" onClick={() => setRouteFocus({ flightKey: 'red:2', routeIndex: 1 })}>赤の経路点を選ぶ</button>
+      <button type="button" onClick={() => setMapUi(previous => ({ ...previous, soloFlightKey: 'blue:1' }))}>この機だけ</button>
+    </>
+  );
+}
+
 /** Keeps the map mounted or unmounted from outside, the way a screen change does. */
-function Harness({ readOnly = false }: { readOnly?: boolean }) {
+function Harness({ readOnly = false, focusFlightKey }: { readOnly?: boolean; focusFlightKey?: string | null }) {
   const [visible, setVisible] = useState(true);
   return (
     <WorkspaceProvider>
       <button type="button" onClick={() => setVisible(value => !value)}>切替</button>
       <FlightPicker value="blue:1" />
-      {visible && <MapPanel readOnly={readOnly} />}
+      <WorkspaceControls />
+      {visible && <MapPanel readOnly={readOnly} focusFlightKey={focusFlightKey} />}
     </WorkspaceProvider>
   );
 }
@@ -232,6 +270,8 @@ beforeEach(async () => {
   await i18nReady;
   mocks.fitBounds.mockClear();
   mocks.setView.mockClear();
+  mocks.panTo.mockClear();
+  mocks.inView = true;
   mocks.zoomIn.mockClear();
   mocks.zoomOut.mockClear();
   mocks.setNotes.mockClear();
@@ -316,12 +356,128 @@ describe('map panel state and screen changes', () => {
     expect(mocks.fitBounds).toHaveBeenCalledTimes(2);
   });
 
-  it('fits the map again when a flight is selected', async () => {
+  it('fits the map to the selected flight at mount, and again when the selection changes', async () => {
     setContext(makeMission());
     await render();
+    // The own side's first flight is selected by default (T7), so the mount fits that flight.
     expect(mocks.fitBounds).toHaveBeenCalledTimes(1);
-    await act(async () => buttonByText('フライト選択')?.click());
+    await act(async () => buttonByText('選択なし')?.click());
     expect(mocks.fitBounds).toHaveBeenCalledTimes(2);
+    await act(async () => buttonByText('フライト選択')?.click());
+    expect(mocks.fitBounds).toHaveBeenCalledTimes(3);
+  });
+
+  it('a route pick marks its point and never refits the view', async () => {
+    setContext(missionWithBlueRoute([point(1, [42, 42]), point(2, [42.1, 42.1]), point(3, [42.2, 42.2])]));
+    await render();
+    expect(mocks.fitBounds).toHaveBeenCalledTimes(1);
+    await act(async () => buttonByText('経路点を選ぶ')?.click());
+    const ring = host.querySelectorAll('.map-icon-focus');
+    expect(ring).toHaveLength(1);
+    expect(ring[0].getAttribute('data-title')).toBe('BLUE1: WP2');
+    expect(mocks.fitBounds).toHaveBeenCalledTimes(1);
+    expect(mocks.panTo).not.toHaveBeenCalled();
+  });
+
+  it('a route pick on another flight marks that route too, and the selected flight stays marked', async () => {
+    setContext(missionWithBlueRoute([point(1, [42, 42]), point(2, [42.1, 42.1]), point(3, [42.2, 42.2])]));
+    await render();
+    const fitsBefore = mocks.fitBounds.mock.calls.length;
+    await act(async () => buttonByText('赤の経路点を選ぶ')?.click());
+    expect(host.querySelector('[data-testid="polyline"].map-route-red.is-selected')).not.toBeNull();
+    expect(host.querySelector('[data-testid="polyline"].map-route-blue.is-selected')).not.toBeNull();
+    const ring = host.querySelectorAll('.map-icon-focus');
+    expect(ring).toHaveLength(1);
+    expect(ring[0].getAttribute('data-title')).toBe('RED1: WP2');
+    expect(mocks.fitBounds).toHaveBeenCalledTimes(fitsBefore);
+  });
+
+  it('a route pick pans to its point only when the point is out of view', async () => {
+    setContext(missionWithBlueRoute([point(1, [42, 42]), point(2, [42.1, 42.1]), point(3, [42.2, 42.2])]));
+    mocks.inView = false;
+    await render();
+    await act(async () => buttonByText('経路点を選ぶ')?.click());
+    expect(mocks.panTo).toHaveBeenCalledTimes(1);
+    expect(mocks.panTo).toHaveBeenCalledWith([42.1, 42.1]);
+    expect(mocks.fitBounds).toHaveBeenCalledTimes(1);
+  });
+
+  it('this flight only keeps its own route on the map, and the banner shows every flight again', async () => {
+    setContext(missionWithBlueRoute([point(1, [42, 42]), point(2, [42.1, 42.1]), point(3, [42.2, 42.2])]));
+    await render();
+    expect(host.querySelectorAll('[data-testid="polyline"].map-route-red').length).toBeGreaterThan(0);
+    await act(async () => buttonByText('この機だけ')?.click());
+    expect(host.querySelector('[data-testid="polyline"].map-route-red')).toBeNull();
+    expect(host.querySelector('[data-testid="polyline"].map-route-blue')).not.toBeNull();
+    expect(host.querySelector('.map-solo')?.textContent).toContain('BLUE1 だけを表示中');
+    await act(async () => buttonByText('全機を表示に戻す')?.click());
+    expect(host.querySelector('[data-testid="polyline"].map-route-red')).not.toBeNull();
+    expect(host.querySelector('.map-solo')).toBeNull();
+  });
+
+  it('a route pick on the read-only map changes no flight selection and offers no flight link', async () => {
+    setContext(missionWithBlueRoute([point(1, [42, 42]), point(2, [42.1, 42.1]), point(3, [42.2, 42.2])]));
+    await render(<Harness readOnly />);
+    await act(async () => buttonByText('選択なし')?.click());
+    const line = host.querySelector<HTMLElement>('[data-testid="polyline"].map-route-blue');
+    expect(line).not.toBeNull();
+    await act(async () => line?.click());
+    expect(host.querySelector('[data-testid="polyline"].map-route-blue.is-selected')).toBeNull();
+    expect(buttonByText('この機のナビログを開く')).toBeUndefined();
+  });
+
+  it('a read-only map ignores the solo flight of the map screen, so a briefing with no focus shows every flight', async () => {
+    setContext(makeMission());
+    await render(<Harness readOnly focusFlightKey={null} />);
+    await act(async () => buttonByText('この機だけ')?.click());
+    expect(host.querySelector('[data-testid="polyline"].map-route-red')).not.toBeNull();
+    expect(host.querySelector('.map-solo')).toBeNull();
+  });
+
+  it('a briefing map focused on one flight fits it and dims the others', async () => {
+    setContext(missionWithBlueRoute([point(1, [42, 42]), point(2, [42.1, 42.1]), point(3, [42.2, 42.2])]));
+    await render(<Harness focusFlightKey="blue:1" />);
+    expect(mocks.fitBounds).toHaveBeenCalledTimes(1);
+    expect(host.querySelector('[data-testid="polyline"].map-route-blue')?.className).not.toContain('is-dim');
+    expect(host.querySelector('[data-testid="polyline"].map-route-red')?.className).toContain('is-dim');
+  });
+
+  it('a briefing map with no focused flight shows every flight, with none dimmed', async () => {
+    setContext(makeMission());
+    await render(<Harness focusFlightKey={null} />);
+    expect(host.querySelector('.is-dim')).toBeNull();
+    expect(host.querySelector('.map-route-red')).not.toBeNull();
+  });
+
+  it('a read-only briefing map with no focus argument fits every flight, as null does, and picking a flight does not refit it', async () => {
+    setContext(missionWithBlueRoute([point(1, [42, 42]), point(2, [42.1, 42.1]), point(3, [42.2, 42.2])]));
+    await render(<Harness readOnly focusFlightKey={null} />);
+    const allFlightsBounds = mocks.fitBounds.mock.calls[0][0];
+
+    // A fresh mount of the same map, this time without the focusFlightKey prop.
+    await act(async () => root.unmount());
+    root = createRoot(host);
+    mocks.fitBounds.mockClear();
+    await render(<Harness readOnly />);
+    expect(mocks.fitBounds).toHaveBeenCalledTimes(1);
+    expect(mocks.fitBounds.mock.calls[0][0]).toEqual(allFlightsBounds);
+
+    await act(async () => buttonByText('選択なし')?.click());
+    await act(async () => buttonByText('フライト選択')?.click());
+    expect(mocks.fitBounds).toHaveBeenCalledTimes(1);
+    expect(host.querySelector('.is-dim')).toBeNull();
+  });
+
+  it('picking the same route row again pans to its point again when that point is still out of view', async () => {
+    setContext(missionWithBlueRoute([point(1, [42, 42]), point(2, [42.1, 42.1]), point(3, [42.2, 42.2])]));
+    mocks.inView = false;
+    await render();
+    await act(async () => buttonByText('経路点を選ぶ')?.click());
+    expect(mocks.panTo).toHaveBeenCalledTimes(1);
+    await act(async () => buttonByText('経路点を選ぶ')?.click());
+    expect(mocks.panTo).toHaveBeenCalledTimes(2);
+    expect(mocks.panTo).toHaveBeenLastCalledWith([42.1, 42.1]);
+    expect(mocks.fitBounds).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -343,6 +499,16 @@ describe('legend', () => {
     expect(legend).toContain('赤の経路');
     expect(legend).toContain('赤（ひし形）');
     expect(host.querySelector('.map-legend .map-mark-red')).not.toBeNull();
+  });
+
+  it('the solo flight legend names only its own route', async () => {
+    setContext(makeMission(), { viewMode: 'creator', side: 'blue' });
+    await render();
+    expect(host.querySelector('.map-legend')?.textContent).toContain('赤の経路');
+    await act(async () => buttonByText('この機だけ')?.click());
+    const legend = host.querySelector('.map-legend')?.textContent ?? '';
+    expect(legend).toContain('青の経路');
+    expect(legend).not.toContain('赤の経路');
   });
 
   it('pilot view titles the units group as support only, without threats', async () => {
@@ -662,16 +828,46 @@ describe('marker presses, zoom, route lines and empty states', () => {
       point(4, [42.3, 42.3]),
     ]));
     await render();
-    const counts = [...host.querySelectorAll<HTMLElement>('.map-route')].map(node => node.dataset.count);
+    const counts = [...host.querySelectorAll<HTMLElement>('[data-testid="polyline"].map-route-blue')].map(node => node.dataset.count);
     expect(counts).toEqual(['2']);
   });
 
   it('the selected flight route is marked as selected when the flight is picked', async () => {
     setContext(missionWithBlueRoute([point(1, [42, 42]), point(2, [42.1, 42.1]), point(3, [42.2, 42.2])]));
     await render();
-    expect(host.querySelector('.map-route.is-selected')).toBeNull();
+    // The own side's first flight is selected at mount, so its route is marked before any click.
+    expect(host.querySelector('[data-testid="polyline"].map-route-blue.is-selected')).not.toBeNull();
+    await act(async () => buttonByText('選択なし')?.click());
+    expect(host.querySelector('[data-testid="polyline"].is-selected')).toBeNull();
     await act(async () => buttonByText('フライト選択')?.click());
-    expect(host.querySelector('.map-route-blue.is-selected')).not.toBeNull();
+    expect(host.querySelector('[data-testid="polyline"].map-route-blue.is-selected')).not.toBeNull();
+  });
+
+  it('a press on a route line selects the flight with the move tool', async () => {
+    setContext(missionWithBlueRoute([point(1, [42, 42]), point(2, [42.1, 42.1]), point(3, [42.2, 42.2])]));
+    await render();
+    await act(async () => buttonByText('選択なし')?.click());
+    await act(async () => host.querySelector<HTMLElement>('[data-testid="polyline"].map-route-blue')?.click());
+    expect(host.querySelector('[data-testid="polyline"].map-route-blue.is-selected')).not.toBeNull();
+  });
+
+  it('with the pin tool a press on a route line places a pin and leaves the flight selection alone', async () => {
+    setContext(missionWithBlueRoute([point(1, [42, 42]), point(2, [42.1, 42.1]), point(3, [42.2, 42.2])]));
+    await render();
+    await act(async () => buttonByText('選択なし')?.click());
+    await act(async () => buttonByText('ピン')?.click());
+    const line = host.querySelector<HTMLElement>('[data-testid="polyline"].map-route-blue');
+    expect(line).not.toBeNull();
+    await act(async () => {
+      pointer('pointerdown', 1, 100, 100, line);
+      pointer('pointerup', 1, 100, 100, line);
+    });
+    await act(async () => line?.click());
+    expect(mocks.setNotes).toHaveBeenCalledTimes(1);
+    const [notes] = mocks.setNotes.mock.calls[0] as [{ mapAnnotations: MapAnnotation[] }];
+    expect(notes.mapAnnotations[0].kind).toBe('pin');
+    expect(host.querySelector('.map-route.is-selected')).toBeNull();
+    expect(mocks.fitBounds).toHaveBeenCalledTimes(2);
   });
 
   it('with every layer off the map says so and restores the layers on request', async () => {
@@ -702,20 +898,113 @@ describe('marker presses, zoom, route lines and empty states', () => {
     expect(mocks.setNotes).not.toHaveBeenCalled();
   });
 
-  it('the untouched default ink follows the current theme blue', async () => {
-    document.documentElement.style.setProperty('--info-text', '#9cc3ea');
+  it('the untouched default ink is the theme colour 1, and the colour swatches pick the others', async () => {
+    const root = document.documentElement.style;
+    root.setProperty('--ink-1', '#ffd166');
+    root.setProperty('--ink-2', '#7fe0c4');
     try {
       setContext(makeMission());
       await render();
+      expect(host.querySelector('button[aria-label="色 1"]')?.getAttribute('aria-pressed')).toBe('true');
       await act(async () => buttonByText('ピン')?.click());
       await act(async () => {
         pointer('pointerdown', 1, 100, 100);
         pointer('pointerup', 1, 100, 100);
       });
-      const [notes] = mocks.setNotes.mock.calls[0] as [{ mapAnnotations: MapAnnotation[] }];
-      expect(notes.mapAnnotations[0].color).toBe('#9cc3ea');
+      expect((mocks.setNotes.mock.calls[0] as [{ mapAnnotations: MapAnnotation[] }])[0].mapAnnotations[0].color).toBe('#ffd166');
+
+      await act(async () => host.querySelector<HTMLButtonElement>('button[aria-label="色 2"]')?.click());
+      expect(host.querySelector('button[aria-label="色 2"]')?.getAttribute('aria-pressed')).toBe('true');
+      expect(host.querySelector('button[aria-label="色 1"]')?.getAttribute('aria-pressed')).toBe('false');
+      await act(async () => {
+        pointer('pointerdown', 2, 120, 120);
+        pointer('pointerup', 2, 120, 120);
+      });
+      const second = mocks.setNotes.mock.calls[1] as [{ mapAnnotations: MapAnnotation[] }];
+      expect(second[0].mapAnnotations.at(-1)?.color).toBe('#7fe0c4');
     } finally {
-      document.documentElement.style.removeProperty('--info-text');
+      root.removeProperty('--ink-1');
+      root.removeProperty('--ink-2');
     }
+  });
+
+  it('a new pin takes the next number after the largest default name, renamed pins do not count', async () => {
+    const annotations = [pin('ピン 1'), pin('ピン 3'), pin('my note')];
+    setContext(makeMission({ annotations }));
+    await render();
+    await act(async () => buttonByText('ピン')?.click());
+    await act(async () => {
+      pointer('pointerdown', 1, 100, 100);
+      pointer('pointerup', 1, 100, 100);
+    });
+    const [notes] = mocks.setNotes.mock.calls[0] as [{ mapAnnotations: MapAnnotation[] }];
+    expect(notes.mapAnnotations.at(-1)).toMatchObject({ kind: 'pin', label: 'ピン 4' });
+  });
+
+  it('clears every annotation only after a confirmation, and one step of 元に戻す brings them all back', async () => {
+    const existing = [pin('ピン 1'), pin('ピン 2')];
+    setContext(makeMission({ annotations: existing }));
+    await render();
+    await act(async () => buttonByText('注釈をすべて消す')?.click());
+    expect(mocks.setNotes).not.toHaveBeenCalled();
+    expect(host.querySelector('.map-confirm')?.textContent).toContain('注釈 2 件をすべて消します');
+    await act(async () => buttonByText('消す')?.click());
+    expect(mocks.setNotes).toHaveBeenCalledTimes(1);
+    expect((mocks.setNotes.mock.calls[0] as [{ mapAnnotations: MapAnnotation[] }])[0].mapAnnotations).toEqual([]);
+
+    setContext(makeMission({ annotations: [] }));
+    await render();
+    expect(host.textContent).toContain('注釈 2 件をすべて消しました');
+    await act(async () => buttonByText('元に戻す')?.click());
+    const restored = (mocks.setNotes.mock.calls[1] as [{ mapAnnotations: MapAnnotation[] }])[0].mapAnnotations;
+    expect(restored).toEqual(existing);
+  });
+
+  it('keeping the annotations after the confirmation changes nothing', async () => {
+    setContext(makeMission({ annotations: [pin('ピン 1')] }));
+    await render();
+    await act(async () => buttonByText('注釈をすべて消す')?.click());
+    await act(async () => buttonByText('やめる')?.click());
+    expect(mocks.setNotes).not.toHaveBeenCalled();
+    expect(host.querySelector('.map-confirm')).toBeNull();
+  });
+
+  it('the clear confirmation starts on やめる, its 消す is styled as dangerous, and Escape closes it back to the opening button', async () => {
+    setContext(makeMission({ annotations: [pin('ピン 1')] }));
+    await render();
+    const clearButton = buttonByText('注釈をすべて消す');
+    await act(async () => clearButton?.click());
+    expect(buttonByText('消す')?.className).toContain('map-danger');
+    expect(document.activeElement).toBe(buttonByText('やめる'));
+
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    });
+    expect(host.querySelector('.map-confirm')).toBeNull();
+    expect(mocks.setNotes).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(clearButton);
+  });
+});
+
+describe('drawings and layers', () => {
+  it('an ME polygon is drawn closed, as a polygon and not as an open line', async () => {
+    const mission = makeMission();
+    mission.coalitions.blue.drawings = [{
+      layer: 'Common',
+      visible: true,
+      objects: [{
+        primitiveType: 'Polygon',
+        points: [[1000, 1000], [2000, 1000], [2000, 2000]],
+        color: '#336699',
+        thickness: 2,
+        style: 0,
+        name: 'area',
+      }],
+    }];
+    setContext(mission);
+    await render();
+    expect(host.querySelector('[data-testid="polygon"]')).not.toBeNull();
+    expect(host.querySelector('.map-drawing')).not.toBeNull();
+    expect(host.querySelectorAll('[data-testid="polyline"].map-drawing')).toHaveLength(0);
   });
 });

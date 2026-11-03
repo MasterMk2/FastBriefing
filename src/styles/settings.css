@@ -78,11 +78,6 @@
   align-self: flex-start;
 }
 
-/* Map background (the bridge in SettingsDrawer.tsx): the Leaflet tiles are hidden, the overlays stay. */
-html[data-map-background="hidden"] .leaflet-tile-pane {
-  visibility: hidden;
-}
-
 @media (max-width: 767px) {
   .settings-select,
   .settings-check {

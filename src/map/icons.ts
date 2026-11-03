@@ -17,13 +17,29 @@ function cached(key: string, build: () => L.DivIcon): L.DivIcon {
   return icon;
 }
 
-/** Route point number. The selected flight's points carry an extra class. */
-export function waypointIcon(number: number, selected: boolean): L.DivIcon {
-  return cached(`wp:${number}:${selected ? 1 : 0}`, () => L.divIcon({
-    className: `map-icon map-icon-waypoint${selected ? ' is-selected' : ''}`,
+/**
+ * Route point number. The selected flight's points carry an extra class; the points of the other flights
+ * are dimmed when one flight is focused (MapPanelProps.focusFlightKey).
+ */
+export function waypointIcon(number: number, selected: boolean, dimmed = false): L.DivIcon {
+  const classes = ['map-icon', 'map-icon-waypoint'];
+  if (selected) classes.push('is-selected');
+  if (dimmed) classes.push('is-dim');
+  return cached(`wp:${number}:${selected ? 1 : 0}:${dimmed ? 1 : 0}`, () => L.divIcon({
+    className: classes.join(' '),
     html: `<span>${number}</span>`,
     iconSize: [24, 24],
     iconAnchor: [12, 12],
+  }));
+}
+
+/** Ring that marks the route point picked in the route table (routeFocus). It takes no pointer input. */
+export function focusIcon(): L.DivIcon {
+  return cached('focus', () => L.divIcon({
+    className: 'map-icon map-icon-focus',
+    html: '<span class="map-focus-ring"></span>',
+    iconSize: [40, 40],
+    iconAnchor: [20, 20],
   }));
 }
 

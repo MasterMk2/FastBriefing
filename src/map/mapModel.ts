@@ -28,6 +28,8 @@ export interface FlightEntry {
   flight: Flight;
   /** flightKey() for blue and red flights; null for neutral (not selectable). */
   key: string | null;
+  /** flightKey() for every flight, neutral included. Matches focus, solo and route-focus keys. */
+  routeKey: string;
 }
 
 export interface CoalitionItem<T> {
@@ -82,7 +84,11 @@ export function isCoalitionShown(side: CoalitionKey, shown: Side, viewMode: View
   return viewMode === 'creator' || side === shown || side === 'neutral';
 }
 
-export function buildMapModel(view: MissionData, shown: Side, viewMode: ViewMode): MapModel {
+/**
+ * What the map draws, derived from the displayed view. When `soloFlightKey` names a flight of the view, only
+ * that flight's route is kept ("この機だけ地図に", T12); the other layers stay as they are.
+ */
+export function buildMapModel(view: MissionData, shown: Side, viewMode: ViewMode, soloFlightKey: string | null = null): MapModel {
   const theatre = view.meta.theatre;
   const model: MapModel = {
     flights: [],
@@ -101,10 +107,13 @@ export function buildMapModel(view: MissionData, shown: Side, viewMode: ViewMode
     const coalition = view.coalitions[side];
 
     for (const flight of coalition.flights) {
+      const routeKey = flightKey(side, flight.groupId);
+      if (soloFlightKey !== null && routeKey !== soloFlightKey) continue;
       model.flights.push({
         side,
         flight,
-        key: side === 'neutral' ? null : flightKey(side, flight.groupId),
+        key: side === 'neutral' ? null : routeKey,
+        routeKey,
       });
       for (const waypoint of flight.route) {
         if (!isResolvedLatLon(waypoint.latlon, waypoint.latlonResolved)) {
@@ -241,7 +250,7 @@ export function collectBounds(model: MapModel, theatre: string): L.LatLngBounds 
 
 /** Bounds of one selected flight's resolved route, or null when the key is not in the model. */
 export function flightBounds(model: MapModel, key: string): L.LatLngBounds | null {
-  const entry = model.flights.find(candidate => candidate.key === key);
+  const entry = model.flights.find(candidate => candidate.routeKey === key);
   if (!entry) return null;
   const bounds = L.latLngBounds([]);
   for (const waypoint of entry.flight.route) {

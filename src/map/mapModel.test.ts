@@ -152,6 +152,34 @@ describe('unsupported maps', () => {
   });
 });
 
+describe('solo flight and route keys', () => {
+  it('keeps only the solo flight when one is named, and drops the other flights from the off-map list', () => {
+    const mission = makeMission();
+    const solo = buildMapModel(mission, 'blue', 'creator', 'blue:1');
+    expect(solo.flights.map(entry => entry.routeKey)).toEqual(['blue:1']);
+    // BLUE1 has an unresolved point, so it stays in the off-map list; the points of other flights do not.
+    const offMap = solo.unresolved.map(entry => entry.label);
+    expect(offMap).toContain('BLUE1: WP2');
+    expect(offMap.some(label => label.startsWith('RED1'))).toBe(false);
+    const all = buildMapModel(mission, 'blue', 'creator', null);
+    expect(all.flights.map(entry => entry.routeKey)).toEqual(['blue:1', 'red:2']);
+  });
+
+  it('names a solo flight that is not in the view by no flight at all', () => {
+    const model = buildMapModel(makeMission(), 'blue', 'creator', 'red:99');
+    expect(model.flights).toEqual([]);
+  });
+
+  it('gives neutral flights a route key while keeping them unselectable', () => {
+    const mission = makeMission();
+    mission.coalitions.neutral.flights = [flight(7, 'NEUT7', [point(1, [42, 42])])];
+    const entry = buildMapModel(mission, 'blue', 'creator').flights.find(candidate => candidate.side === 'neutral');
+    expect(entry?.routeKey).toBe('neutral:7');
+    expect(entry?.key).toBeNull();
+    expect(flightBounds(buildMapModel(mission, 'blue', 'creator'), 'neutral:7')).not.toBeNull();
+  });
+});
+
 describe('layers', () => {
   it('uses the default when the stored layer state has no entry, so missing ids keep their default', () => {
     expect(isLayerOn({}, 'detection')).toBe(false);

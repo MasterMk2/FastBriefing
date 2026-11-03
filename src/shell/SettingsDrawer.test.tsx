@@ -1,10 +1,6 @@
 // @vitest-environment jsdom
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
-// @ts-expect-error Vitest executes this test in Node; this project intentionally omits @types/node.
-import { readFile } from 'node:fs/promises';
-// @ts-expect-error Vitest executes this test in Node; this project intentionally omits @types/node.
-import { resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { normalizeMission } from '../core/MissionNormalizer';
 import App from '../App';
@@ -298,35 +294,17 @@ describe('SettingsDrawer changes apply at once', () => {
     expect(storedSettings().fontScale).toBe('large');
   });
 
-  it('hides the map tiles when the map background is turned off, and shows them again', async () => {
-    // The map screens draw Leaflet tiles into .leaflet-tile-pane. The real stylesheet is loaded, so
-    // the computed visibility shows whether the tiles are drawn, not only what was stored.
-    const style = document.createElement('style');
-    // This file runs under jsdom, where import.meta.url is not a file URL. Vitest runs from the project root.
-    style.textContent = await readFile(resolve('src/styles/settings.css'), 'utf8');
-    const tiles = document.createElement('div');
-    tiles.className = 'leaflet-tile-pane';
-    document.head.append(style);
-    document.body.append(tiles);
-    try {
-      await renderDrawer(true);
-      const box = container.querySelector<HTMLInputElement>('.settings-check input');
-      expect(box?.checked).toBe(true);
-      expect(getComputedStyle(tiles).visibility).not.toBe('hidden');
+  it('stores the map background switch both ways and shows the box state of each', async () => {
+    await renderDrawer(true);
+    const box = container.querySelector<HTMLInputElement>('.settings-check input');
+    expect(box?.checked).toBe(true);
 
-      await act(async () => { box?.click(); });
-      expect(storedSettings().mapBackground).toBe(false);
-      expect(document.documentElement.dataset.mapBackground).toBe('hidden');
-      expect(getComputedStyle(tiles).visibility).toBe('hidden');
+    await act(async () => { box?.click(); });
+    expect(storedSettings().mapBackground).toBe(false);
+    expect(container.querySelector<HTMLInputElement>('.settings-check input')?.checked).toBe(false);
 
-      await act(async () => { container.querySelector<HTMLInputElement>('.settings-check input')?.click(); });
-      expect(storedSettings().mapBackground).toBe(true);
-      expect(document.documentElement.dataset.mapBackground).toBe('shown');
-      expect(getComputedStyle(tiles).visibility).not.toBe('hidden');
-    } finally {
-      style.remove();
-      tiles.remove();
-    }
+    await act(async () => { container.querySelector<HTMLInputElement>('.settings-check input')?.click(); });
+    expect(storedSettings().mapBackground).toBe(true);
   });
 
   it('changes the theme and font size of the whole app, not only the stored values', async () => {

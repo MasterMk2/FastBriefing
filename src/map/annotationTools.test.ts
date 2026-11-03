@@ -3,12 +3,43 @@ import type { MapPinAnnotation, MapStrokeAnnotation } from '../types/mission';
 import { MAX_MAP_ANNOTATIONS, MAX_MAP_POINTS_TOTAL, MAX_MAP_STROKE_POINTS } from '../utils/notes';
 import {
   checkAdd,
+  nextPinNumber,
   PointerGestures,
+  pinNumberPattern,
   removeAnnotation,
   restoreAnnotation,
   truncateLabel,
   undoLast,
 } from './annotationTools';
+
+describe('default pin numbers', () => {
+  // The pattern is built from the translated template, with a sentinel for the number.
+  const pattern = pinNumberPattern('ピン 987654321', 987654321);
+  const pinNamed = (id: string, label: string): MapPinAnnotation => ({
+    id,
+    kind: 'pin',
+    position: [42, 43],
+    label,
+    notes: '',
+    color: '#123456',
+  });
+
+  it('is one more than the largest default number, so a gap is not filled and a renamed pin does not count', () => {
+    const annotations = [pinNamed('a', 'ピン 1'), pinNamed('b', 'ピン 3'), pinNamed('c', 'ピン 3 の確認')];
+    expect(nextPinNumber(annotations, pattern)).toBe(4);
+  });
+
+  it('starts at 1 when no default name is left', () => {
+    expect(nextPinNumber([], pattern)).toBe(1);
+    expect(nextPinNumber([pinNamed('a', 'my pin')], pattern)).toBe(1);
+  });
+
+  it('escapes the template, so characters in it are read as text', () => {
+    const dotted = pinNumberPattern('Pin (1).987654321', 987654321);
+    expect(dotted.test('Pin (1).7')).toBe(true);
+    expect(dotted.test('Pin X1x7')).toBe(false);
+  });
+});
 
 const pin = (id: string): MapPinAnnotation => ({ id, kind: 'pin', position: [42, 43], label: id, notes: '', color: '#123456' });
 const stroke = (id: string, count: number): MapStrokeAnnotation => ({
