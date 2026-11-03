@@ -1,1 +1,36 @@
-{}
+{
+  "title": "Mission revision diff",
+  "before": "Before",
+  "after": "After",
+  "scope": "Compares group radios, unit presets and loadouts, weather, date and start time. Numbers use the DCS source units (m, m/s, seconds, mmHg, radio in MHz). Unset and zero are distinct. The direction is fixed: Before is the older file you chose, After is the version open now.",
+  "close": "Close diff",
+  "filter": "Show",
+  "all": "All changes",
+  "count": "{{count}} changes",
+  "unchanged": "No differences",
+  "retryCompare": "Choose the older file again",
+  "dismissCompare": "Close",
+  "differentTheatre": "The maps differ, so coordinates cannot be compared directly. The map overlay is disabled.",
+  "kind": "Change",
+  "entity": "Group / unit",
+  "field": "Field",
+  "missing": "Not set",
+  "more": "Show next 100",
+  "loading": "Loading",
+  "emptyTitle": "To compare revisions, choose the older file",
+  "emptyBody": "With a mission open, choose File > Compare revisions and pick the older .miz. It is compared with the version open now.",
+  "pickOld": "Choose the older .miz to compare",
+  "categories": {
+    "mission": "Mission",
+    "route": "Route",
+    "loadout": "Loadout",
+    "radio": "Radio",
+    "weather": "Weather"
+  },
+  "kinds": {
+    "added": "Added",
+    "removed": "Removed",
+    "changed": "Changed",
+    "renamed": "Renamed"
+  }
+}

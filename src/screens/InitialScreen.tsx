@@ -3,7 +3,8 @@
 //   Shown by AppShell when no mission is open. Errors and the loading overlay are rendered by App.tsx
 //   (the error band sits under the header). The hidden <input type="file" id="file-input"> lives in App.tsx;
 //   onPickFiles opens it. Drop events are handled by App.tsx on the window.
-import type { KeyboardEvent, DragEvent } from 'react';
+import { useEffect, useState } from 'react';
+import type { DragEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 
 export interface InitialScreenProps {
@@ -15,48 +16,69 @@ export interface InitialScreenProps {
   onPickFiles: () => void;
 }
 
+/** After this long, a read is slow and the screen says that it can be cancelled from the overlay (SPEC 6 状態). */
+const SLOW_LOAD_MS = 10_000;
+
+/** True once a read has lasted SLOW_LOAD_MS; resets when the read ends. */
+function useSlowLoad(loading: boolean): boolean {
+  const [slow, setSlow] = useState(false);
+  useEffect(() => {
+    if (!loading) return;
+    const timer = window.setTimeout(() => setSlow(true), SLOW_LOAD_MS);
+    return () => {
+      window.clearTimeout(timer);
+      setSlow(false);
+    };
+  }, [loading]);
+  return loading && slow;
+}
+
 export default function InitialScreen({ loading, isDragging, onPickFiles }: InitialScreenProps) {
   const { t } = useTranslation('initial');
-
-  const handleKeyDown = (event: KeyboardEvent<HTMLLabelElement>) => {
-    if (event.key === 'Enter' || event.key === ' ') {
-      event.preventDefault();
-      onPickFiles();
-    }
-  };
+  const slow = useSlowLoad(loading);
 
   const handleDragOver = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault();
     event.stopPropagation();
   };
 
+  // The whole drop area opens the picker, as the old label did (SPEC 1.3). The button has no handler of its
+  // own: its click bubbles here once, so keyboard and mouse both call onPickFiles exactly once.
+  const handleZonePress = () => {
+    if (!loading) onPickFiles();
+  };
+
   return (
     <section className="initial-screen">
       <div
-        className={`drop-zone${isDragging ? ' dragging' : ''}`}
-        onDragOver={handleDragOver}
+        className={`initial-drop${isDragging ? ' dragging' : ''}`}
+        role="region"
         aria-label={t('initial:dropZone')}
         aria-busy={loading}
+        onDragOver={handleDragOver}
+        onClick={handleZonePress}
       >
-        <label
-          htmlFor="file-input"
-          className="drop-label"
-          role="button"
-          tabIndex={0}
-          onKeyDown={handleKeyDown}
-          aria-describedby="drop-hint"
-        >
-          <div className="drop-icon" aria-hidden="true">📁</div>
-          <p>{t('initial:dropFile')}</p>
-          <p className="drop-hint" id="drop-hint">{t('initial:dropHint')}</p>
-        </label>
+        <p className="initial-drop-title">{t('initial:dropFile')}</p>
+        <p className="initial-drop-hint">{t('initial:dropHint')}</p>
+        <button type="button" className="btn btn-primary initial-pick" disabled={loading}>
+          {t('initial:pick')}
+        </button>
+        {loading && (
+          <p className="initial-loading" role="status" aria-live="polite">
+            {slow ? t('initial:slow') : t('initial:loading')}
+          </p>
+        )}
       </div>
-      <ul className="initial-points">
-        <li>{t('initial:point1')}</li>
-        <li>{t('initial:point2')}</li>
-        <li>{t('initial:point3')}</li>
-      </ul>
-      <p className="initial-compare">{t('initial:compareHint')}</p>
+
+      <section className="initial-guide" aria-labelledby="initial-guide-title">
+        <h2 id="initial-guide-title">{t('initial:guideTitle')}</h2>
+        <ul className="initial-points">
+          <li>{t('initial:point1')}</li>
+          <li>{t('initial:point2')}</li>
+          <li>{t('initial:point3')}</li>
+        </ul>
+        <p className="initial-compare">{t('initial:compareHint')}</p>
+      </section>
     </section>
   );
 }

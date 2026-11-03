@@ -50,6 +50,14 @@ async function choose(files: File[]) {
   await act(async () => { input().dispatchEvent(new Event('change', { bubbles: true })); });
   await settle();
 }
+// The comparison input picks the older version from the file menu (F10); the open mission is not replaced.
+async function chooseCompare(files: File[]) {
+  const compareInput = container.querySelector<HTMLInputElement>('#compare-file-input');
+  if (!compareInput) throw new Error('compare input not rendered');
+  Object.defineProperty(compareInput, 'files', { configurable: true, value: files });
+  await act(async () => { compareInput.dispatchEvent(new Event('change', { bubbles: true })); });
+  await settle();
+}
 // Wait until the lazily loaded revision screen shows the expected text (bounded, so a missing text still fails).
 async function waitForText(text: string) {
   for (let attempt = 0; attempt < 100 && !container.textContent?.includes(text); attempt += 1) {
@@ -73,7 +81,7 @@ beforeEach(async () => {
 afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.unstubAllGlobals(); });
 
 describe('two-file revision UI', () => {
-  it('loads both files in selection order, swaps the comparison, and closes without losing the revised briefing', async () => {
+  it('loads both files in selection order, keeps the direction fixed (no swap), and closes without losing the revised briefing', async () => {
     expect(input().multiple).toBe(true);
     mocks.parse.mockResolvedValueOnce(parsed('old')).mockResolvedValueOnce(parsed('new', 37000));
     await choose([file('old.miz'), file('new.miz')]);
@@ -81,12 +89,24 @@ describe('two-file revision UI', () => {
     await waitForText('変更前: old.miz → 変更後: new.miz');
     expect(container.textContent).toContain('変更前: old.miz → 変更後: new.miz');
     expect(container.textContent).toContain('start_time');
-    await click('変更前／変更後を入れ替え');
-    await waitForText('変更前: new.miz → 変更後: old.miz');
-    expect(container.textContent).toContain('変更前: new.miz → 変更後: old.miz');
+    // F10: the direction is fixed; there is no swap control.
+    expect([...container.querySelectorAll('button')].some(button => button.textContent?.includes('入れ替え'))).toBe(false);
     expect(mission()).toBe('new');
     await click('差分を閉じる');
     expect(container.querySelector('.revision-comparison')).toBeNull(); expect(mission()).toBe('new');
+  });
+  it('compares the open mission with an older file chosen from the file menu, and keeps the open mission', async () => {
+    mocks.parse.mockResolvedValueOnce(parsed('new', 37000));
+    await choose([file('new.miz')]);
+    expect(mission()).toBe('new');
+    await click('ファイル ▾');
+    await click('改版を比べる');
+    mocks.parse.mockResolvedValueOnce(parsed('old'));
+    await chooseCompare([file('old.miz')]);
+    await waitForText('変更前: old.miz → 変更後: new.miz');
+    expect(container.textContent).toContain('変更前: old.miz → 変更後: new.miz');
+    expect(mission()).toBe('new');
+    expect(mocks.parse).toHaveBeenCalledTimes(2);
   });
   it('uses the same batch handling for a window drop and clears comparison on a later single file', async () => {
     mocks.parse.mockResolvedValueOnce(parsed('a')).mockResolvedValueOnce(parsed('b'));
@@ -137,5 +157,34 @@ describe('two-file revision UI', () => {
     await choose([file('<img src=x onerror=alert(1)>.miz'), file('b.miz')]);
     expect(container.querySelector('.revision-comparison img')).toBeNull();
     expect(container.textContent).toContain('<img src=x onerror=alert(1)>.miz');
+  });
+  it('keeps the open mission when the old file is not a .miz, and re-picks only the old version (no reset)', async () => {
+    mocks.parse.mockResolvedValueOnce(parsed('new', 37000));
+    await choose([file('new.miz')]);
+    await click('ファイル ▾'); await click('改版を比べる');
+    const replacePick = vi.spyOn(input(), 'click');
+    const oldPick = vi.spyOn(container.querySelector<HTMLInputElement>('#compare-file-input')!, 'click').mockImplementation(() => {});
+    await chooseCompare([file('old.txt')]);
+    expect(mission()).toBe('new');
+    const band = container.querySelector('.app-error');
+    expect(band).not.toBeNull();
+    expect([...band!.querySelectorAll('button')].map(node => node.textContent)).toEqual(['旧版を選び直す', '閉じる']);
+    await act(async () => { band!.querySelector<HTMLButtonElement>('button')!.click(); });
+    expect(oldPick).toHaveBeenCalledTimes(1);
+    expect(replacePick).not.toHaveBeenCalled();
+  });
+  it('keeps the open mission when the old file cannot be parsed, and closes the band without touching it', async () => {
+    mocks.parse.mockResolvedValueOnce(parsed('new', 37000));
+    await choose([file('new.miz')]);
+    await click('ファイル ▾'); await click('改版を比べる');
+    mocks.parse.mockRejectedValueOnce(new Error('invalid archive'));
+    await chooseCompare([file('old.miz')]);
+    expect(mission()).toBe('new');
+    expect(container.querySelector('.revision-comparison')).toBeNull();
+    const band = container.querySelector('.app-error');
+    expect([...band!.querySelectorAll('button')].map(node => node.textContent)).not.toContain('やり直す');
+    await act(async () => { [...band!.querySelectorAll<HTMLButtonElement>('button')][1].click(); });
+    expect(container.querySelector('.app-error')).toBeNull();
+    expect(mission()).toBe('new');
   });
 });

@@ -4,6 +4,7 @@ import type { WhiteboardData, WhiteboardPoint, WhiteboardStroke } from '../types
 
 export const WHITEBOARD_VERSION = 1;
 export const WHITEBOARD_STORAGE_PREFIX = 'fastbriefing-whiteboard:';
+export const WHITEBOARD_BACKUP_PREFIX = 'fastbriefing-whiteboard-backup:';
 export const WHITEBOARD_WIDTH = 1200;
 export const WHITEBOARD_HEIGHT = 675;
 export const WHITEBOARD_COLORS = ['#1f2937', '#b42318', '#175cd3', '#067647', '#b54708'] as const;
@@ -152,20 +153,99 @@ export function saveWhiteboard(
   }
 }
 
+/** What the browser store holds for one board. A broken record is `corrupt`: it is never overwritten (F11). */
+export type WhiteboardStoredState = 'absent' | 'ok' | 'corrupt' | 'unavailable';
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
+/**
+ * Whether a parsed record has the shape the board is written in. It is stricter than normalizeWhiteboard,
+ * which fills in or drops bad parts silently: saving after such a load would overwrite the original (F11).
+ * Anything the board writes itself passes this check.
+ */
+function hasIntactBoardShape(value: Record<string, unknown>): boolean {
+  if (value.version !== WHITEBOARD_VERSION) return false;
+  if (typeof value.notes !== 'string' || value.notes.length > MAX_WHITEBOARD_NOTES) return false;
+  if (!Array.isArray(value.strokes) || value.strokes.length > MAX_WHITEBOARD_STROKES) return false;
+  let totalPoints = 0;
+  for (const stroke of value.strokes) {
+    if (!isRecord(stroke) || !Array.isArray(stroke.points)) return false;
+    if (stroke.points.length === 0 || stroke.points.length > MAX_POINTS_PER_STROKE) return false;
+    if (!stroke.points.every(point => isRecord(point) && isFiniteNumber(point.x) && isFiniteNumber(point.y))) return false;
+    totalPoints += stroke.points.length;
+  }
+  return totalPoints <= MAX_TOTAL_POINTS;
+}
+
+export function inspectWhiteboard(
+  missionId: string,
+  storage: WhiteboardStorage | null = getStorage(),
+): WhiteboardStoredState {
+  if (!storage) return 'unavailable';
+  let value: string | null;
+  try {
+    value = storage.getItem(`${WHITEBOARD_STORAGE_PREFIX}${missionId}`);
+  } catch {
+    return 'unavailable';
+  }
+  if (value === null) return 'absent';
+  try {
+    const parsed: unknown = JSON.parse(value);
+    return isRecord(parsed) && hasIntactBoardShape(parsed) ? 'ok' : 'corrupt';
+  } catch {
+    return 'corrupt';
+  }
+}
+
+/**
+ * Moves a board that cannot be read under a backup key, then removes it. Returns the backup key,
+ * or null when nothing was stored. Throws when the store refuses the backup.
+ */
+export function setAsideWhiteboard(
+  missionId: string,
+  storage: WhiteboardStorage | null = getStorage(),
+  now: Date = new Date(),
+): string | null {
+  if (!storage) return null;
+  const key = `${WHITEBOARD_STORAGE_PREFIX}${missionId}`;
+  const raw = storage.getItem(key);
+  if (raw === null) return null;
+  const backupKey = `${WHITEBOARD_BACKUP_PREFIX}${missionId}:${now.toISOString()}`;
+  storage.setItem(backupKey, raw);
+  (storage as WhiteboardStorage & { removeItem?: (name: string) => void }).removeItem?.(key);
+  return backupKey;
+}
+
 export function useWhiteboard(mission: MissionData) {
   const missionId = useMemo(() => getMissionWhiteboardId(mission), [mission]);
   const [data, setData] = useState<WhiteboardData>(() => loadWhiteboard(missionId));
+  const [stored, setStored] = useState<WhiteboardStoredState>(() => inspectWhiteboard(missionId));
   const [clearedStrokes, setClearedStrokes] = useState<WhiteboardStroke[] | null>(null);
-  const [persistenceStatus, setPersistenceStatus] = useState<'saved' | 'memory-only'>('saved');
+  const [persistenceStatus, setPersistenceStatus] = useState<'saved' | 'memory-only' | 'blocked'>('saved');
 
   useEffect(() => {
+    if (stored === 'corrupt') {
+      setPersistenceStatus('blocked');
+      return;
+    }
     setPersistenceStatus(saveWhiteboard(missionId, data) ? 'saved' : 'memory-only');
-  }, [data, missionId]);
+  }, [data, missionId, stored]);
 
   return {
     missionId,
     data,
     persistenceStatus,
+    storedState: stored,
+    /** Keeps the unreadable board under a backup key and starts an empty board (F11). */
+    setAside: () => {
+      const backupKey = setAsideWhiteboard(missionId);
+      setStored('absent');
+      setClearedStrokes(null);
+      setData(createEmptyWhiteboard());
+      return backupKey;
+    },
     canUndo: data.strokes.length > 0 || clearedStrokes !== null,
     setNotes: (notes: string) => setData(current => ({
       ...current,

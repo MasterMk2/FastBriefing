@@ -1,1 +1,106 @@
-{}
+{
+  "title": "記入",
+  "nav": {
+    "label": "記入の項目"
+  },
+  "sections": {
+    "situation": "状況（S）",
+    "mission": "任務（M）",
+    "execution": "実行（E）",
+    "adminLogistics": "補給（A）",
+    "commandSignal": "指揮（C）",
+    "flights": "フライト別",
+    "whiteboard": "白板",
+    "storage": "保存"
+  },
+  "smeacHelp": "SMEAC の 5 節を、ブリーフィング資料に載せる文として書きます。",
+  "smeac": {
+    "situation": "状況",
+    "mission": "任務",
+    "execution": "実行",
+    "adminLogistics": "補給",
+    "commandSignal": "指揮"
+  },
+  "status": {
+    "saved": "変更はこの端末に自動で保存されます",
+    "headerUnavailable": "保存できません",
+    "unavailable": "この端末には保存できません。入力は画面を閉じるまで残ります。",
+    "corruptTitle": "保存された注記を読めないため、上書きを止めています",
+    "corruptBody": "元のデータは消していません。退避すると、元のデータを別の場所に残し、空の注記から始められます。画面で入力した内容は退避すると消えるので、必要なら先に書き出してください。",
+    "setAside": "退避して空から始める",
+    "setAsideDone": "元のデータを {{key}} に退避しました",
+    "setAsideFailed": "退避できませんでした。元のデータはそのまま残っています。",
+    "previousAvailable": "同じ名前の前の版に注記があります",
+    "loadPrevious": "前版の注記を読み込む",
+    "previousLoaded": "前版の注記を読み込みました"
+  },
+  "flights": {
+    "title": "フライト別の記入",
+    "help": "フライトを選び、担当・TOT・燃料・自由記入を書きます。すべて空の注記は保存されません。",
+    "empty": "この表示で記入できるフライトはありません",
+    "pick": "記入するフライト",
+    "pilotName": "担当",
+    "tot": "TOT",
+    "joker": "Joker（kg（仮））",
+    "bingo": "Bingo（kg（仮））",
+    "fuelInvalid": "0 以上の数値で入力してください。この値は保存されていません。",
+    "customNotes": "自由記入",
+    "limit": "注記は最大 {{count}} フライトまでです。空の注記を消すと、別のフライトを書けます。"
+  },
+  "storage": {
+    "title": "保存と書き出し",
+    "help": "注記は、この端末のブラウザ内にミッションごとに保存されます。書き出した JSON は別の端末で読み込めます。",
+    "pilotNote": "パイロット表示では、表示中のフライトの注記だけを書き出します。地図の注記は書き出しません。",
+    "export": "注記を JSON で書き出す",
+    "import": "JSON から読み込む",
+    "exported": "注記を書き出しました",
+    "exportFailed": "書き出せませんでした",
+    "imported": "注記を読み込みました",
+    "importFailed": "このファイルは、このミッションの注記として読み込めません"
+  },
+  "screen": {
+    "charCount": "{{count}} / {{max}} 字",
+    "board": {
+      "blockedTitle": "保存された白板を読めないため、保存を止めています",
+      "blockedBody": "白板の内容は画面にだけ残ります。退避すると、元のデータを別の場所に残し、空の白板から始めます。画面の内容は退避すると消えるので、必要なら先に書き出してください。",
+      "setAside": "退避して空の白板から始める",
+      "setAsideDone": "元の白板を {{key}} に退避しました",
+      "setAsideFailed": "退避できませんでした。元の白板はそのまま残っています。"
+    }
+  },
+  "whiteboard": {
+    "title": "白板",
+    "description": "図と文字を書き込めます。描いた内容は、この端末にミッションごとに保存されます。",
+    "savedLocally": "この端末に保存済み",
+    "memoryOnly": "保存できません（画面を閉じると消えます）",
+    "blocked": "保存を止めています",
+    "toolbar": "描画の道具",
+    "penColor": "色",
+    "selectColor": "{{color}} で描く",
+    "penWidth": "太さ",
+    "widthValue": "{{width}}",
+    "undo": "直前の線を取り消す",
+    "clearDrawing": "線をすべて消す",
+    "canvasLabel": "白板の描画",
+    "drawingSurface": "描画の面（ドラッグで線を書く）",
+    "pointerOnly": "描画はマウスかタッチで行います。キーボードでは、下の白板のメモ欄に書いてください。",
+    "colorNames": {
+      "black": "黒",
+      "red": "赤",
+      "blue": "青",
+      "green": "緑",
+      "orange": "橙"
+    },
+    "strokeLimit": "この線は長さの上限に達したため、ここから先は描かれません。",
+    "notes": "白板のメモ",
+    "notesHelp": "白板に添えて書くメモです。資料にも載ります。",
+    "notesPlaceholder": "例: 14:30Z に突入、離脱は北へ",
+    "shareTitle": "白板を書き出す・読み込む",
+    "shareHelp": "書き出した JSON は、同じミッションでだけ読み込めます。",
+    "exportJson": "白板を JSON で書き出す",
+    "importJson": "JSON から読み込む",
+    "exported": "白板を書き出しました",
+    "imported": "白板を読み込みました",
+    "importFailed": "この白板は、このミッションでは読み込めません"
+  }
+}

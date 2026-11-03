@@ -1,8 +1,8 @@
-// STUB. Owner: P6 (記入・改版・ファイル操作・初回画面). P6 keeps this contract and polishes the body.
-// Contract (frozen): default export FileMenu, props FileMenuProps below. Rendered in the header ("ファイル ▾").
-//   The menu items: 開く（onOpen）, 改版を比べる（onCompare, enabled when a mission is open）,
-//   ミッションを閉じる（onClose）. Closing the menu returns focus to its trigger.
-import { useState } from 'react';
+// Owner: P6 (記入・改版・ファイル操作・初回画面). Header menu "ファイル ▾" (SPEC 1.4, F10).
+// Contract (frozen): default export FileMenu, props FileMenuProps below. Closing the menu (Esc, a choice,
+// an outside press) returns focus to its trigger.
+import { useEffect, useRef, useState } from 'react';
+import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 
 export interface FileMenuProps {
@@ -12,18 +12,69 @@ export interface FileMenuProps {
   onClose: () => void;
 }
 
-export default function FileMenu({ hasMission, onOpen, onCompare, onClose }: FileMenuProps) {
+/** The hidden single-file input App.tsx renders for the old version of a comparison. */
+export const COMPARE_INPUT_ID = 'compare-file-input';
+
+const ENABLED_ITEM = '[role="menuitem"]:not(:disabled)';
+
+// onCompare is part of the frozen props but is not used: an ordinary file pick would replace the open mission.
+export default function FileMenu({ hasMission, onOpen, onClose }: FileMenuProps) {
   const { t } = useTranslation('shell');
   const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    menuRef.current?.querySelector<HTMLButtonElement>(ENABLED_ITEM)?.focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      setOpen(false);
+      triggerRef.current?.focus();
+    };
+    const onPointerDown = (event: MouseEvent) => {
+      if (rootRef.current && !rootRef.current.contains(event.target as Node)) setOpen(false);
+    };
+    document.addEventListener('keydown', onKeyDown);
+    document.addEventListener('mousedown', onPointerDown);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      document.removeEventListener('mousedown', onPointerDown);
+    };
+  }, [open]);
 
   const choose = (action: () => void) => {
     setOpen(false);
+    triggerRef.current?.focus();
     action();
   };
 
+  // App.tsx owns the comparison flow: its input picks the old version and always renders it. If the input is
+  // missing, nothing opens, so the open mission is never replaced by a plain pick.
+  const compare = () => {
+    const input = document.getElementById(COMPARE_INPUT_ID);
+    if (input instanceof HTMLInputElement) input.click();
+  };
+
+  const handleMenuKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'Tab') {
+      setOpen(false);
+      return;
+    }
+    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+    event.preventDefault();
+    const items = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>(ENABLED_ITEM));
+    if (items.length === 0) return;
+    const current = items.indexOf(document.activeElement as HTMLButtonElement);
+    const delta = event.key === 'ArrowDown' ? 1 : -1;
+    items[(current + delta + items.length) % items.length].focus();
+  };
+
   return (
-    <div className="file-menu">
+    <div className="file-menu" ref={rootRef}>
       <button
+        ref={triggerRef}
         type="button"
         className="btn btn-secondary file-menu-trigger"
         aria-haspopup="menu"
@@ -33,10 +84,16 @@ export default function FileMenu({ hasMission, onOpen, onCompare, onClose }: Fil
         {t('shell:file.label')} ▾
       </button>
       {open && (
-        <div className="file-menu-list" role="menu">
-          <button type="button" role="menuitem" className="file-menu-item" onClick={() => choose(onOpen)}>{t('shell:file.open')}</button>
-          <button type="button" role="menuitem" className="file-menu-item" disabled={!hasMission} onClick={() => choose(onCompare)}>{t('shell:file.compare')}</button>
-          <button type="button" role="menuitem" className="file-menu-item" disabled={!hasMission} onClick={() => choose(onClose)}>{t('shell:file.close')}</button>
+        <div className="file-menu-list" role="menu" ref={menuRef} onKeyDown={handleMenuKeyDown}>
+          <button type="button" role="menuitem" className="file-menu-item" onClick={() => choose(onOpen)}>
+            {t('shell:file.open')}
+          </button>
+          <button type="button" role="menuitem" className="file-menu-item" disabled={!hasMission} onClick={() => choose(compare)}>
+            {t('shell:file.compare')}
+          </button>
+          <button type="button" role="menuitem" className="file-menu-item" disabled={!hasMission} onClick={() => choose(onClose)}>
+            {t('shell:file.close')}
+          </button>
         </div>
       )}
     </div>
