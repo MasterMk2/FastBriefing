@@ -76,6 +76,8 @@
     "noRadios": "無線の設定はありません",
     "notAvailable": "—",
     "mapNote": "地図は {{theatre}} の座標で描いています。",
+    "mapPins": "地図のピン",
+    "mapPin": "ピン",
     "mapUnsupported": "未対応マップ: DCS {{theatre}}（一覧のみ）",
     "mapLoading": "地図を準備中",
     "whiteboard": "白板",

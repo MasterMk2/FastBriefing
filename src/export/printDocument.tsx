@@ -46,6 +46,16 @@ export default function PrintDocument({ pages, title, viewLabel, t, drawMaps }: 
                 deferredText={t('export:ui.mapDeferred')}
                 loadingText={t('export:ui.mapPreparing')}
               />
+              {page.pins.length > 0 && (
+                <div className="print-section print-map-pins">
+                  <h3>{t('export:label.mapPins')}</h3>
+                  <ul className="print-lines">
+                    {page.pins.map((pin, index) => (
+                      <li key={index}><strong>{pin.label}</strong>{pin.notes ? `: ${pin.notes}` : ''}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </section>
           );
         }

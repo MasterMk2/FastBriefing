@@ -5,11 +5,13 @@ import { fileURLToPath } from 'node:url';
 // @ts-expect-error Vitest executes this test in Node; this project intentionally omits @types/node.
 import { relative, resolve, sep } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import en from './locales/en/legacy.json';
-import ja from './locales/ja/legacy.json';
+import shellEn from './locales/en/shell.json';
+import shellJa from './locales/ja/shell.json';
+import type { FileSelectionError } from '../core/MissionBatchLoader';
+import { MissionLoadError } from '../core/MissionParser';
+import { missionLoadErrorTranslationKey } from '../utils/missionLoadError';
 import i18n, {
   buildLocaleResources,
-  DEFAULT_NAMESPACE,
   i18nReady,
   loadInitialLanguage,
   NAMESPACES,
@@ -64,10 +66,10 @@ async function collectStaticTranslationReferences(): Promise<Array<{ key: string
   return references;
 }
 
-/** Splits "ns:key" into its namespace and key; an unprefixed key belongs to the default namespace. */
-function splitNamespacedKey(key: string): { namespace: string; path: string } {
+/** Splits "ns:key" into its namespace and key. A key without a namespace has none (it cannot resolve). */
+function splitNamespacedKey(key: string): { namespace: string | null; path: string } {
   const separator = key.indexOf(':');
-  if (separator < 0) return { namespace: DEFAULT_NAMESPACE, path: key };
+  if (separator < 0) return { namespace: null, path: key };
   return { namespace: key.slice(0, separator), path: key.slice(separator + 1) };
 }
 
@@ -75,11 +77,6 @@ function splitNamespacedKey(key: string): { namespace: string; path: string } {
 const localeFiles = import.meta.glob<{ default: Record<string, unknown> }>('./locales/*/*.json', { eager: true }) as LocaleModules;
 
 describe('i18n resources', () => {
-  it('ja and en have exactly the same translation keys for the legacy namespace', async () => {
-    await i18nReady;
-    expect(Object.keys(flattenTranslations(en)).sort()).toEqual(Object.keys(flattenTranslations(ja)).sort());
-  });
-
   it('has exactly the namespace files listed in NAMESPACES, in both languages', () => {
     const resources = buildLocaleResources(localeFiles);
     const expected = [...NAMESPACES].sort();
@@ -115,6 +112,7 @@ describe('i18n resources', () => {
     const missing = references
       .filter(reference => {
         const { namespace, path } = splitNamespacedKey(reference.key);
+        if (namespace === null) return true;
         const bundle = flattenTranslations(i18n.getResourceBundle('ja', namespace));
         return !(path in bundle);
       })
@@ -127,8 +125,30 @@ describe('i18n resources', () => {
     await i18nReady;
     await i18n.changeLanguage('ja');
 
-    expect(i18n.t('overview.sortie', { lng: 'en' })).toBe(en.overview.sortie);
-    expect(i18n.t('overview.sortie')).toBe(ja.overview.sortie);
+    expect(i18n.t('shell:app.retry', { lng: 'en' })).toBe(shellEn.app.retry);
+    expect(i18n.t('shell:app.retry')).toBe(shellJa.app.retry);
+  });
+
+  it('has no legacy namespace any more, and an unprefixed key does not resolve', async () => {
+    await i18nReady;
+    expect([...NAMESPACES] as string[]).not.toContain('legacy');
+    expect(i18n.t('app.retry')).toBe('app.retry');
+  });
+
+  it('resolves every file selection and mission load message in both languages (template keys the scan cannot see)', async () => {
+    await i18nReady;
+    const selection: FileSelectionError[] = ['invalidMizOnly', 'tooManyFiles'];
+    const codes = ['empty-file', 'invalid-zip', 'archive-too-large', 'safety-limit', 'invalid-mission', 'parse-failed'] as const;
+    const keys = [
+      ...selection.map(code => `shell:app.${code}`),
+      ...codes.map(code => missionLoadErrorTranslationKey(new MissionLoadError(code, 'detail'))),
+      missionLoadErrorTranslationKey(new Error('other')),
+    ];
+    for (const key of keys) {
+      for (const lng of ['ja', 'en'] as const) {
+        expect(i18n.exists(key, { lng }), `${lng} ${key}`).toBe(true);
+      }
+    }
   });
 
   it('resolves namespaced keys in their own file', async () => {

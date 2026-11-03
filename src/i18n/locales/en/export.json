@@ -76,6 +76,8 @@
     "noRadios": "No radio settings",
     "notAvailable": "—",
     "mapNote": "Map drawn in {{theatre}} coordinates.",
+    "mapPins": "Map pins",
+    "mapPin": "Pin",
     "mapUnsupported": "Unsupported map: DCS {{theatre}} (list only)",
     "mapLoading": "Map loading",
     "whiteboard": "Whiteboard",

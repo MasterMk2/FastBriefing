@@ -1,26 +1,26 @@
 import { MissionLoadError } from '../core/MissionParser';
 
 export type MissionLoadErrorTranslationKey =
-  | 'app.emptyMiz'
-  | 'app.corruptMiz'
-  | 'app.mizSafetyLimit'
-  | 'app.invalidMissionData'
-  | 'app.parseError';
+  | 'shell:app.emptyMiz'
+  | 'shell:app.corruptMiz'
+  | 'shell:app.mizSafetyLimit'
+  | 'shell:app.invalidMissionData'
+  | 'shell:app.parseError';
 
 export function missionLoadErrorTranslationKey(error: unknown): MissionLoadErrorTranslationKey {
-  if (!(error instanceof MissionLoadError)) return 'app.parseError';
+  if (!(error instanceof MissionLoadError)) return 'shell:app.parseError';
 
   switch (error.code) {
     case 'empty-file':
-      return 'app.emptyMiz';
+      return 'shell:app.emptyMiz';
     case 'invalid-zip':
-      return 'app.corruptMiz';
+      return 'shell:app.corruptMiz';
     case 'archive-too-large':
     case 'safety-limit':
-      return 'app.mizSafetyLimit';
+      return 'shell:app.mizSafetyLimit';
     case 'invalid-mission':
-      return 'app.invalidMissionData';
+      return 'shell:app.invalidMissionData';
     case 'parse-failed':
-      return 'app.parseError';
+      return 'shell:app.parseError';
   }
 }

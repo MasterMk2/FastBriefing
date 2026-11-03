@@ -50,7 +50,7 @@ function App() {
     const validationError = validateMissionFiles(files);
     if (validationError) {
       setLoading(false);
-      setError(t(`app.${validationError}`));
+      setError(t(`shell:app.${validationError}`));
       return;
     }
     setLoading(true);
@@ -74,7 +74,7 @@ function App() {
         if (parseGenerationRef.current === generation && !isAbortError(err)) {
           const message = err instanceof Error ? err.message : '';
           const translationKey = missionLoadErrorTranslationKey(err);
-          setError(message ? t(translationKey, { message }) : t('app.parseError'));
+          setError(message ? t(translationKey, { message }) : t('shell:app.parseError'));
         }
       } finally {
         if (parseGenerationRef.current === generation) setLoading(false);
@@ -160,7 +160,7 @@ function App() {
     setCompareError(null);
     const validationError = validateMissionFiles([file]);
     if (validationError) {
-      setCompareError(t(`legacy:app.${validationError}`));
+      setCompareError(t(`shell:app.${validationError}`));
       return;
     }
     const generation = ++parseGenerationRef.current;
@@ -180,7 +180,7 @@ function App() {
         if (parseGenerationRef.current === generation && !isAbortError(err)) {
           const message = err instanceof Error ? err.message : '';
           const translationKey = missionLoadErrorTranslationKey(err);
-          setCompareError(message ? t(`legacy:${translationKey}`, { message }) : t('legacy:app.parseError'));
+          setCompareError(message ? t(translationKey, { message }) : t('shell:app.parseError'));
         }
       } finally {
         if (parseGenerationRef.current === generation) setLoading(false);
@@ -220,6 +220,8 @@ function App() {
     latestSnapshotRef.current = null;
   }, []);
 
+  const bandError = compareError ?? (missionData ? error : null);
+
   return (
     <div className="app" data-theme={settings.theme} data-font-scale={settings.fontScale}>
       <input
@@ -230,7 +232,7 @@ function App() {
         onChange={handleFileSelect}
         id="file-input"
         className="visually-hidden"
-        aria-label={t('app.selectMiz')}
+        aria-label={t('shell:app.selectMiz')}
       />
       <input
         ref={compareInputRef}
@@ -254,17 +256,21 @@ function App() {
         onCompare={openComparePicker}
         onCloseRevisions={() => setRevisions(null)}
         onCloseMission={resetMission}
+        // With no mission open, a read error belongs under the drop area of the initial screen (SPEC 3).
+        initialError={missionData ? null : error}
+        onRetryInitial={handleRetrySelection}
       />
 
       {isDragging && missionData && (
         <div className="drop-overlay" role="status" aria-live="polite">
-          {t('app.dropFile')}
+          {t('shell:app.dropFile')}
         </div>
       )}
 
-      {(compareError ?? error) && (
+      {/* The band is for an open mission only; the initial screen shows its own error, so it is never doubled. */}
+      {bandError && (
         <div className="error app-error" role="alert">
-          <p>{compareError ?? error}</p>
+          <p>{bandError}</p>
           <div className="error-actions">
             {compareError ? (
               <>
@@ -273,8 +279,8 @@ function App() {
               </>
             ) : (
               <>
-                <button type="button" className="btn btn-secondary" onClick={handleRetrySelection}>{t('app.retry')}</button>
-                <button type="button" className="btn btn-secondary" onClick={resetMission}>{t('app.reset')}</button>
+                <button type="button" className="btn btn-secondary" onClick={handleRetrySelection}>{t('shell:app.retry')}</button>
+                <button type="button" className="btn btn-secondary" onClick={resetMission}>{t('shell:app.reset')}</button>
               </>
             )}
           </div>
@@ -284,12 +290,12 @@ function App() {
       {loading && (
         <div className="loading-overlay" role="status" aria-live="polite">
           <div className="spinner" aria-hidden="true"></div>
-          <p>{t('app.loading')}</p>
+          <p>{t('shell:app.loading')}</p>
           <button type="button" className="btn btn-secondary" onClick={() => {
             loaderRef.current.cancel();
             parseGenerationRef.current += 1;
             setLoading(false);
-          }}>{t('revision.cancel')}</button>
+          }}>{t('shell:app.cancel')}</button>
         </div>
       )}
     </div>

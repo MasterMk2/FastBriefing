@@ -5,9 +5,9 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 /**
- * The export code must name the namespace of every static key (`export:`, `shell:` ...). A key
- * without a prefix belongs to `legacy`, which is removed when the old tabs are removed (contract
- * §7.1), so the output would then show raw keys. Dynamic keys are not checked here.
+ * The export code must name the namespace of every static key (`export:`, `shell:` ...). There is
+ * no default namespace any more (the old `legacy` one was removed with the old tabs, contract §7.1),
+ * so a key without a prefix would show as a raw key. Dynamic keys are not checked here.
  */
 const EXPORT_SOURCES = [
   'utils/kneeboardRenderer.ts',
@@ -18,8 +18,6 @@ const EXPORT_SOURCES = [
   'export/exportModel.ts',
   'export/useExportModel.ts',
   'screens/ExportScreen.tsx',
-  // planKneeboardPages is the old tab's planner (ExportTab.tsx); it stays until the tab is removed.
-  'utils/kneeboard.ts',
 ];
 
 const staticKeyCall = /\bt\(\s*(['"`])([^'"`]*)\1/g;

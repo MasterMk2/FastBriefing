@@ -3,6 +3,7 @@
   "dropFile": "Drop a .miz file here",
   "dropHint": "Select 1 file to open. Select 2 files at once to compare revisions (first: before, second: after).",
   "pick": "Choose a file",
+  "retry": "Choose another file",
   "loading": "Reading the file…",
   "slow": "This is taking a while. Use Cancel load on the overlay to stop.",
   "guideTitle": "What you can do here",

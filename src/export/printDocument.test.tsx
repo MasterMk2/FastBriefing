@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { applyViewMode } from '../utils/viewMode';
 import type { KneeboardPage } from '../utils/kneeboard';
 import { DEFAULT_SETTINGS } from '../hooks/useSettings';
+import { MAX_WHITEBOARD_NOTES, MAX_WHITEBOARD_STROKES } from '../hooks/useWhiteboard';
 import PrintDocument from './printDocument';
 import { buildExportModel } from './exportModel';
 import { fixtureMission } from './__tests__/fixture';
@@ -112,6 +113,31 @@ describe('PrintDocument', () => {
     expect(container.textContent).not.toContain('Bandit 1');
     expect(container.textContent).not.toContain('SA-10');
   });
+
+  it('lists the map pins with their label and memo under the map (old Markdown and PrintView map pins)', async () => {
+    const mission = fixtureMission();
+    mission.userNotes.mapAnnotations = [
+      { id: 'pin_1', kind: 'pin', position: [42, 43], label: 'Rally', notes: 'Orbit west', color: '#e53935' },
+      { id: 'pin_2', kind: 'pin', position: [42.1, 43.1], label: 'Tanker', notes: '', color: '#1e88e5' },
+    ];
+    const view = applyViewMode(mission, 'pilot', 'blue');
+    const model = buildExportModel({
+      view,
+      settings: { ...DEFAULT_SETTINGS, briefingSections: ['map'], viewMode: 'pilot' },
+      side: 'blue',
+      scope: { kind: 'mission' },
+      whiteboard: { notes: '', strokes: [] },
+    }, t);
+    await render(model.pages, false);
+    const list = container.querySelector('.print-map-page .print-map-pins');
+    expect(list?.querySelector('h3')?.textContent).toBe('export:label.mapPins');
+    expect(Array.from(list?.querySelectorAll('li') ?? []).map(item => item.textContent)).toEqual(['Rally: Orbit west', 'Tanker']);
+  });
+
+  it('prints no pin list when the map has no pins', async () => {
+    await render(mapPages(), false);
+    expect(container.querySelector('.print-map-pins')).toBeNull();
+  });
 });
 
 describe('PrintDocument maps (decision 7: drawn only when allowed)', () => {
@@ -212,6 +238,7 @@ describe('PrintDocument maps (decision 7: drawn only when allowed)', () => {
         userStrokes: [],
         unprojectableMapAnnotations: 0,
       },
+      pins: [],
     };
     await render([empty], true);
     expect(container.querySelector('.print-map-canvas')).not.toBeNull();
@@ -232,6 +259,25 @@ describe('PrintDocument whiteboard (migrated from the old PrintView)', () => {
     }]);
     expect(container.querySelector('.print-notes')?.textContent).toBe('Dodge north');
     expect(container.querySelector('.print-whiteboard-board polyline')).not.toBeNull();
+  });
+
+  it('keeps the drawing and every note character when the notes are at their maximum length (old briefingPng)', async () => {
+    // The print has no page split of its own: the notes and the drawing are one section, and the browser
+    // breaks the printed page. So a long note can never push the drawing out.
+    const notes = 'x'.repeat(MAX_WHITEBOARD_NOTES);
+    await render([{
+      kind: 'whiteboard',
+      section: 'notes',
+      title: 'Whiteboard',
+      data: {
+        notes,
+        strokes: Array.from({ length: MAX_WHITEBOARD_STROKES }, (_, index) => ({
+          id: `s${index}`, color: '#175cd3', width: 6, points: [{ x: 1, y: 1 }, { x: 2, y: 2 }],
+        })),
+      },
+    }]);
+    expect(container.querySelector('.print-notes')?.textContent).toBe(notes);
+    expect(container.querySelectorAll('.print-whiteboard-board polyline')).toHaveLength(MAX_WHITEBOARD_STROKES);
   });
 
   it('prints no drawing when the whiteboard has no strokes', async () => {

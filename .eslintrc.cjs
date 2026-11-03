@@ -34,14 +34,6 @@ module.exports = {
   },
   overrides: [
     {
-      files: ['src/components/MapTab.tsx', 'src/vite-env.d.ts'],
-      // Leaflet is exposed through the existing global window.L declaration;
-      // replacing this bridge with a typed adapter is a separate source task.
-      rules: {
-        '@typescript-eslint/no-explicit-any': 'off',
-      },
-    },
-    {
       files: ['src/core/MissionNormalizer.ts', 'src/utils/coordinates.ts'],
       // These are existing style-only findings; TypeScript remains the source
       // of truth for type and unused-code checking in the build.

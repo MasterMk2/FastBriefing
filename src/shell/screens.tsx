@@ -23,12 +23,12 @@ const SCREENS: Record<Exclude<ScreenId, 'initial'>, ScreenComponent> = {
 
 /** Renders the current screen. Only the current screen's code is loaded. */
 export function ScreenHost() {
-  const { t } = useTranslation();
+  const { t } = useTranslation('shell');
   const { screen } = useWorkspace();
   if (screen === 'initial') return null;
   const Screen = SCREENS[screen];
   return (
-    <Suspense fallback={<div className="tab-loading" role="status" aria-live="polite">{t('tabs.loading')}</div>}>
+    <Suspense fallback={<div className="screen-loading" role="status" aria-live="polite">{t('shell:app.screenLoading')}</div>}>
       <Screen />
     </Suspense>
   );

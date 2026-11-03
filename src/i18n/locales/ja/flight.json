@@ -106,5 +106,27 @@
     "notNumber": "数値を入れてください。",
     "storageFailedTitle": "この端末に保存できません",
     "storageFailedBody": "注記は、このページを開いている間だけ残ります。"
+  },
+  "waypoints": {
+    "purpose": "用途",
+    "purposePlaceholder": "例: IP、Push、攻撃開始、離脱点",
+    "notes": "ウェイポイントメモ",
+    "notesPlaceholder": "高度・編隊・脅威・無線など",
+    "save": "保存",
+    "saved": "このウェイポイントへ保存しました。",
+    "savedGroup": "同期グループ全体へ保存しました。",
+    "saveGroup": "同期中の {{count}} 点へ保存",
+    "syncNearby": "近傍ウェイポイントとの同期",
+    "syncHelp": "DCS Mission Editorの座標ずれを距離で候補化します。自動同期はせず、チェックした対象だけを同じグループにします。",
+    "radius": "候補距離",
+    "noCandidates": "この距離内に別フライトのウェイポイントはありません。",
+    "selectTarget": "同期する対象を1点以上選んでください。",
+    "createGroup": "選択した {{count}} 点を同期",
+    "groupCreated": "{{count}} 点の同期グループを作成しました。",
+    "currentGroup": "現在の同期グループ（{{count}} 点）",
+    "leaveGroup": "この点をグループから外す",
+    "leftGroup": "この点を同期グループから外しました。",
+    "groupConflict": "別の同期グループに所属済み",
+    "limitReached": "注釈の保存上限に達したため保存できませんでした。"
   }
 }

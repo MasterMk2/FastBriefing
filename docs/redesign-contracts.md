@@ -210,7 +210,9 @@ interface Units {
 
 ```ts
 // src/screens/InitialScreen.tsx（P6）
-interface InitialScreenProps { loading: boolean; isDragging: boolean; onPickFiles: () => void; }
+interface InitialScreenProps { loading: boolean; isDragging: boolean; onPickFiles: () => void; error?: string | null; onRetry?: () => void; }
+//   統合で追加: error は最初の読み込みの失敗（翻訳済み）。落とす場所の下に role="alert" で出し、再試行ボタン（`initial:retry`）は onRetry（既定は onPickFiles）を呼ぶ。
+//   App はミッションが無いときだけ渡す（`AppShellProps.initialError`、`onRetryInitial`）。ミッションがあるときの失敗は `.app-error` の帯に出し、二重に出さない。
 
 // src/shell/FileMenu.tsx（P6）
 interface FileMenuProps { hasMission: boolean; onOpen: () => void; onCompare: () => void; onClose: () => void; }
@@ -237,7 +239,7 @@ interface MapPanelProps { readOnly?: boolean; height?: string; }   // P2 の src
 ### 6.2 画面の共通規則
 
 - すべての画面は `default export` で props を取らない（lazy）。`ThreatsScreen` は内部でパイロットを判定する。
-- 旧タブのコンポーネントは `mission`（原本）と `settings` を受ける。`applyViewMode(mission, settings.viewMode, settings.side)` を内部で使う。
+- 旧タブ（`src/components/*Tab.tsx`、`PrintView`、`BriefingPlanner`、`MissionMapCanvas`）は統合で削除した。残る旧部品は `RevisionComparison`、`RevisionMap`、`WaypointAnnotationEditor`（経路表が使う）、`WhiteboardDrawing`（印刷文書と白板が使う）。
 
 ---
 
@@ -247,9 +249,9 @@ interface MapPanelProps { readOnly?: boolean; height?: string; }   // P2 の src
 
 `src/i18n/locales/{ja,en}/<namespace>.json`。`src/i18n/index.ts` が `import.meta.glob` で読み込み、名前空間ごとに登録する。
 
-名前空間（`NAMESPACES`）: `legacy`、`shell`、`flight`、`map`、`export`、`briefing`、`comms`、`support`、`threats`、`notes`、`revision`、`wingman`、`settings`、`issues`、`lint`、`overview`、`initial`、`common`。
+名前空間（`NAMESPACES`）: `shell`、`flight`、`map`、`export`、`briefing`、`comms`、`support`、`threats`、`notes`、`revision`、`wingman`、`settings`、`issues`、`lint`、`overview`、`initial`、`common`。
 
-- `legacy`（defaultNS）: 旧タブの既存キーをすべて保持する（例 `overview.sortie`、`app.dropFile`）。統合時に削除する。
+- `legacy` は統合で削除した。まだ使うキーは移した: `app.*` → `shell:app.*`（ファイルの選択と読み込みの失敗、読み込み中、画面の読み込み中）、`waypoints.*` → `flight:waypoints.*`、`revision.*` → `revision:*`。defaultNS は中身の無い `common` にし、名前空間の無いキー（例 `app.retry`）は解決せずキーのまま出る。`src/i18n/i18n.test.ts` が、名前空間の無い `t()` のキーを静的検査で欠落として数える。
 - `shell`: P0 の枠の文言。`issues`: 警告の文言（code 名のキー）。`initial`: 初回画面の文言（`dropZone`、`dropFile`、`dropHint`、`point1`〜`point3`、`compareHint`）。
 - 他の名前空間は `{}`（P1〜P8 が中身を足す）。
 - ja と en は名前空間ごとにキー集合が一致しなければならない（`src/i18n/i18n.test.ts`）。
@@ -279,9 +281,9 @@ interface MapPanelProps { readOnly?: boolean; height?: string; }   // P2 の src
 
 | ファイル | 担当 | 中身 |
 |---|---|---|
-| `src/index.css` | 統合時に削除（SPEC 8） | 旧タブの見た目。`:root` は明色、`[data-theme="ffs"]` は暗色。 |
-| `src/styles/index.css` | P0（import のみ） | `main.tsx` が `src/index.css` の後に読む。 |
-| `src/styles/tokens.css` | P0 | トークン。`:root` と `[data-theme="ffs"]`（既定、暗色）、`[data-theme="standard"]`（明色、青 1 色）、`[data-theme="night"]`（赤一色）。旧変数（`--color-*`）はトークンの別名として上書きする。`html[data-font-scale="large"]` で 112%。 |
+| `src/styles/index.css` | P0（import のみ） | `main.tsx` が読む唯一の入口。tokens → common → shell → 各パッケージの順。旧 `src/index.css` は統合で削除した。 |
+| `src/styles/common.css` | Lead（統合） | 旧 `src/index.css` から移した土台と共通部品（`body`、`.btn` 系、`.visually-hidden`、`.hint`、`.data-table`、`.error`・`.app-error`、読み込みの重ね、ドロップの重ね、`.screen-loading`）。トークンだけを使う。 |
+| `src/styles/tokens.css` | P0 | トークン。`:root` と `[data-theme="ffs"]`（既定、暗色）、`[data-theme="standard"]`（明色、青 1 色）、`[data-theme="night"]`（赤一色）。旧変数（`--color-*`）の別名は統合で削除した。`html[data-font-scale="large"]` で 112%。白板の紙と方眼（`--whiteboard-paper`、`--whiteboard-grid`）はテーマに依らない共通の `:root` に置く。 |
 | `src/styles/shell.css` | P0 | 枠（ヘッダ、左レール 1280px 以上、下部タブ、ドロワー、印刷の枠の非表示）と共通部品。 |
 | `src/styles/overview.css` | P4 | |
 | `src/styles/flight.css` | P1 | |
@@ -311,13 +313,14 @@ interface MapPanelProps { readOnly?: boolean; height?: string; }   // P2 の src
 - `src/core/issues.test.ts`: severity、重複除去、正規化の issue。
 - `src/utils/magvar.test.ts`: 表が無い地図は `null`。
 - `src/utils/coordinates.test.ts`: `resolveCoordinateFormat`。
-- `src/utils/flightKey.test.ts`、`src/utils/kneeboard.test.ts`（パイロットの D1）。
+- `src/utils/flightKey.test.ts`。旧 `src/utils/kneeboard.test.ts`（パイロットの D1）は旧出力とともに削除し、D1 は `src/export/exportModel.test.ts`（pilot view）、地図背景は `src/export/kneeboardPlan.test.ts` が検査する。
 - `src/workers/missionParser.test.ts`: 101 エントリの ZIP を受け入れる。合計サイズの上限は据え置き。
 - `src/themeContrast.test.ts`: トークンの全テーマの組み合わせ（4.5:1）。
 - `src/shell/__tests__/parts.test.tsx`: `Notice`、`SideMark`、`Segmented`、`Unresolved`、`Field`、`EmptyState` の描画。
 - `src/App.test.tsx`: 旧タブのモックを画面単位に変更。読み込み・改版の回帰は維持。
 - `src/utils/missionRevision.test.ts`: 改版比較のパイロットは表示勢力のフライトだけを比べる（D1）。
-- `src/components/PrintView.test.tsx`: 印刷文書の警告節は、パイロットで相手陣営の issue を出さない（D1）。
+- 旧 `src/components/PrintView.test.tsx`（警告節の D1）は削除した。同じ検査は `src/export/exportScope.test.ts`（警告）と `src/export/printDocument.test.tsx`（白板）にある。
+- 統合で追加: `src/export/outputMigration.test.ts`（旧出力の振る舞いの移植: 地図のピン、節の選択と順、白板の位置、経路点の目的とメモ、hidden の除外、地図の分割）、`src/export/printDocument.test.tsx`（ピンの一覧、白板の最大量）、`src/utils/kneeboardRenderer.test.ts`（白板の長文の分割で図を落とさない）、`src/components/RevisionMap.test.tsx`（`mapBackground`）、`src/map/MapPanel.test.tsx`（この機だけ／全機に戻すの fitBounds）、`src/screens/InitialScreen.test.tsx` と `src/App.test.tsx`（初回画面の失敗と再試行）、`src/shell/__tests__/tokens.test.ts`（白板のトークン）。
 - P0 統合で追加: `src/shell/__tests__/workspace.test.tsx`（既定の選択、自機、選び直し、null の保持、neutral、`jumpTo`、`previousScreen`、`soloFlightKey`、anchor の書式）、`src/shell/__tests__/tokens.test.ts`（陣営とインクのトークン）、`src/utils/flightKey.test.ts`（neutral、`parseFlightKey`）。`src/shell/__tests__/AppShell.test.tsx` は口頭ブリーフィングの層と inert、改版を比べる（ファイル ▾ と「その他」）を検査する。`src/shell/__tests__/FileMenu.test.tsx` は onCompare が呼ばれ onOpen は呼ばれないことを検査する。
 
 ---
@@ -331,18 +334,17 @@ interface MapPanelProps { readOnly?: boolean; height?: string; }   // P2 の src
 - **改版比較の D1（P0 で修正）**: パイロットでは相手陣営と中立のフライトを比べない（§3 の `compareMissionRevisions`）。単体テストで確認した。改版画面の描画と操作は未確認。
 - **発生しない issue**: `airbase.nameMissing`、`coord.unresolved` は P0 では発生させていない（§2.1）。`weather.qnhDefaulted` と `weather.temperatureDefaulted` は、mission に値が無く既定値（760 mmHg、0 ℃）で補ったときに出す（Lead が追加）。
 - **smoke の既存の失敗**: CaucasusConquest.miz（theatre が空、UTC 表に無い）は基準から変わらない。実データのテストは `SMOKE_MIZ_DIR` が無いとスキップされる（`npm run check` では走らない）。
-- jsdom で AppShell を描画すると、出力画面の地図（`MissionMapCanvas`）が `HTMLCanvasElement.prototype.getContext` の未実装の警告を出す。テストは通る（jsdom の制限で、ブラウザの問題ではない）。
+- 旧 `MissionMapCanvas` は統合で削除した。jsdom の `getContext` 未実装の警告は、canvas を使うテスト（出力と SettingsDrawer）で出ることがある。テストは通る（jsdom の制限）。
 - smoke の既存の失敗 1 件（CaucasusConquest.miz: theatre が空で UTC 表に無い）は、基準（origin/master）から変わらず残っている。
 - `parse.unknownNode` の issue は、パーサの sink で収集する仕組みのみ。実ファイルで発生させる試験は未実施。
-- 旧タブの色は旧変数のまま（トークンの別名で追従するが、個別の色は統合時に置き換える）。
 - 描画・操作の確認（タブレット・スマホ幅、印刷の Ctrl+P、キーボード操作）は未実施。Lead が行う。
 - `formatCoordinate` は機種を知らないため、`'aircraft'` は DDM になる。P1 と P3 で機種を渡すこと（§3）。
 - 敵の bullseye は `latlonResolved: false` の `[0, 0]` で渡される。P4 は必ず `latlonResolved` を確かめ、`[0, 0]` を描かないこと。
 - `FileMenu` の「改版を比べる」は App.tsx の比較用 input を開く（旧版を選ぶ）。P0 統合で `getElementById` の検索をやめ、`onCompare` を直接呼ぶ。P6 は旧版を選ぶ流れを担当する。
 - SettingsDrawer は P0 の暫定（言語・テーマ・文字の大きさ・既定に戻す）。P8 が F1 の全項目を置く。
-- 名前の衝突を避けるため、旧ファイル（`MissionView.tsx`）は削除済み。`src/components/*Tab.tsx` などの旧タブは残している（統合時に削除）。
-- 旧 `src/index.css` の `.header-controls` 等の旧ヘッダ規則は未使用になった（統合時に削除）。統合時にこの規則を消すと、`src/themeContrast.test.ts` の旧検査 'header selector contrast keeps explicit selector and option colors...'（旧 `.header-controls select option` の検査）も消える。その代わりにトークンの組み合わせ検査（4.5:1）が入っている。
-- TACAN と ICLS は `[0, 0]` を入れない（`latlon` は未解決で `undefined`）。NavPoint、Airbase、Runway、支援機、AI 群などは、P0 の時点でまだ `[0, 0]` の既定を入れている。描画は必ず `latlonResolved` で判定し、未解決は `Unresolved` で出す（旧タブの `|| [0, 0]` は統合時に消す）。
+- 名前の衝突を避けるため、旧ファイル（`MissionView.tsx`）は削除済み。`src/components/*Tab.tsx` などの旧タブと旧出力（`briefingMarkdown`、`briefingPng`、`planKneeboardPages`）も統合で削除した。
+- 旧 `src/index.css` は統合で削除した（`.header-controls` などの旧ヘッダ規則と `.print-map-blocked*` を含む）。`src/themeContrast.test.ts` は tokens.css だけを読み、トークンの組み合わせ（4.5:1）を検査する。
+- TACAN と ICLS は `[0, 0]` を入れない（`latlon` は未解決で `undefined`）。NavPoint、Airbase、Runway、支援機、AI 群などは、P0 の時点でまだ `[0, 0]` の既定を入れている。描画は必ず `latlonResolved` で判定し、未解決は `Unresolved` で出す（旧タブの `|| [0, 0]` は旧タブとともに消えた）。
 - ME 図形のレイヤーは DCS の固定 5 種（Red、Blue、Neutral、Common、Author）を前提に絞る。Red・Blue レイヤーに図形がある実データでの確認は未実施（同梱 .miz では Red レイヤーは 0 件）。
 - 出力の磁方位（`magvar.unsupported`）の severity（warning）は、SPEC に記載が無いため P0 が決めた値。
 - `BriefingSectionId` は旧定義（8 項目、`whiteboard` を含む）のまま。P3 が SPEC §6.2 の 9 項目へ更新する。
@@ -352,6 +354,15 @@ interface MapPanelProps { readOnly?: boolean; height?: string; }   // P2 の src
 - `src/shell/SettingsDrawer.test.tsx`（担当 P8）が `getContext` の Not implemented を出す。AppShell のテストでは出ない（モック済み）。
 - 口頭ブリーフィングの全画面層は、印刷（Ctrl+P）に出る可能性がある。`@media print` の確認は未実施。
 - 描画・操作の確認は Lead が行う（この統合ではブラウザで確認していない）。
+
+- 既知の制限（旧タブ削除の統合で追加）:
+  - 地図のピンは、Markdown と印刷では名前とメモを、PNG のニーボードでは地図上の名前だけを出す（PNG にメモの一覧は無い）。ピンの一覧は最初の地図ページにだけ付く。対応外の地図では、文字のページに「地図のピン」の節として出す。
+  - 経路点の目的とメモは、航法表の列ではなく、表の下の一覧（`export:label.notesLabel`）に出す。
+  - 印刷文書では白板の長文を分割しない（ページ送りはブラウザに任せる）。PNG は図のページに 7 行、残りを続きのページに出す。
+  - 白板の線の色は保存されたデータで、トークンにしない（例外）。紙と方眼は `--whiteboard-paper`、`--whiteboard-grid`（テーマに依らない）。`missionMapRaster` と `kneeboardRenderer` の canvas の紙の色（`#ffffff` など）もテーマに依らない（例外。画像として配る資料のため）。
+  - `RevisionMap` の経路の色（改版前 `#b54b12`、改版後 `#167a49`）は 16 進のまま残る（Leaflet の pathOptions には var() を渡せない）。
+  - 地図の注釈の線は、キーボードだけでは引けない。ピンは「この地点に置く」でキーボードから置ける。
+  - 作成者表示で両陣営の任務文を並べる旧概要の振る舞いは、SPEC §1.3 の変更により移植しない。
 
 ## 11. Lead の決定 1〜13（この統合で守る）
 
@@ -396,4 +407,4 @@ interface MapPanelProps { readOnly?: boolean; height?: string; }   // P2 の src
 - P5: 周波数の衝突の定義（決定 1）、L1 の severity（warning）、lint の anchor 書式（§12 のとおり）。
 - P6: 旧版を選ぶ流れ（`onCompare`）、記入の保存が壊れたときの扱い（決定 8）。
 - P8: `SettingsDrawer` の `mapBackground` の CSS 橋渡しを取り除く（決定 6）。`SettingsDrawer.test.tsx` の getContext の出力。
-- Lead（統合時）: 旧 `src/index.css` の `.print-map-blocked` の規則（`printReadiness` の削除で使われなくなった）を消す。口頭ブリーフィングの全画面層のインラインスタイルを `src/styles/shell.css` へ移すかは Lead が決める（shell.css はこの作業の書き込み範囲外）。
+- Lead（統合時）: 旧 `src/index.css` の `.print-map-blocked` の規則は `src/index.css` とともに削除した。口頭ブリーフィングの全画面層のインラインスタイルを `src/styles/shell.css` へ移すかは Lead が決める（shell.css はこの作業の書き込み範囲外）。

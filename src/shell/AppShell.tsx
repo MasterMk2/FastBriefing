@@ -38,6 +38,13 @@ export interface AppShellProps {
   onCompare?: () => void;
   onCloseRevisions: () => void;
   onCloseMission: () => void;
+  /**
+   * A failed read while no mission is open (already translated). The initial screen shows it under the drop
+   * area (SPEC 3). App passes it only in that state, so it is never shown twice.
+   */
+  initialError?: string | null;
+  /** Chooses another file after a failed first read. Required with initialError. */
+  onRetryInitial?: () => void;
 }
 
 /** Full-screen layer for the verbal briefing: outside the shell chrome, above it. Inline because the frame CSS is shared. */
@@ -67,6 +74,8 @@ export default function AppShell({
   onCompare = noop,
   onCloseRevisions,
   onCloseMission,
+  initialError = null,
+  onRetryInitial = onPickFiles,
 }: AppShellProps) {
   if (!mission) {
     return (
@@ -76,6 +85,8 @@ export default function AppShell({
         onPickFiles={onPickFiles}
         onCompare={onCompare}
         onCloseMission={onCloseMission}
+        error={initialError}
+        onRetry={onRetryInitial}
       />
     );
   }
@@ -103,12 +114,14 @@ export default function AppShell({
  * Shell before a mission is open. Language and theme stay reachable here (the old
  * header had them), so the display settings drawer is available without a mission.
  */
-function InitialShell({ loading, isDragging, onPickFiles, onCompare, onCloseMission }: {
+function InitialShell({ loading, isDragging, onPickFiles, onCompare, onCloseMission, error, onRetry }: {
   loading: boolean;
   isDragging: boolean;
   onPickFiles: () => void;
   onCompare: () => void;
   onCloseMission: () => void;
+  error: string | null;
+  onRetry: () => void;
 }) {
   const { t } = useTranslation('shell');
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -136,7 +149,7 @@ function InitialShell({ loading, isDragging, onPickFiles, onCompare, onCloseMiss
       </header>
       <div className="shell-frame shell-frame-initial">
         <main id="main" className="shell-main" tabIndex={-1}>
-          <InitialScreen loading={loading} isDragging={isDragging} onPickFiles={onPickFiles} />
+          <InitialScreen loading={loading} isDragging={isDragging} onPickFiles={onPickFiles} error={error} onRetry={onRetry} />
         </main>
       </div>
       <SettingsDrawer open={settingsOpen} onClose={closeSettings} />

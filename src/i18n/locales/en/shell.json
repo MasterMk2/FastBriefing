@@ -1,6 +1,20 @@
 {
   "app": {
-    "name": "FastBriefing"
+    "name": "FastBriefing",
+    "selectMiz": "Open 1 .miz or compare 2 .miz files",
+    "dropFile": "Drop a .miz file here",
+    "retry": "Choose another file",
+    "reset": "Start over",
+    "loading": "Parsing mission...",
+    "cancel": "Cancel loading",
+    "screenLoading": "Loading the screen...",
+    "invalidMizOnly": "Please select a .miz file (other formats cannot be loaded)",
+    "tooManyFiles": "Select one .miz, or exactly two .miz files to compare revisions.",
+    "parseError": "Failed to parse the mission file",
+    "emptyMiz": "This file is empty (0 bytes) and contains no mission data. Download or copy it again.",
+    "corruptMiz": "This file is not a valid DCS mission ZIP or was damaged during transfer. Check whether DCS Mission Editor can open it, then obtain the source file again.",
+    "mizSafetyLimit": "This mission cannot be loaded because it exceeds a safety limit. Check the archive contents and embedded images.",
+    "invalidMissionData": "The ZIP opened, but its DCS mission data could not be read. Save it again in DCS Mission Editor."
   },
   "header": {
     "side": "Side",

@@ -386,6 +386,23 @@
   white-space: nowrap;
 }
 
+.revision-map-section {
+  margin-top: 16px;
+}
+
+.revision-map-section h3 {
+  margin: 0 0 4px;
+  font-size: var(--fs-body);
+}
+
+.revision-map {
+  height: 360px;
+  width: 100%;
+  margin-top: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
 @media (max-width: 767px) {
   .notes-layout,
   .notes-flights,

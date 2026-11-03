@@ -1,4 +1,5 @@
-import type { KneeboardPage, KneeboardSection, KneeboardTranslate } from '../utils/kneeboard';
+import type { KneeboardMapPin, KneeboardPage, KneeboardSection, KneeboardTranslate } from '../utils/kneeboard';
+import { pinLine } from './kneeboardPlan';
 
 export type MarkdownStyle = 'table' | 'code';
 
@@ -30,7 +31,9 @@ export function renderMarkdown(
 
 function pageMarkdown(page: KneeboardPage, style: MarkdownStyle, t: KneeboardTranslate): string {
   if (page.kind === 'map') {
-    return [`## ${page.title}`, `- ${t('export:label.mapNote', { theatre: page.scene.theatre })}`].join('\n\n');
+    const blocks = [`## ${page.title}`, `- ${t('export:label.mapNote', { theatre: page.scene.theatre })}`];
+    if (page.pins.length > 0) blocks.push(pinsMarkdown(page.pins, style, t));
+    return blocks.join('\n\n');
   }
   if (page.kind === 'whiteboard') {
     const notes = page.data.notes.trim();
@@ -54,6 +57,22 @@ function sectionMarkdown(section: KneeboardSection, style: MarkdownStyle): strin
     body.push([`${fence}text`, ...lines, fence].join('\n'));
   }
   return [`### ${section.heading}`, ...body].filter(Boolean).join('\n\n');
+}
+
+/**
+ * The map pins as "**label**: memo" items (the form of the old Markdown output). In code style they go in a
+ * fenced block as "label: memo", the same as every other section.
+ */
+function pinsMarkdown(pins: readonly KneeboardMapPin[], style: MarkdownStyle, t: KneeboardTranslate): string {
+  const heading = `### ${t('export:label.mapPins')}`;
+  if (style === 'code') {
+    const lines = pins.map(pinLine);
+    const fence = codeFence(lines);
+    return [heading, [`${fence}text`, ...lines, fence].join('\n')].join('\n\n');
+  }
+  const inline = (value: string) => value.replace(/\s*\r?\n\s*/g, ' / ').replace(/([\\*_`[\]])/g, '\\$1');
+  const items = pins.map(pin => `- **${inline(pin.label)}**: ${inline(pin.notes || t('export:label.notAvailable'))}`);
+  return [heading, items.join('\n')].join('\n\n');
 }
 
 /** A fence longer than any backtick run in the content, so a memo with ``` cannot close the block early. */

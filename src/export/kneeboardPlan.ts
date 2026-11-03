@@ -1,7 +1,7 @@
 import type { DisplaySettings, Flight, MissionData, RoutePoint, Side, SupportAsset } from '../types/mission';
 import type { BriefingSection } from '../utils/briefingSections';
 import type { WhiteboardData } from '../types/whiteboard';
-import type { KneeboardPage, KneeboardSection, KneeboardTranslate } from '../utils/kneeboard';
+import type { KneeboardMapPin, KneeboardPage, KneeboardSection, KneeboardTranslate } from '../utils/kneeboard';
 import { buildMetar } from '../utils/metar';
 import { PROJECTIONS, formatCoordinate, resolveCoordinateFormat } from '../utils/coordinates';
 import { buildMissionMapScene } from '../utils/missionMapRaster';
@@ -291,13 +291,28 @@ function threatsPage(input: PagePlanInput, t: KneeboardTranslate): KneeboardPage
   return textPage('threats', t('export:sections.threats'), sections);
 }
 
+/**
+ * The map pins of the user (label and memo). Annotations belong to the mission, not to a side, and have no
+ * hidden flag, so the pilot view lists the same pins the map canvas already draws there (D1 has nothing to drop).
+ * Lines (strokes) are not listed: they have no text.
+ */
+function mapPins(view: MissionData, t: KneeboardTranslate): KneeboardMapPin[] {
+  return view.userNotes.mapAnnotations.flatMap(annotation => (annotation.kind === 'pin'
+    ? [{ label: annotation.label.trim() || t('export:label.mapPin'), notes: annotation.notes.trim() }]
+    : []));
+}
+
 function mapPages(input: PagePlanInput, t: KneeboardTranslate): KneeboardPage[] {
   const { view } = input;
+  const pins = mapPins(view, t);
   if (!PROJECTIONS[view.meta.theatre]) {
-    return [textPage('map', t('export:sections.map'), [{
+    // No map can be drawn, but the pins are still text the pilot needs.
+    const sections: KneeboardSection[] = [{
       heading: t('export:sections.map'),
       lines: [t('export:label.mapUnsupported', { theatre: view.meta.theatre })],
-    }])];
+    }];
+    if (pins.length > 0) sections.push({ heading: t('export:label.mapPins'), lines: pins.map(pinLine) });
+    return [textPage('map', t('export:sections.map'), sections)];
   }
   const flights = input.flights.map(item => item.flight);
   const pageCount = Math.max(1, Math.ceil(flights.length / MAP_FLIGHTS_PER_PAGE));
@@ -310,14 +325,21 @@ function mapPages(input: PagePlanInput, t: KneeboardTranslate): KneeboardPage[] 
       input.side === 'blue' ? 'red' : 'blue',
     );
     // The display setting "mapBackground" applies to the print, the PNG and the .miz alike (decision 6).
+    // The pin list is mission-wide, so only the first map page carries it (a long mission does not repeat it).
     pages.push({
       kind: 'map',
       section: 'map',
       title,
       scene: { ...scene, basemap: input.settings.mapBackground },
+      pins: index === 0 ? pins : [],
     });
   }
   return pages;
+}
+
+/** "label: memo", or the label alone when the pin has no memo. */
+export function pinLine(pin: KneeboardMapPin): string {
+  return pin.notes ? `${pin.label}: ${pin.notes.replace(/\s*\r?\n\s*/g, ' / ')}` : pin.label;
 }
 
 function notesPage(input: PagePlanInput, t: KneeboardTranslate): KneeboardPage {

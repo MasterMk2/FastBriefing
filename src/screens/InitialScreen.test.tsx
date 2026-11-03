@@ -85,4 +85,26 @@ describe('initial screen', () => {
 
     expect(container.textContent).toContain(initialJa.slow);
   });
+
+  it('shows a read error directly under the drop area, with a retry that calls onRetry exactly once', async () => {
+    const onPickFiles = vi.fn();
+    const onRetry = vi.fn();
+    await act(async () => {
+      root.render(<InitialScreen loading={false} isDragging={false} onPickFiles={onPickFiles} error="読み込めません" onRetry={onRetry} />);
+    });
+    const alert = container.querySelector('[role="alert"]');
+    expect(alert?.textContent).toContain('読み込めません');
+    // The next sibling of the drop area, and not inside it, so the drop area's own click does not also fire.
+    expect(container.querySelector('.initial-drop')?.nextElementSibling).toBe(alert);
+    expect(container.querySelector('.initial-drop')?.contains(alert)).toBe(false);
+    const retry = [...alert!.querySelectorAll<HTMLButtonElement>('button')].find(node => node.textContent === initialJa.retry);
+    await act(async () => { retry!.click(); });
+    expect(onRetry).toHaveBeenCalledTimes(1);
+    expect(onPickFiles).not.toHaveBeenCalled();
+  });
+
+  it('shows no alert without an error', async () => {
+    await render(false);
+    expect(container.querySelector('[role="alert"]')).toBeNull();
+  });
 });

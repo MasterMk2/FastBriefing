@@ -1,7 +1,6 @@
 /* Owner: P3 (出力). The printable briefing document (A4 portrait, SPEC F9).
    On screen the document is kept off-screen rather than display:none, so a map canvas
-   still lays out and draws. The legacy index.css hides .print-briefing with display:none;
-   this file loads later and shows it again. Its height is 0 with overflow hidden, so the
+   still lays out and draws. Its height is 0 with overflow hidden, so the
    off-screen copy adds no scrollable height to the page. Printing brings it into the flow.
    The print preview (html[data-print-preview="on"]) shows the same copy full screen.
    Colours use the system keywords CanvasText and Canvas, which print in black on white. */
@@ -113,6 +112,17 @@ html[data-print-preview="on"] .print-document {
 }
 
 @media print {
+  @page {
+    size: A4 portrait;
+    margin: 12mm;
+  }
+
+  html,
+  body {
+    background: Canvas;
+    color: CanvasText;
+  }
+
   .print-briefing {
     position: static;
     left: auto;

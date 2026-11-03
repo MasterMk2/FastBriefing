@@ -6,9 +6,6 @@
  * Themes: FFS dark is the default (no data-theme needed). data-theme="standard" is the
  * white theme with one blue. data-theme="night" is a red-only theme for night use:
  * status is shown by symbols and words, never by hue alone.
- *
- * Legacy variables (--color-*, defined in src/index.css for the old tabs) are overridden
- * here so the old tabs follow the selected theme until they are replaced (SPEC 8).
  */
 
 :root,
@@ -52,15 +49,6 @@
   --ink-2: #7fe0c4;
   --ink-3: #f49ac1;
   --ink-4: #e8e6e1;
-
-  /* Legacy names used by src/index.css for the old tabs (FFS values). */
-  --color-page-background: var(--surface-0);
-  --color-surface: var(--surface-1);
-  --color-text: var(--text);
-  --color-heading: var(--text);
-  --color-border: var(--border);
-  --color-accent: var(--accent);
-  --color-text-muted: var(--text-muted);
 }
 
 :root[data-theme="standard"] {
@@ -100,20 +88,6 @@
   --ink-2: #137a3a;
   --ink-3: #a85d00;
   --ink-4: #7a3e9d;
-
-  --color-page-background: var(--surface-0);
-  --color-surface: var(--surface-1);
-  --color-text: var(--text);
-  --color-heading: var(--text);
-  --color-border: var(--border);
-  --color-accent: var(--accent);
-  --color-accent-hover: #174a96;
-  --color-text-muted: var(--text-muted);
-  --color-text-secondary: var(--text-muted);
-  --color-text-tertiary: var(--text-muted);
-  --color-control-background: var(--surface-0);
-  --color-control-border: var(--border);
-  --color-control-text: var(--text);
 }
 
 :root[data-theme="night"] {
@@ -156,29 +130,6 @@
   --ink-2: #ff7a70;
   --ink-3: #e0463b;
   --ink-4: #a8281f;
-
-  --color-page-background: var(--surface-0);
-  --color-surface: var(--surface-1);
-  --color-text: var(--text);
-  --color-heading: var(--text);
-  --color-border: var(--border);
-  --color-accent: var(--accent);
-  --color-accent-hover: #ff7a70;
-  --color-text-muted: var(--text-muted);
-  --color-text-secondary: var(--text-muted);
-  --color-text-tertiary: var(--text-muted);
-  --color-on-accent: #000000;
-  --color-control-background: var(--surface-1);
-  --color-control-border: var(--border);
-  --color-control-text: var(--text);
-  --color-control-option-background: var(--surface-1);
-  --color-control-option-text: var(--text);
-  --color-info-text: var(--info-text);
-  --color-warning-text: var(--warning-text);
-  --color-error-text: var(--danger-text);
-  --color-danger-text: var(--danger-text);
-  --color-code-background: var(--surface-1);
-  --color-code-text: var(--text);
 }
 
 /* Shared, theme-independent tokens. */
@@ -195,6 +146,12 @@
   --shell-rail-width: 240px;
   --shell-bottom-height: 56px;
   --shell-gutter: 16px;
+  /*
+   * The whiteboard paper and its grid. Theme-independent on purpose: the board is a writing surface whose ink
+   * colours are stored with the data, and the same drawing is printed, so the paper stays light in every theme.
+   */
+  --whiteboard-paper: #ffffff;
+  --whiteboard-grid: #e5e7eb;
 }
 
 /* Large text: the whole UI scales by 112% (SPEC 4.1). */

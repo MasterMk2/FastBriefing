@@ -85,7 +85,7 @@ export default function RevisionComparison({ revisions, settings, side, onClose 
       )}
       {diff.sameTheatre && diff.routes.length > 0 && (
         <Suspense fallback={<p>{t('revision:loading')}</p>}>
-          <RevisionMap theatre={before.revision.theatre} routes={diff.routes} />
+          <RevisionMap theatre={before.revision.theatre} routes={diff.routes} mapBackground={settings.mapBackground} />
         </Suspense>
       )}
     </section>

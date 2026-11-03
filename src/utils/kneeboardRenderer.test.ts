@@ -21,6 +21,7 @@ import {
   renderKneeboardPages,
 } from './kneeboardRenderer';
 import { fixtureMission } from '../export/__tests__/fixture';
+import { MAX_WHITEBOARD_NOTES, MAX_WHITEBOARD_STROKES } from '../hooks/useWhiteboard';
 
 const t: KneeboardTranslate = (key, options) => `${key}:${JSON.stringify(options ?? {})}`;
 
@@ -110,6 +111,33 @@ describe('kneeboard page count and rendering', () => {
     const rendered = await renderKneeboardPages(pages, 768, t);
     expect(counted).toBeGreaterThan(pages.length);
     expect(rendered).toHaveLength(counted);
+  });
+
+  it('splits maximum whiteboard notes onto continuation pages without dropping the drawing page (old briefingPng)', async () => {
+    const notes = 'x'.repeat(MAX_WHITEBOARD_NOTES);
+    const pages: KneeboardPage[] = [{
+      kind: 'whiteboard',
+      section: 'notes',
+      title: 'Whiteboard',
+      data: {
+        notes,
+        strokes: Array.from({ length: MAX_WHITEBOARD_STROKES }, (_, index) => ({
+          id: `route-${index}`, color: '#175cd3', width: 6, points: [{ x: 1, y: 1 }, { x: 2, y: 2 }],
+        })),
+      },
+    }];
+    const counted = countKneeboardPages(pages, t, createMeasurementContext());
+    texts = [];
+    const rendered = await renderKneeboardPages(pages, 768, t);
+    expect(rendered).toHaveLength(counted);
+    expect(counted).toBeGreaterThan(1);
+    const continued = `Whiteboard (export:label.continued:{})`;
+    // The first page is the drawing page (its own title, once); the rest are continuation text pages.
+    expect(texts.filter(text => text === 'Whiteboard')).toHaveLength(1);
+    expect(texts.filter(text => text.startsWith(continued))).toHaveLength(counted - 1);
+    expect(texts.indexOf('Whiteboard')).toBeLessThan(texts.indexOf(continued));
+    // Every character of the notes is drawn once, across the drawing page and the continuation pages.
+    expect(texts.filter(text => /^x+$/.test(text)).join('')).toBe(notes);
   });
 
   it('reports progress up to the total', async () => {

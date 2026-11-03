@@ -10,17 +10,19 @@ export type SupportedLanguage = typeof SUPPORTED_LANGUAGES[number];
 export const DEFAULT_LANGUAGE: SupportedLanguage = 'ja';
 
 /**
- * Translation namespaces. `legacy` holds every key the pre-redesign tabs use and
- * is the defaultNS, so existing `t('overview.sortie')` calls keep resolving.
- * New code names its namespace explicitly, for example `t('shell:nav.overview')`.
- * Remove `legacy` keys as the old tabs are replaced during integration.
+ * Translation namespaces. Every key names its namespace, for example `t('shell:nav.overview')`.
+ * The old `legacy` namespace (the pre-redesign tabs) was removed with those tabs.
  */
 export const NAMESPACES = [
-  'legacy', 'shell', 'flight', 'map', 'export', 'briefing', 'comms', 'support', 'threats',
+  'shell', 'flight', 'map', 'export', 'briefing', 'comms', 'support', 'threats',
   'notes', 'revision', 'wingman', 'settings', 'issues', 'lint', 'overview', 'initial', 'common',
 ] as const;
 export type Namespace = typeof NAMESPACES[number];
-export const DEFAULT_NAMESPACE: Namespace = 'legacy';
+/**
+ * i18next needs a default namespace. `common` is empty, so a key without a namespace shows as the raw key
+ * instead of silently resolving somewhere; `src/i18n/i18n.test.ts` rejects such keys in the source.
+ */
+export const DEFAULT_NAMESPACE: Namespace = 'common';
 
 type MessageTree = Record<string, unknown>;
 export type LocaleModules = Record<string, { default: MessageTree }>;

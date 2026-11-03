@@ -106,5 +106,27 @@
     "notNumber": "Enter a number.",
     "storageFailedTitle": "This device cannot save",
     "storageFailedBody": "Notes stay only while this page is open."
+  },
+  "waypoints": {
+    "purpose": "Purpose",
+    "purposePlaceholder": "Example: IP, push, attack start, egress",
+    "notes": "Waypoint notes",
+    "notesPlaceholder": "Altitude, formation, threats, radios, etc.",
+    "save": "Save",
+    "saved": "Saved to this waypoint.",
+    "savedGroup": "Saved to the complete sync group.",
+    "saveGroup": "Save to {{count}} synced points",
+    "syncNearby": "Sync nearby waypoints",
+    "syncHelp": "Distance finds candidates despite DCS Mission Editor coordinate offsets. Nothing syncs automatically; only checked targets join the group.",
+    "radius": "Candidate radius",
+    "noCandidates": "No waypoint from another flight is inside this radius.",
+    "selectTarget": "Select at least one sync target.",
+    "createGroup": "Sync selected {{count}} points",
+    "groupCreated": "Created a {{count}}-point sync group.",
+    "currentGroup": "Current sync group ({{count}} points)",
+    "leaveGroup": "Remove this point from the group",
+    "leftGroup": "Removed this point from the sync group.",
+    "groupConflict": "Already belongs to another sync group",
+    "limitReached": "The annotation limit was reached, so this could not be saved."
   }
 }

@@ -139,7 +139,7 @@
   overflow-wrap: anywhere;
 }
 
-/* Buttons of this screen. They do not use the index.css .btn rules, which are removed at integration (SPEC 8). */
+/* Buttons of this screen. They are drawn here rather than with the shared .btn rules (common.css). */
 .flight-button {
   min-height: var(--target-desktop);
   padding: 0 12px;
@@ -712,4 +712,107 @@
 .flight-screen a:focus-visible {
   outline: var(--focus-ring);
   outline-offset: 2px;
+}
+
+/* The waypoint purpose and memo editor in the route table (components/WaypointAnnotationEditor). */
+.waypoint-editor {
+  display: grid;
+  gap: 8px;
+  min-width: 18rem;
+  color: var(--text);
+}
+
+.waypoint-editor label {
+  display: grid;
+  gap: 4px;
+}
+
+.waypoint-editor input,
+.waypoint-editor textarea {
+  width: 100%;
+  min-height: var(--target-desktop);
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-0);
+  color: var(--text);
+  font: inherit;
+}
+
+.waypoint-editor textarea {
+  resize: vertical;
+}
+
+.waypoint-editor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.waypoint-editor .button-secondary,
+.waypoint-editor .button-danger-text {
+  min-height: var(--target-desktop);
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-0);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.waypoint-editor .button-danger-text {
+  color: var(--danger-text);
+}
+
+.waypoint-editor button:focus-visible,
+.waypoint-editor input:focus-visible,
+.waypoint-editor textarea:focus-visible,
+.waypoint-sync summary:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.waypoint-editor button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.waypoint-sync {
+  border-top: 1px solid var(--border);
+  padding-top: 6px;
+}
+
+.waypoint-sync summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.waypoint-radius {
+  grid-template-columns: auto 5rem auto;
+  align-items: center;
+}
+
+.waypoint-candidates {
+  display: grid;
+  gap: 6px;
+  max-height: 10rem;
+  overflow: auto;
+  margin: 8px 0;
+}
+
+.waypoint-candidates label {
+  grid-template-columns: auto 1fr;
+  align-items: start;
+}
+
+.waypoint-group-members ul {
+  margin: 6px 0;
+  padding-left: 1.2rem;
+}
+
+.waypoint-editor-status {
+  margin: 0;
+  color: var(--info-text);
+  font-size: var(--fs-note);
 }

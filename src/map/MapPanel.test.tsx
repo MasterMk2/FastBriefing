@@ -415,6 +415,36 @@ describe('map panel state and screen changes', () => {
     expect(host.querySelector('.map-solo')).toBeNull();
   });
 
+  it('this flight only fits that flight, and showing every flight again fits every flight (Lead decision)', async () => {
+    setContext(missionWithBlueRoute([point(1, [42, 42]), point(2, [42.1, 42.1]), point(3, [42.2, 42.2])]));
+    await render();
+    mocks.fitBounds.mockClear();
+    await act(async () => buttonByText('この機だけ')?.click());
+    expect(mocks.fitBounds).toHaveBeenCalledTimes(1);
+    const solo = mocks.fitBounds.mock.calls[0][0] as { contains: (point: [number, number]) => boolean };
+    expect(solo.contains([42.1, 42.1])).toBe(true);
+    expect(solo.contains([43, 43])).toBe(false);
+
+    await act(async () => buttonByText('全機を表示に戻す')?.click());
+    expect(mocks.fitBounds).toHaveBeenCalledTimes(2);
+    const all = mocks.fitBounds.mock.calls[1][0] as { contains: (point: [number, number]) => boolean };
+    expect(all.contains([42.1, 42.1])).toBe(true);
+    expect(all.contains([43, 43])).toBe(true);
+  });
+
+  it('a map that opens with a solo flight fits that flight once at mount', async () => {
+    setContext(missionWithBlueRoute([point(1, [42, 42]), point(2, [42.1, 42.1]), point(3, [42.2, 42.2])]));
+    await render();
+    await act(async () => buttonByText('この機だけ')?.click());
+    // Leave the map and come back: the solo flight is still set in the workspace.
+    await act(async () => buttonByText('切替')?.click());
+    mocks.fitBounds.mockClear();
+    await act(async () => buttonByText('切替')?.click());
+    expect(mocks.fitBounds).toHaveBeenCalledTimes(1);
+    const bounds = mocks.fitBounds.mock.calls[0][0] as { contains: (point: [number, number]) => boolean };
+    expect(bounds.contains([43, 43])).toBe(false);
+  });
+
   it('a route pick on the read-only map changes no flight selection and offers no flight link', async () => {
     setContext(missionWithBlueRoute([point(1, [42, 42]), point(2, [42.1, 42.1]), point(3, [42.2, 42.2])]));
     await render(<Harness readOnly />);

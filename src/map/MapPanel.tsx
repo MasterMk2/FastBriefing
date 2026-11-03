@@ -104,15 +104,20 @@ function pinPatternFor(t: TFunction): RegExp {
   return pinNumberPattern(String(t('map:annotations.defaultPin', { count: PIN_NUMBER_SENTINEL })), PIN_NUMBER_SENTINEL);
 }
 
-/** Whole-map fit (initial mount, flight selection, "全体表示"). Annotation edits never change this. */
+/**
+ * Whole-map fit (initial mount, flight selection, "全体表示", "この機だけ地図に" and "全機を表示に戻す").
+ * Annotation edits never change this.
+ */
 interface FitRequest {
   id: number;
-  target: 'all' | 'flight';
+  target: 'all' | 'flight' | 'solo';
 }
 
 interface FitBounds {
   all: LatLngBounds;
   flight: LatLngBounds | null;
+  /** The route of the solo flight ("この機だけ地図に"), or null when no flight is shown alone. */
+  solo: LatLngBounds | null;
 }
 
 function resolveToken(token: string): string {
@@ -254,15 +259,25 @@ export function MapPanel({ readOnly = false, height = '100%', focusFlightKey }: 
   const bounds = useMemo<FitBounds>(() => ({
     all: collectBounds(model, theatre),
     flight: focusKey ? flightBounds(model, focusKey) : null,
-  }), [model, theatre, focusKey]);
+    solo: soloKey ? flightBounds(model, soloKey) : null,
+  }), [model, theatre, focusKey, soloKey]);
 
-  const [fit, setFit] = useState<FitRequest>(() => ({ id: 1, target: focusKey ? 'flight' : 'all' }));
+  // A map that opens with a solo flight (from the flight screen's "この機だけ地図に") fits that flight at once.
+  const [fit, setFit] = useState<FitRequest>(() => ({ id: 1, target: soloKey ? 'solo' : focusKey ? 'flight' : 'all' }));
   const lastKey = useRef(focusKey);
   useEffect(() => {
     if (lastKey.current === focusKey) return;
     lastKey.current = focusKey;
     setFit(previous => ({ id: previous.id + 1, target: focusKey ? 'flight' : 'all' }));
   }, [focusKey]);
+  // Lead decision: "この機だけ地図に" fits the solo flight, and "全機を表示に戻す" fits every flight again.
+  // Declared after the selection fit, so a change of both in one render ends on the solo target.
+  const lastSolo = useRef(soloKey);
+  useEffect(() => {
+    if (lastSolo.current === soloKey) return;
+    lastSolo.current = soloKey;
+    setFit(previous => ({ id: previous.id + 1, target: soloKey ? 'solo' : 'all' }));
+  }, [soloKey]);
 
   // The route point picked in the route table. Only the marker and (when out of view) the pan follow it; no refit.
   const focusTarget = useMemo<RouteFocusTarget | null>(() => {
@@ -904,7 +919,8 @@ function FitController({ request, bounds }: { request: FitRequest; bounds: FitBo
     latest.current = bounds;
   }, [bounds]);
   useEffect(() => {
-    const target = request.target === 'flight' && latest.current.flight ? latest.current.flight : latest.current.all;
+    const { all, flight, solo } = latest.current;
+    const target = request.target === 'solo' && solo ? solo : request.target === 'flight' && flight ? flight : all;
     fitMap(map, target);
   }, [map, request.id, request.target]);
   return null;

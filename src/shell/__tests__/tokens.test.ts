@@ -73,3 +73,26 @@ describe('coalition and ink tokens', () => {
     }
   });
 });
+
+describe('whiteboard paper tokens (theme-independent)', () => {
+  it('defines the paper and grid once in the shared block, light enough for dark ink, and in no theme block', async () => {
+    const css = await readTokens();
+    const shared = css.slice(css.indexOf('/* Shared, theme-independent tokens. */'));
+    const paper = /--whiteboard-paper:\s*(#[0-9a-f]{6});/i.exec(shared)?.[1];
+    const grid = /--whiteboard-grid:\s*(#[0-9a-f]{6});/i.exec(shared)?.[1];
+    expect(paper).toBeDefined();
+    expect(grid).toBeDefined();
+    expect(luminance(paper!)).toBeGreaterThan(0.8);
+    for (const theme of THEMES) {
+      const palette = await themePalette(theme);
+      expect(palette['whiteboard-paper'], theme).toBeUndefined();
+    }
+  });
+
+  it('draws the whiteboard paper and grid from the tokens, not from fixed colours', async () => {
+    const source = await readFile(new URL('../../components/WhiteboardDrawing.tsx', import.meta.url), 'utf8') as string;
+    expect(source).toContain("'var(--whiteboard-paper)'");
+    expect(source).toContain("'var(--whiteboard-grid)'");
+    expect(source).not.toMatch(/#[0-9a-f]{6}\b/i);
+  });
+});

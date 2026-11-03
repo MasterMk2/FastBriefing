@@ -149,7 +149,22 @@ describe('two-file revision UI', () => {
     const pending = deferred<ReturnType<typeof parsed>>(); mocks.parse.mockReturnValueOnce(pending.promise);
     await choose([file('pending.miz')]); await choose([file('bad.txt')]);
     await act(async () => { pending.resolve(parsed('stale')); }); expect(mission()).toBeUndefined();
-    expect(container.querySelector('.app-error')).not.toBeNull();
+    // No mission is open, so the error is on the initial screen, not in the band (never both).
+    expect(container.querySelector('.initial-error[role=alert]')).not.toBeNull();
+    expect(container.querySelector('.app-error')).toBeNull();
+  });
+  it('shows a failed first read under the drop area with a way to choose another file, and only there', async () => {
+    mocks.parse.mockRejectedValueOnce(new Error('invalid archive'));
+    await choose([file('broken.miz')]);
+    const alert = container.querySelector('.initial-error[role=alert]');
+    expect(alert).not.toBeNull();
+    expect(alert?.textContent).toContain('ミッションファイルの解析に失敗しました');
+    expect(container.querySelector('.initial-drop + .initial-error')).toBe(alert);
+    expect(container.querySelector('.app-error')).toBeNull();
+    const pick = vi.spyOn(input(), 'click').mockImplementation(() => {});
+    await act(async () => { alert!.querySelector<HTMLButtonElement>('button')!.click(); });
+    expect(pick).toHaveBeenCalledTimes(1);
+    expect(container.querySelector('.initial-error')).toBeNull();
   });
   it('ignores a canceled file picker and renders untrusted filenames as text', async () => {
     await choose([]); expect(container.querySelector('.app-error')).toBeNull();
