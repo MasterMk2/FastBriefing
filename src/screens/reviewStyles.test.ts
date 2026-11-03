@@ -59,6 +59,12 @@ describe('print stylesheet (PE-1, PE-5)', () => {
     expect(blockOf(css, /\n\.print-briefing/)).toContain('color-scheme: light');
     expect(blockOf(mediaBlocks(css, 'print').join('\n'), /html,\s*body/)).toContain('color-scheme: light');
   });
+
+  it('keeps the spaces and line breaks of a free text (the mission description), in a monospaced font', async () => {
+    const block = blockOf(await readStylesheet('print.css'), /\.print-pre/);
+    expect(block).toMatch(/white-space:\s*pre-wrap/);
+    expect(block).toMatch(/font-family:[^;]*monospace/);
+  });
 });
 
 describe('night theme inks (A11Y-10)', () => {

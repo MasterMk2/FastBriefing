@@ -11,6 +11,8 @@ import { MissionProvider } from '../shell/MissionContext';
 import { useWorkspace, WorkspaceProvider } from '../shell/workspace';
 import type { AIGroup, DisplaySettings, Flight, MissionData, RoutePoint, SupportAsset } from '../types/mission';
 import type { LintFinding } from '../types/lint';
+import { buildExportModel } from '../export/exportModel';
+import { applyViewMode } from '../utils/viewMode';
 import OverviewScreen from './OverviewScreen';
 
 // The check runs the real rules. A test can replace its findings to show that the screen guards
@@ -572,6 +574,35 @@ describe('OverviewScreen load notices (warnings from the file)', () => {
 
     await renderOverview(mission, { viewMode: 'pilot', side: 'blue' });
     expect(container.textContent).not.toContain('SECRET-RED-NODE');
+  });
+
+  it('lists as many load notices in pilot view as the pilot handout lists warnings', async () => {
+    const mission = makeMission();
+    mission.issues = [
+      { code: 'time.utcOffsetUnknown', severity: 'warning', params: { theatre: 'Nowhere' } },
+      { code: 'parse.unknownNode', severity: 'warning', params: { type: 'OWN-NODE' }, side: 'blue' },
+      { code: 'weapon.unknownClsid', severity: 'info', params: { clsid: 'CATM-9M' } },
+      { code: 'threat.rangeUnrecorded', severity: 'warning', params: { type: 'OWN-SAM' }, side: 'blue' },
+    ];
+
+    await renderOverview(mission, { viewMode: 'pilot', side: 'blue' });
+    const shown = container.querySelectorAll('.overview-load-row').length;
+
+    const settings: DisplaySettings = { ...DEFAULT_SETTINGS, viewMode: 'pilot', side: 'blue', briefingSections: ['overview'] };
+    const withParams = (key: string, options?: Record<string, string | number>) => (options ? `${key} ${JSON.stringify(options)}` : key);
+    const pages = buildExportModel({
+      view: applyViewMode(mission, 'pilot', 'blue'),
+      settings,
+      side: 'blue',
+      scope: { kind: 'mission' },
+      whiteboard: { notes: '', strokes: [] },
+    }, withParams).pages;
+    const handout = pages.flatMap(page => (page.kind === 'text' ? page.sections : []))
+      .find(section => section.heading === 'export:label.warnings')?.lines ?? [];
+
+    expect(shown).toBe(2);
+    expect(handout).toHaveLength(shown);
+    expect(handout.join('\n')).not.toContain('weapon.unknownClsid');
   });
 
   it('lists the opposing side warning in creator view, with its side mark', async () => {

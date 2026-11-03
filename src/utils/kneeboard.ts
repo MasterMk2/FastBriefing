@@ -12,6 +12,12 @@ export interface KneeboardSection {
   lines: string[];
   /** Optional table for Markdown and print (P3). */
   table?: { header: string[]; rows: string[][] };
+  /**
+   * The lines are free text written by the mission author or the user (the mission description, a task text, a
+   * memo): every output keeps them as written, with their blank lines and the spaces that line up columns.
+   * Markdown fences them, the print keeps the white space, and the PNG draws them in a monospaced font.
+   */
+  preformatted?: boolean;
 }
 
 /** A map pin the user placed on the map (label and memo), listed under the map in print and Markdown. */

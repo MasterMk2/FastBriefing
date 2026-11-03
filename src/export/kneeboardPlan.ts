@@ -1,4 +1,4 @@
-import { isCreatorOnlyIssueCode } from '../core/issues';
+import { handoutWarningIssues } from '../core/issues';
 import type { DisplaySettings, Flight, MissionData, MissionMeta, Pylon, RoutePoint, Side, SupportAsset, Unit } from '../types/mission';
 import type { BriefingSection } from '../utils/briefingSections';
 import type { WhiteboardData } from '../types/whiteboard';
@@ -86,21 +86,21 @@ function overviewPage(input: PagePlanInput, t: KneeboardTranslate): KneeboardPag
     ...(timeDisplay !== 'local' ? [`${t('export:label.startZulu')}: ${formatTimeHHMM(zulu)}Z`] : []),
     `${t('export:label.view')}: ${t(input.plan.viewMode === 'pilot' ? 'export:label.viewPilot' : 'export:label.viewCreator')}`,
   ];
-  const description = input.view.meta.description.trim();
-  if (description) lines.push(...description.split(/\r?\n/));
   const sections: KneeboardSection[] = [{ heading: t('export:label.mission'), lines }];
+  // The description is the author's free text (often columns lined up with spaces and ==== rules): its own
+  // section, kept as written, so a list or a proportional font does not break it.
+  const description = freeTextLines(meta.description);
+  if (description.length > 0) sections.push({ heading: t('export:label.description'), lines: description, preformatted: true });
   // SPEC 1.3: the task text of the displayed side, or the neutral text when that side has none.
   // The opposing side's text is already cleared by applyViewMode (D1).
-  const ownTask = input.side === 'blue' ? meta.descriptionBlueTask : meta.descriptionRedTask;
-  const task = ownTask.trim() || meta.descriptionNeutralTask.trim();
-  if (task) sections.push({ heading: t('export:label.task'), lines: task.split(/\r?\n/) });
+  const ownTask = freeTextLines(input.side === 'blue' ? meta.descriptionBlueTask : meta.descriptionRedTask);
+  const task = ownTask.length > 0 ? ownTask : freeTextLines(meta.descriptionNeutralTask);
+  if (task.length > 0) sections.push({ heading: t('export:label.task'), lines: task, preformatted: true });
   sections.push(astroSection(input, t));
   // Warnings of the displayed view. applyViewMode already removed the other side's issues and the issues of
-  // hidden groups (D1). Threat issues are creator-only, the same rule as the overview screen (SPEC 5.1, D1).
-  // The texts are in the output language, the same as the rest of the page.
-  const pilot = input.plan.viewMode === 'pilot';
-  const warnings = [...new Set(input.view.issues
-    .filter(issue => !(pilot && isCreatorOnlyIssueCode(issue.code)))
+  // hidden groups (D1). The pilot handout lists what the pilot overview lists as load notices (handoutWarningIssues),
+  // so data-quality notes and creator-only codes stay off it. The texts are in the output language.
+  const warnings = [...new Set(handoutWarningIssues(input.view.issues, input.plan.viewMode)
     .map(issue => t(`issues:${issue.code}`, { ...issue.params })))];
   if (warnings.length > 0) sections.push({ heading: t('export:label.warnings'), lines: warnings });
   return textPage('overview', t('export:sections.overview'), sections);
@@ -212,10 +212,10 @@ function flightListPage(input: PagePlanInput, t: KneeboardTranslate): KneeboardP
     if (notes?.tot) lines.push(`${t('export:label.tot')}: ${notes.tot}`);
     if (notes?.jokerFuel !== null && notes?.jokerFuel !== undefined) lines.push(`${t('export:label.joker')}: ${notes.jokerFuel} ${t('export:label.fuelUnit')}`);
     if (notes?.bingoFuel !== null && notes?.bingoFuel !== undefined) lines.push(`${t('export:label.bingo')}: ${notes.bingoFuel} ${t('export:label.fuelUnit')}`);
-    if (notes?.customNotes) lines.push(`${t('export:label.customNotes')}: ${notes.customNotes}`);
     const name = flight.callsign || flight.name;
     return [
       { heading: `${name} · ${flight.type} ×${flight.units.length}`, lines },
+      memoSection(notes?.customNotes ?? '', `${t('export:label.customNotes')}: ${name}`),
       rosterSection(flight, name, t),
       loadoutSection(flight.units[0], name, t),
       aircraftSettingsSection(flight.units[0], name, t),
@@ -496,23 +496,46 @@ function notesPage(input: PagePlanInput, t: KneeboardTranslate): KneeboardPage {
   const sections: KneeboardSection[] = [];
   const smeac = input.view.userNotes.smeac;
   for (const field of SMEAC_FIELDS) {
-    const content = smeac[field].trim();
-    if (content) sections.push({ heading: t(`export:label.smeac.${field}`), lines: content.split(/\r?\n/) });
+    const section = memoSection(smeac[field], t(`export:label.smeac.${field}`));
+    if (section) sections.push(section);
   }
   for (const item of input.flights) {
     const perFlight = input.view.userNotes.perFlight[item.key];
     if (!perFlight) continue;
+    const name = item.flight.callsign || item.flight.name;
     const lines = [
       perFlight.pilotName && `${t('export:label.pilotName')}: ${perFlight.pilotName}`,
       perFlight.tot && `${t('export:label.tot')}: ${perFlight.tot}`,
       perFlight.jokerFuel !== null && `${t('export:label.joker')}: ${perFlight.jokerFuel}`,
       perFlight.bingoFuel !== null && `${t('export:label.bingo')}: ${perFlight.bingoFuel}`,
-      perFlight.customNotes,
     ].filter((line): line is string => Boolean(line));
-    if (lines.length > 0) sections.push({ heading: item.flight.callsign || item.flight.name, lines });
+    if (lines.length > 0) sections.push({ heading: name, lines });
+    // The memo is free text: a section of its own, kept as written. Alone it takes the flight's name.
+    const memo = memoSection(perFlight.customNotes, lines.length > 0 ? `${t('export:label.customNotes')}: ${name}` : name);
+    if (memo) sections.push(memo);
   }
   if (sections.length === 0) sections.push({ heading: t('export:sections.notes'), lines: [t('export:label.noNotes')] });
   return textPage('notes', t('export:sections.notes'), sections);
+}
+
+/**
+ * Free text as its lines, kept as written: blank lines inside and the leading spaces that line up columns stay.
+ * Only the blank lines before and after the text and the spaces at line ends are dropped (`trim()` would take
+ * the first line's indentation too).
+ */
+export function freeTextLines(value: string): string[] {
+  const lines = value.split(/\r?\n/).map(line => line.trimEnd());
+  let start = 0;
+  let end = lines.length;
+  while (start < end && lines[start] === '') start += 1;
+  while (end > start && lines[end - 1] === '') end -= 1;
+  return lines.slice(start, end);
+}
+
+/** A free-text section (a memo, a SMEAC field), or null when the text is empty. */
+function memoSection(value: string, heading: string): KneeboardSection | null {
+  const lines = freeTextLines(value);
+  return lines.length > 0 ? { heading, lines, preformatted: true } : null;
 }
 
 /** Blue and red support only: neutral support is not exported, the same as the support screen (decision 11). */

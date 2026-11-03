@@ -2,7 +2,7 @@
   "title": "Display settings",
   "close": "Close",
   "reset": "Reset to defaults",
-  "resetNote": "Reset returns every display setting to its default, including the view mode (creator or pilot) and the side. The briefing section order and presets are kept.",
+  "resetNote": "Reset returns every display setting to its default, including the view mode (creator or pilot) and the side. The output section order and presets are kept.",
   "intro": "Changes apply at once. There is no save button.",
   "unsaved": "This device cannot save settings. After a reload, the last saved settings apply.",
   "section": {

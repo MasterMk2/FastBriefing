@@ -7,7 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { checkedLintRuleCount, isCreatorOnlyLintRule, lintMissionForSide } from '../analysis/lint';
 import { buildTot } from '../analysis/tot';
 import { isResolvedLatLon, taskTextFor, weatherConditionPairs, type Translate } from '../briefing/slides';
-import { isCreatorOnlyIssueCode } from '../core/issues';
+import { DEFAULTED_ISSUE_CODES, isIssueShownInView, loadNoticeIssues } from '../core/issues';
 import { issueText, issueTextList } from '../core/issueText';
 import { Notice } from '../shell/Notice';
 import { SideMark } from '../shell/SideMark';
@@ -16,15 +16,13 @@ import { useMission } from '../shell/MissionContext';
 import { useUnits } from '../shell/units';
 import { useWorkspace } from '../shell/workspace';
 import type { LintFinding } from '../types/lint';
-import type { IssueSeverity, MissionData, Side } from '../types/mission';
+import type { DisplaySettings, IssueSeverity, MissionData, Side } from '../types/mission';
 import { getMoonInfo, getSunTimes } from '../utils/astro';
 import { buildMetar } from '../utils/metar';
 import { formatDateYMD, formatUtcOffset, missionLocalDate, missionZuluDate } from '../utils/time';
 
 const SEVERITY_ORDER: Record<IssueSeverity, number> = { error: 0, warning: 1, info: 2 };
 const SEVERITY_SYMBOL: Record<IssueSeverity, string> = { error: '×', warning: '▲', info: 'i' };
-/** Weather values that were filled with defaults; listed with the info items (SPEC 1.3). */
-const DEFAULTED_CODES: ReadonlySet<string> = new Set(['weather.qnhDefaulted', 'weather.temperatureDefaulted']);
 const TOT_PREVIEW_ROWS = 10;
 const MS_PER_DAY = 86400000;
 
@@ -42,13 +40,13 @@ interface LoadNotice {
 /**
  * Warnings and errors of the file as it was read (SPEC 3: issues are the warning kind).
  * Info items and the defaulted weather values are listed in the defaults section instead.
+ * The pilot handout lists the same issues as its warnings (loadNoticeIssues in core/issues.ts).
  */
-function loadNotices(issues: MissionData['issues'], hideCreatorOnly: boolean): LoadNotice[] {
+function loadNotices(issues: MissionData['issues'], viewMode: DisplaySettings['viewMode']): LoadNotice[] {
   const seen = new Set<string>();
   const notices: LoadNotice[] = [];
-  for (const issue of issues) {
-    if (issue.severity === 'info' || DEFAULTED_CODES.has(issue.code)) continue;
-    if (hideCreatorOnly && isCreatorOnlyIssueCode(issue.code)) continue;
+  for (const issue of loadNoticeIssues(issues, viewMode)) {
+    if (issue.severity === 'info') continue; // never true here; narrows the severity type
     const text = issueText(issue);
     const key = `${issue.severity}|${issue.side ?? ''}|${text}`;
     if (seen.has(key)) continue;
@@ -99,10 +97,10 @@ export default function OverviewScreen() {
   );
   const tot = useMemo(() => buildTot(view, side), [view, side]);
   // Issue texts are read in the current UI language on every render (the translation hook re-renders on change).
-  const notices = loadNotices(view.issues, pilot);
+  const notices = loadNotices(view.issues, viewMode);
   const defaultTexts = issueTextList(
-    view.issues.filter(issue => (issue.severity === 'info' || DEFAULTED_CODES.has(issue.code))
-      && !(pilot && isCreatorOnlyIssueCode(issue.code))),
+    view.issues.filter(issue => (issue.severity === 'info' || DEFAULTED_ISSUE_CODES.has(issue.code))
+      && isIssueShownInView(issue, viewMode)),
   );
   const translate: Translate = (key, values) => String(t(key, values));
 

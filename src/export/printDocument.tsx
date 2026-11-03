@@ -91,7 +91,10 @@ function PrintSection({ section }: { section: KneeboardSection }) {
   return (
     <div className="print-section">
       <h3>{section.heading}</h3>
-      {section.table ? (
+      {section.preformatted ? (
+        // Free text keeps its blank lines and the spaces that line up its columns (print.css: .print-pre).
+        <pre className="print-pre">{section.lines.join('\n')}</pre>
+      ) : section.table ? (
         <table className="print-table">
           <thead>
             <tr>{section.table.header.map((cell, index) => <th key={index} scope="col">{cell}</th>)}</tr>

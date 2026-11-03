@@ -57,7 +57,7 @@
 - 移行: `src/hooks/useSettings.tsx` の `migrateSettings`。v1 はテーマを `ffs` に、v2〜v4 は `'default'` を `'standard'` に、v3 は記入欄の位置を移す。壊れた値はフィールド単位で既定に戻る。
 - 保存キー `fastbriefing-settings`、`settingsVersion: 5`（`src/i18n/index.ts` の `SETTINGS_VERSION`）。
 - `useSettings()` の返り値（凍結。`set*` は `boolean`＝保存できたか）:
-  `settings`、`setCoordinateFormat`、`setUnitSystem`、`setAltitudeUnit`、`setSpeedUnit`、`setDistanceUnit`、`setPressureUnit`、`setTemperatureUnit`、`setViewMode`、`setSide(side | null)`、`setLanguage`、`setOutputLanguage`、`setTheme`、`setFontScale`、`setWindDisplay`、`setTimeDisplay`、`setMapBackground`、`setKneeboardWidth`、`setBriefingSections`、`setBriefingPresets`、`resetDisplaySettings()`（既定に戻す。断面の順序とプリセットは残す）。
+  `settings`、`setCoordinateFormat`、`setUnitSystem`、`setAltitudeUnit`、`setSpeedUnit`、`setDistanceUnit`、`setPressureUnit`、`setTemperatureUnit`、`setViewMode`、`setSide(side | null)`、`setLanguage`、`setOutputLanguage`、`setTheme`、`setFontScale`、`setWindDisplay`、`setTimeDisplay`、`setMapBackground`、`setKneeboardWidth`、`setBriefingSections`、`setBriefingPresets`、`resetDisplaySettings()`（既定に戻す。出力の節の順序とプリセットは残す）。
 - 同じイベント内で複数の setter を呼んでも値は消えない（最新値を ref で持つ）。
 
 ### 2.3 その他の型（凍結）

@@ -140,6 +140,37 @@ describe('kneeboard page count and rendering', () => {
     expect(texts.filter(text => /^x+$/.test(text)).join('')).toBe(notes);
   });
 
+  it('draws a free-text section in a monospaced font, with its blank lines and its leading spaces', async () => {
+    const drawn: { font: string; text: string }[] = [];
+    vi.mocked(HTMLCanvasElement.prototype.getContext).mockImplementation(() => {
+      const context = fakeCanvasContext([]);
+      return new Proxy(context, {
+        get(target, property) {
+          if (property === 'fillText') return (value: string) => { drawn.push({ font: String(target.font), text: value }); };
+          return Reflect.get(target, property);
+        },
+      });
+    });
+    const pages: KneeboardPage[] = [{
+      kind: 'text',
+      section: 'overview',
+      title: 'Overview',
+      sections: [
+        { heading: 'Mission', lines: ['Theatre: Caucasus'] },
+        { heading: 'Description', lines: ['   TITLE', '', 'CALL   FREQ'], preformatted: true },
+      ],
+    }];
+    const rendered = await renderKneeboardPages(pages, 768, t);
+    expect(rendered).toHaveLength(countKneeboardPages(pages, t, createMeasurementContext()));
+    const fontOf = (text: string) => drawn.find(item => item.text === text)?.font ?? '';
+    expect(fontOf('   TITLE')).toContain('monospace');
+    expect(fontOf('CALL   FREQ')).toContain('monospace');
+    expect(fontOf('Theatre: Caucasus')).toContain('sans-serif');
+    const title = drawn.findIndex(item => item.text === '   TITLE');
+    // The blank line between them is kept as an empty line, not dropped.
+    expect(drawn.slice(title, title + 3).map(item => item.text)).toEqual(['   TITLE', '', 'CALL   FREQ']);
+  });
+
   it('reports progress up to the total', async () => {
     const onProgress = vi.fn();
     const rendered = await renderKneeboardPages([textPage('A'), textPage('B')], 768, t, { onProgress });

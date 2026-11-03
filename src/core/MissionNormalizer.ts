@@ -607,7 +607,7 @@ export function normalizePayload(payload: Record<string, unknown>, issues: Missi
   for (const { key, value } of pylons) {
     const p = value as Record<string, unknown>;
     const clsid = getString(p, ['CLSID']);
-    if (clsid) {
+    if (clsid && !isEmptyPylonClsid(clsid)) {
       const reference = findWeaponReference(clsid);
       const weight = reference?.weight ?? 0;
       if (!reference) addIssue(issues, 'weapon.unknownClsid', { clsid });
@@ -631,6 +631,17 @@ export function normalizePayload(payload: Record<string, unknown>, issues: Missi
     gun,
     weight: totalWeight,
   };
+}
+
+/**
+ * DCS writes "<CLEAN>" for a pylon that carries nothing (the sample mission Operation Colchis Shield has it). Such a pylon
+ * is empty: it is not a weapon, so it is neither a loadout row nor an unknown-weapon issue. Other placeholder
+ * values are added only when a mission file shows them.
+ */
+const EMPTY_PYLON_CLSIDS: ReadonlySet<string> = new Set(['<CLEAN>']);
+
+function isEmptyPylonClsid(clsid: string): boolean {
+  return EMPTY_PYLON_CLSIDS.has(clsid.trim().toUpperCase());
 }
 
 function findWeaponReference(clsid: string): WeaponReference | undefined {
@@ -904,7 +915,9 @@ function normalizeJTAC(
   const unit = units[0] as Record<string, unknown>;
   const { hasFacTask: _hasFacTask, ...signalFields } = signals;
   const frequency = getNumber(groupData, ['frequency']);
-  const callsign = normalizeCallsign(getValue(groupData, ['callsign']), dictionary) || getString(unit, ['name']);
+  const callsign = normalizeCallsign(getValue(groupData, ['callsign']), dictionary)
+    || resolveDictKey(getString(unit, ['name']), dictionary)
+    || groupCallsign(groupData, dictionary);
   const coordinate = normalizeLatLon(theatre, getNumber(unit, ['x']), getNumber(unit, ['y']));
   const jtac: JTACInfo = {
     unitType: unitType || undefined,

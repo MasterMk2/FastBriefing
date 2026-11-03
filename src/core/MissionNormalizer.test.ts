@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeMission } from './MissionNormalizer';
-import type { IssueCode, MissionData } from '../types/mission';
+import { normalizeMission, normalizePayload } from './MissionNormalizer';
+import type { IssueCode, MissionData, MissionIssue } from '../types/mission';
 import utcOffsetData from '../data/utcOffsets.json';
 import { formatTimeHHMM, missionLocalDate, missionZuluDate } from '../utils/time';
 import { calculateBearing, calculateDistance } from '../utils/coordinates';
@@ -157,6 +157,21 @@ describe('MissionNormalizer reference-backed layers', () => {
     expect(normalizedPayload.pylons[0].unknown).toBeUndefined();
     expect(normalizedPayload.weight).toBeCloseTo(1402.48, 2);
     expect(hasIssue(normalized, 'weapon.unknownClsid', { clsid: '{CLSID_UNLISTED}' })).toBe(true);
+  });
+
+  it('treats a "<CLEAN>" pylon as empty: no loadout row and no unknown-weapon issue', () => {
+    const issues: MissionIssue[] = [];
+    const payload = normalizePayload({
+      fuel: 1000,
+      pylons: {
+        1: { CLSID: '<CLEAN>' },
+        2: { CLSID: '{AIM-120C}' },
+        3: { CLSID: ' <CLEAN> ' },
+      },
+    }, issues);
+
+    expect(payload.pylons.map(pylon => pylon.station)).toEqual(['2']);
+    expect(issues.filter(issue => issue.code === 'weapon.unknownClsid')).toEqual([]);
   });
 
   it('returns empty dictionary values instead of leaking raw keys into the UI', () => {
@@ -363,6 +378,19 @@ describe('MissionNormalizer reference-backed layers', () => {
     expect(jtac).toBeDefined();
     expect(jtac?.jtac?.unitType).toBe('JTAC');
     expect(jtac?.laserCode).toBe(168);
+    expect(jtac?.callsign).toBe('Axeman');
+  });
+
+  it('names a JTAC by its group when neither the group nor the unit has a callsign', () => {
+    const raw = makeMission();
+    const vehicles = raw.mission.coalition.blue.country[0].vehicle[0].group;
+    const jtacGroup = vehicles[vehicles.length - 1];
+    jtacGroup.name = 'Axe Group';
+    (jtacGroup.units as Record<string, unknown>[])[0].name = '';
+
+    const normalized = normalizeMission(raw, settings);
+    const jtac = normalized.coalitions.blue.support.find(asset => asset.kind === 'jtac');
+    expect(jtac?.callsign).toBe('Axe Group');
   });
 
   it('resolves cloud presets and warns for unknown presets', () => {

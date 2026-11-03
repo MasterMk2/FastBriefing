@@ -1,5 +1,5 @@
 import type { KneeboardMapPin, KneeboardPage, KneeboardSection, KneeboardTranslate } from '../utils/kneeboard';
-import { pinLine } from './kneeboardPlan';
+import { freeTextLines, pinLine } from './kneeboardPlan';
 
 export type MarkdownStyle = 'table' | 'code';
 
@@ -15,7 +15,8 @@ export interface MarkdownOptions {
  * Markdown for chat tools such as Discord (SPEC 1.3, F9, D8). It is written from the
  * same pages as the print and PNG output, so a section never differs between formats.
  * `table` writes navigation tables as Markdown tables; `code` puts every section in a
- * monospaced block, which keeps columns aligned where tables do not render.
+ * monospaced block, which keeps columns aligned where tables do not render. Free text (the mission description,
+ * task texts and memos) is a block without a language in both styles.
  */
 export function renderMarkdown(
   pages: readonly KneeboardPage[],
@@ -36,18 +37,24 @@ function pageMarkdown(page: KneeboardPage, style: MarkdownStyle, t: KneeboardTra
     return blocks.join('\n\n');
   }
   if (page.kind === 'whiteboard') {
-    const notes = page.data.notes.trim();
+    // The notes are free text: fenced, so their line breaks and spaces survive (Markdown joins plain lines).
+    const notes = freeTextLines(page.data.notes);
     const drawing = page.data.strokes.length
       ? `_${t('export:label.whiteboardDrawing', { count: page.data.strokes.length })}_`
       : '';
-    return [`## ${page.title}`, notes || `_${t('export:label.noNotes')}_`, drawing].filter(Boolean).join('\n\n');
+    return [`## ${page.title}`, notes.length > 0 ? fencedBlock(notes) : `_${t('export:label.noNotes')}_`, drawing]
+      .filter(Boolean).join('\n\n');
   }
   return [`## ${page.title}`, ...page.sections.map(section => sectionMarkdown(section, style))].join('\n\n');
 }
 
 function sectionMarkdown(section: KneeboardSection, style: MarkdownStyle): string {
   const body: string[] = [];
-  if (section.table && style === 'table') {
+  if (section.preformatted) {
+    // Free text (the mission description, a task text, a memo) in both styles: one block without a language, so a
+    // chat tool keeps its blank lines and the spaces that line up its columns, and never makes it a list.
+    body.push(fencedBlock(section.lines));
+  } else if (section.table && style === 'table') {
     body.push(tableMarkdown(section.table.header, section.table.rows));
   } else if (style === 'table') {
     body.push(section.lines.map(line => `- ${line}`).join('\n'));
@@ -112,6 +119,12 @@ function isWide(code: number): boolean {
     || (code >= 0xff00 && code <= 0xff60)
     || (code >= 0xffe0 && code <= 0xffe6)
     || (code >= 0x20000 && code <= 0x3fffd);
+}
+
+/** Lines in a fence without a language (free text: no syntax colouring of the author's words). */
+function fencedBlock(lines: readonly string[]): string {
+  const fence = codeFence(lines);
+  return [fence, ...lines, fence].join('\n');
 }
 
 /** A fence longer than any backtick run in the content, so a memo with ``` cannot close the block early. */

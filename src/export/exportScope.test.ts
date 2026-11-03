@@ -75,8 +75,9 @@ describe('warnings follow the view (D1, migrated from PrintView.test)', () => {
   function missionWithIssues(): MissionData {
     const mission = fixtureMission();
     mission.issues = [
-      { code: 'unit.unknownType', severity: 'info', params: { type: 'OWN-UNKNOWN' }, side: 'blue' },
-      { code: 'unit.unknownType', severity: 'info', params: { type: 'SECRET-RED-SAM' }, side: 'red' },
+      // Warnings, so that the pilot output lists them too (it lists what the overview lists as load notices).
+      { code: 'parse.unknownNode', severity: 'warning', params: { type: 'OWN-UNKNOWN' }, side: 'blue' },
+      { code: 'parse.unknownNode', severity: 'warning', params: { type: 'SECRET-RED-SAM' }, side: 'red' },
       { code: 'map.unsupported', severity: 'warning', params: { theatre: 'Test' } },
     ];
     return mission;
@@ -125,6 +126,35 @@ describe('warnings follow the view (D1, migrated from PrintView.test)', () => {
     const text = warningsOf('pilot', 'red');
     expect(text).toContain('SECRET-RED-SAM');
     expect(text).not.toContain('OWN-UNKNOWN');
+  });
+
+  it('leaves the data-quality notes out of the pilot output, as the overview load notices do, and keeps them for the creator', () => {
+    const mission = missionWithIssues();
+    mission.issues.push(
+      { code: 'weapon.unknownClsid', severity: 'info', params: { clsid: 'CATM-9M' } },
+      { code: 'unit.unknownType', severity: 'info', params: { type: 'ODD-TRUCK' }, side: 'blue' },
+    );
+    const warnings = (mode: 'creator' | 'pilot') => {
+      const pages = buildExportModel({
+        view: applyViewMode(mission, mode, 'blue'),
+        settings: settings({ viewMode: mode, side: 'blue', briefingSections: ['overview'] }),
+        side: 'blue',
+        scope: { kind: 'mission' },
+        whiteboard: { notes: '', strokes: [] },
+      }, withParams).pages;
+      return pages.flatMap(page => (page.kind === 'text' ? page.sections : []))
+        .find(section => section.heading === 'export:label.warnings')?.lines ?? [];
+    };
+    const pilot = warnings('pilot');
+    expect(pilot.join('\n')).not.toContain('issues:weapon.unknownClsid');
+    expect(pilot.join('\n')).not.toContain('ODD-TRUCK');
+    expect(pilot).toEqual([
+      'issues:parse.unknownNode {"type":"OWN-UNKNOWN"}',
+      'issues:map.unsupported {"theatre":"Test"}',
+    ]);
+    const creator = warnings('creator').join('\n');
+    expect(creator).toContain('issues:weapon.unknownClsid {"clsid":"CATM-9M"}');
+    expect(creator).toContain('ODD-TRUCK');
   });
 });
 

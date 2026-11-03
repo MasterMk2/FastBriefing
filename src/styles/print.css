@@ -98,6 +98,16 @@ html[data-print-preview="on"] .print-document {
   font-size: 10pt;
 }
 
+/* Free text (the mission description, task texts, memos): the author's spaces line up columns in a monospaced
+   font, so both are kept. A line longer than the page wraps instead of running off it. */
+.print-pre {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: ui-monospace, "Cascadia Mono", Consolas, "Courier New", monospace;
+  font-size: 9pt;
+}
+
 .print-map-frame {
   position: relative;
 }

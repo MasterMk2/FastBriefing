@@ -22,8 +22,12 @@ interface CanvasPage {
   context: CanvasRenderingContext2D;
 }
 
+/** Free text is drawn in a monospaced font, so the spaces that line up its columns still line them up. */
+const PRE_FONT = '28px monospace';
+
 interface TextCommand {
-  kind: 'heading' | 'line';
+  /** `pre` is a line of free text (a preformatted section), drawn in PRE_FONT. */
+  kind: 'heading' | 'line' | 'pre';
   text: string;
   y: number;
 }
@@ -220,11 +224,12 @@ function paginateTextPage(
     if (y + 110 > CONTENT_BOTTOM) nextPage();
     commands.push({ kind: 'heading', text: section.heading, y });
     y += 64;
-    context.font = '32px sans-serif';
+    const kind = section.preformatted ? 'pre' : 'line';
+    context.font = section.preformatted ? PRE_FONT : '32px sans-serif';
     for (const sourceLine of section.lines) {
       for (const line of wrapLine(context, sourceLine, BASE_WIDTH - MARGIN * 2)) {
         if (y + TEXT_LINE_HEIGHT > CONTENT_BOTTOM) nextPage();
-        commands.push({ kind: 'line', text: line, y });
+        commands.push({ kind, text: line, y });
         y += TEXT_LINE_HEIGHT;
       }
     }
@@ -259,7 +264,7 @@ function createPage(title: string, width: number): CanvasPage {
 
 function renderTextCommands(context: CanvasRenderingContext2D, commands: TextCommand[]): void {
   for (const command of commands) {
-    context.font = command.kind === 'heading' ? 'bold 38px sans-serif' : '32px sans-serif';
+    context.font = command.kind === 'heading' ? 'bold 38px sans-serif' : command.kind === 'pre' ? PRE_FONT : '32px sans-serif';
     context.fillStyle = command.kind === 'heading' ? '#17324f' : '#1e2936';
     context.fillText(command.text, MARGIN, command.y, BASE_WIDTH - MARGIN * 2);
   }

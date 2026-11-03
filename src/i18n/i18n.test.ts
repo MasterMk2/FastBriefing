@@ -175,6 +175,17 @@ describe('i18n resources', () => {
     }
   });
 
+  it('calls the export section order the output section order, never 断面 (a cross-section)', () => {
+    const japanese = Object.entries(localeFiles)
+      .filter(([path]) => path.includes('/ja/'))
+      .flatMap(([path, module]) => Object.entries(flattenTranslations(module.default)).map(([key, text]) => ({ key: `${path}:${key}`, text })));
+    expect(japanese.length).toBeGreaterThan(0);
+    expect(japanese.filter(entry => entry.text.includes('断面')).map(entry => entry.key)).toEqual([]);
+    const settings = (language: 'ja' | 'en') => localeFiles[`./locales/${language}/settings.json`].default as { resetNote: string };
+    expect(settings('ja').resetNote).toContain('出力の節の順序とプリセットは残ります');
+    expect(settings('en').resetNote).toContain('The output section order and presets are kept.');
+  });
+
   it('falls back to Japanese for unknown future versions and broken records', () => {
     expect(loadInitialLanguage({ getItem: () => JSON.stringify({ settingsVersion: SETTINGS_VERSION + 1, language: 'en' }) })).toBe('ja');
     expect(loadInitialLanguage({ getItem: () => '{broken' })).toBe('ja');

@@ -166,6 +166,11 @@
     min-width: var(--target-touch);
     min-height: var(--target-touch);
   }
+
+  .export-preset-save input,
+  .export-screen summary {
+    min-height: var(--target-touch);
+  }
 }
 
 /* Print preview bar and kneeboard progress (P3). The bar sits above the full-screen print copy. */
