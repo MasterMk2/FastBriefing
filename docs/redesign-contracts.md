@@ -80,6 +80,7 @@
 | `getMagneticVariation(theatre, lat, lon, date)` | `src/utils/magvar.ts` | `number \| null`。表が無い地図（Afghanistan、Iraq、独自地図）は `null`。`routeLegs` は null のとき磁方位を `undefined`（真のみ）にする。 |
 | `resolveCoordinateFormat(setting, aircraftType?)` | `src/utils/coordinates.ts` | `'aircraft'` は機種の既定、不明は DDM。`formatCoordinate` は `CoordinateFormatSetting` を受け、`'aircraft'` は DDM に落ちる。**機種を知っている呼び出し（P1 の経路表、P3 の出力）は `resolveCoordinateFormat` で機種を渡すこと。** |
 | `addIssue(issues, code, params?, side?)` | `src/core/issues.ts` | code、params、side の組で重複を除く。 |
+| `loadNoticeEntries` / `defaultsListEntries` / `handoutIssueEntries(issues, viewMode)` | `src/core/issues.ts` | issue の一覧の唯一の判定（Lead 決定）。概要画面（読み込みの注意・既定値を使った項目）と出力（印刷・PNG・Markdown の配布前の警告・既定値を使った項目）が同じ関数を使う。誰向けかは `ISSUE_AUDIENCE`: `notice`（地図・時刻・磁方位・解析）と `defaulted`（QNH・気温・雲・飛行場名・座標の補完）はパイロットにも出す。`creatorOnly`（`weapon.unknownClsid`・`unit.unknownType`・`threat.*`）は作成者だけ。重複は code と params が同じものを 1 行にし、陣営の無い issue は同じ陣営の写しを吸収して印なし、青と赤の写しは陣営ごとに印付きで残す。作成者の出力は両方の一覧をまとめて警告に出す。QNH と気温の値は既定値で補ったとき「（既定値）」の印を付ける（概要と出力）。 |
 | `issueText(issue)` / `issueTexts(issues, codes)` | `src/core/issueText.ts` | 表示文言（`issues` 名前空間）。 |
 | `parseMissionArchive` | `src/workers/missionParser.ts` | `ZIP_LIMITS.MAX_ENTRIES = 4096`（エントリ数のみ緩和）。合計サイズ、個別サイズ、圧縮比の上限は据え置き。 |
 

@@ -102,6 +102,13 @@
     "whiteboardNotes": "Whiteboard notes",
     "noWhiteboardNotes": "No whiteboard notes",
     "warnings": "Warnings before distribution",
+    "defaultedItems": "Items using default values",
+    "defaultedValue": "{{value}} (default)",
+    "sideIssue": "{{side}}: {{text}}",
+    "sideName": {
+      "blue": "Blue",
+      "red": "Red"
+    },
     "mapAnnotationsSkipped": "Some annotations could not be placed and are not drawn.",
     "astro": "Sun and moon",
     "bullseye": "Bullseye (own side)",

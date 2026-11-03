@@ -1,6 +1,19 @@
 import { describe, expect, it } from 'vitest';
-import type { MissionIssue } from '../types/mission';
-import { addIssue, createIssue, handoutWarningIssues, isLoadNoticeIssue, ISSUE_SEVERITY, issueKey, loadNoticeIssues } from './issues';
+import type { IssueCode, MissionIssue } from '../types/mission';
+import {
+  addIssue,
+  createIssue,
+  defaultsListEntries,
+  handoutIssueEntries,
+  isCreatorOnlyIssueCode,
+  isDefaultsListIssue,
+  isLoadNoticeIssue,
+  ISSUE_SEVERITY,
+  issueEntries,
+  issueKey,
+  loadNoticeEntries,
+  type IssueEntry,
+} from './issues';
 import { normalizeMission } from './MissionNormalizer';
 
 describe('mission issues', () => {
@@ -78,12 +91,47 @@ describe('mission issues', () => {
       createIssue('weather.qnhDefaulted'),
       createIssue('time.utcOffsetUnknown', { theatre: 'Nowhere' }),
     ];
+    const codes = (entries: readonly IssueEntry[]) => entries.map(entry => entry.issue.code);
     // Warnings and errors only: info items and defaulted weather values are listed with the defaults (SPEC 1.3).
-    expect(loadNoticeIssues(issues, 'pilot').map(issue => issue.code)).toEqual(['time.utcOffsetUnknown']);
-    expect(handoutWarningIssues(issues, 'pilot')).toEqual(loadNoticeIssues(issues, 'pilot'));
-    expect(handoutWarningIssues(issues, 'creator').map(issue => issue.code)).toEqual([
+    expect(codes(loadNoticeEntries(issues, 'pilot'))).toEqual(['time.utcOffsetUnknown']);
+    // The pilot is told about the defaulted QNH, but not about the data-quality notes (creator-only).
+    expect(codes(defaultsListEntries(issues, 'pilot'))).toEqual(['weather.qnhDefaulted']);
+    expect(handoutIssueEntries(issues, 'pilot')).toEqual({
+      warnings: loadNoticeEntries(issues, 'pilot'),
+      defaulted: defaultsListEntries(issues, 'pilot'),
+    });
+    expect(codes(defaultsListEntries(issues, 'creator'))).toEqual([
+      'weapon.unknownClsid', 'unit.unknownType', 'threat.rangeUnrecorded', 'weather.qnhDefaulted',
+    ]);
+    expect(codes(handoutIssueEntries(issues, 'creator').warnings)).toEqual([
       'time.utcOffsetUnknown', 'weapon.unknownClsid', 'unit.unknownType', 'threat.rangeUnrecorded', 'weather.qnhDefaulted',
     ]);
+    expect(handoutIssueEntries(issues, 'creator').defaulted).toEqual([]);
+  });
+
+  it('decides the audience of every code: the pilot sees the notices and the filled values, not the data-quality notes', () => {
+    const pilotDefaults = (Object.keys(ISSUE_SEVERITY) as IssueCode[])
+      .filter(code => isDefaultsListIssue(createIssue(code), 'pilot'));
+    expect(pilotDefaults.sort()).toEqual([
+      'airbase.nameMissing', 'coord.unresolved', 'weather.cloudPresetUnknown', 'weather.qnhDefaulted', 'weather.temperatureDefaulted',
+    ]);
+    for (const code of ['weapon.unknownClsid', 'unit.unknownType', 'threat.rangeUnrecorded'] as const) {
+      expect(isCreatorOnlyIssueCode(code)).toBe(true);
+      expect(isDefaultsListIssue(createIssue(code), 'pilot')).toBe(false);
+      expect(isDefaultsListIssue(createIssue(code), 'creator')).toBe(true);
+    }
+  });
+
+  it('merges an issue without a side with the same issue of a side, and keeps blue and red apart', () => {
+    const entries = issueEntries([
+      createIssue('parse.unknownNode', { type: 'A' }, 'blue'),
+      createIssue('parse.unknownNode', { type: 'A' }),
+      createIssue('parse.unknownNode', { type: 'B' }, 'blue'),
+      createIssue('parse.unknownNode', { type: 'B' }, 'red'),
+      createIssue('parse.unknownNode', { type: 'B' }, 'blue'),
+    ]);
+    expect(entries.map(entry => [entry.issue.params?.type, entry.side])).toEqual([['A', null], ['B', 'blue'], ['B', 'red']]);
+    expect(new Set(entries.map(entry => entry.key)).size).toBe(entries.length);
   });
 
   it('keeps a creator-only warning off the pilot lists and on the creator list', () => {

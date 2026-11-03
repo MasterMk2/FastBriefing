@@ -13,6 +13,7 @@ import type { AIGroup, DisplaySettings, Flight, MissionData, RoutePoint, Support
 import type { LintFinding } from '../types/lint';
 import { buildExportModel } from '../export/exportModel';
 import { applyViewMode } from '../utils/viewMode';
+import { formatPressure } from '../utils/units';
 import OverviewScreen from './OverviewScreen';
 
 // The check runs the real rules. A test can replace its findings to show that the screen guards
@@ -233,14 +234,17 @@ describe('OverviewScreen issues (D1)', () => {
   it('does not show the opposing side issue text in pilot view', async () => {
     const mission = makeMission();
     mission.issues = [
-      { code: 'unit.unknownType', severity: 'info', params: { type: 'SECRET-RED-SAM' }, side: 'red' },
-      { code: 'unit.unknownType', severity: 'info', params: { type: 'OWN-UNKNOWN' }, side: 'blue' },
+      { code: 'parse.unknownNode', severity: 'warning', params: { type: 'SECRET-RED-SAM' }, side: 'red' },
+      { code: 'parse.unknownNode', severity: 'warning', params: { type: 'OWN-UNKNOWN' }, side: 'blue' },
+      // A data-quality note is creator-only, even for the own side.
+      { code: 'unit.unknownType', severity: 'info', params: { type: 'OWN-ODD-TRUCK' }, side: 'blue' },
     ];
 
     await renderOverview(mission, { viewMode: 'pilot', side: 'blue' });
 
     expect(container.textContent).toContain('OWN-UNKNOWN');
     expect(container.textContent).not.toContain('SECRET-RED-SAM');
+    expect(container.textContent).not.toContain('OWN-ODD-TRUCK');
   });
 
   it('hides the own side threat range notice in pilot view, and shows it in creator view', async () => {
@@ -612,6 +616,106 @@ describe('OverviewScreen load notices (warnings from the file)', () => {
     await renderOverview(mission, { viewMode: 'creator', side: 'blue' });
 
     expect(container.querySelector('.overview-load-list')?.textContent).toContain('RED-NODE');
+  });
+});
+
+describe('OverviewScreen and the handout list the same issues (core/issues.ts)', () => {
+  // The handout in the output language (Japanese here), as the export screen builds it.
+  const outputT = (key: string, options?: Record<string, string | number>) => String(i18n.t(key, options));
+
+  function handoutSections(mission: MissionData, viewMode: 'creator' | 'pilot') {
+    const settings: DisplaySettings = { ...DEFAULT_SETTINGS, viewMode, side: 'blue', briefingSections: ['overview', 'weather'] };
+    const pages = buildExportModel({
+      view: applyViewMode(mission, viewMode, 'blue'),
+      settings,
+      side: 'blue',
+      scope: { kind: 'mission' },
+      whiteboard: { notes: '', strokes: [] },
+    }, outputT).pages;
+    const sections = pages.flatMap(page => (page.kind === 'text' ? page.sections : []));
+    const linesOf = (heading: string) => sections.find(section => section.heading === heading)?.lines ?? [];
+    return {
+      pages,
+      warnings: linesOf(outputT('export:label.warnings')),
+      defaulted: linesOf(outputT('export:label.defaultedItems')),
+      weather: linesOf(outputT('export:sections.weather')),
+    };
+  }
+
+  const defaultsRows = () => Array.from(container.querySelectorAll('.overview-defaults-row')).map(row => row.textContent ?? '');
+  const loadRows = () => Array.from(container.querySelectorAll('.overview-load-row')).map(row => row.textContent ?? '');
+
+  function missionWithDefaults(): MissionData {
+    const mission = makeMission();
+    mission.issues = [
+      { code: 'weather.qnhDefaulted', severity: 'warning' },
+      { code: 'weapon.unknownClsid', severity: 'info', params: { clsid: 'CATM-9M' } },
+      { code: 'time.utcOffsetUnknown', severity: 'warning', params: { theatre: 'Nowhere' } },
+    ];
+    return mission;
+  }
+
+  it('tells the pilot that QNH was filled with the default, on screen and in the handout, and leaves the CLSID out of both', async () => {
+    const mission = missionWithDefaults();
+    await renderOverview(mission, { viewMode: 'pilot', side: 'blue' });
+
+    const qnhNote = 'QNH が既定値で補われました';
+    expect(defaultsRows()).toEqual([qnhNote]);
+    expect(container.textContent).not.toContain('CATM-9M');
+    const qnh = formatPressure(mission.weather.qnh, DEFAULT_SETTINGS.pressureUnit);
+    const weather = container.querySelector('#overview-weather-title')?.parentElement?.textContent ?? '';
+    expect(weather).toContain(`${qnh}（既定値）`);
+
+    const handout = handoutSections(mission, 'pilot');
+    expect(handout.defaulted).toEqual([qnhNote]);
+    expect(handout.weather).toContain(`QNH: ${qnh}（既定値）`);
+    expect(JSON.stringify(handout.pages)).not.toContain('CATM-9M');
+    // The same number of lines as the screen, in both lists.
+    expect(handout.warnings).toHaveLength(loadRows().length);
+    expect(handout.defaulted).toHaveLength(defaultsRows().length);
+  });
+
+  it('keeps every issue for the creator: the CLSID on screen and in the handout', async () => {
+    const mission = missionWithDefaults();
+    await renderOverview(mission, { viewMode: 'creator', side: 'blue' });
+
+    expect(defaultsRows().join('\n')).toContain('CATM-9M');
+    const handout = handoutSections(mission, 'creator');
+    expect(handout.warnings.join('\n')).toContain('未知の兵装 CLSID: CATM-9M');
+    expect(handout.warnings).toHaveLength(loadRows().length + defaultsRows().length);
+  });
+
+  it('does not mark QNH or the temperature when the mission sets them', async () => {
+    const mission = makeMission();
+    await renderOverview(mission, { viewMode: 'pilot', side: 'blue' });
+
+    expect(container.querySelector('#overview-weather-title')?.parentElement?.textContent).not.toContain('既定値');
+    expect(handoutSections(mission, 'pilot').weather.join('\n')).not.toContain('既定値');
+  });
+
+  for (const viewMode of ['pilot', 'creator'] as const) {
+    it(`lists an issue without a side and the same issue of the own side once, on screen and in the handout (${viewMode})`, async () => {
+      const mission = makeMission();
+      mission.issues = [
+        { code: 'parse.unknownNode', severity: 'warning', params: { type: 'SAME-NODE' } },
+        { code: 'parse.unknownNode', severity: 'warning', params: { type: 'SAME-NODE' }, side: 'blue' },
+      ];
+      await renderOverview(mission, { viewMode, side: 'blue' });
+
+      expect(loadRows()).toHaveLength(1);
+      expect(container.querySelector('.overview-load-row .side-mark')).toBeNull();
+      const handout = handoutSections(mission, viewMode);
+      expect(handout.warnings).toEqual(['未知の Lua ノード型（SAME-NODE）を読み飛ばしました']);
+    });
+  }
+
+  it('marks a one-side issue with its side on screen and in the handout', async () => {
+    const mission = makeMission();
+    mission.issues = [{ code: 'parse.unknownNode', severity: 'warning', params: { type: 'RED-NODE' }, side: 'red' }];
+    await renderOverview(mission, { viewMode: 'creator', side: 'blue' });
+
+    expect(container.querySelector('.overview-load-row .side-mark')?.getAttribute('data-side')).toBe('red');
+    expect(handoutSections(mission, 'creator').warnings).toEqual(['赤: 未知の Lua ノード型（RED-NODE）を読み飛ばしました']);
   });
 });
 

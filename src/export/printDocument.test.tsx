@@ -280,6 +280,30 @@ describe('PrintDocument whiteboard (migrated from the old PrintView)', () => {
     expect(container.querySelectorAll('.print-whiteboard-board polyline')).toHaveLength(MAX_WHITEBOARD_STROKES);
   });
 
+  it('prints the notes as free text, keeping the indentation of the first line, in the preformatted block', async () => {
+    await render([{
+      kind: 'whiteboard',
+      section: 'notes',
+      title: 'Whiteboard',
+      data: { notes: '\n   CALL   FREQ\n\nViper  251.0  \n', strokes: [] },
+    }]);
+    const notes = container.querySelector('.print-notes');
+    expect(notes?.tagName).toBe('PRE');
+    expect(notes?.classList.contains('print-pre')).toBe(true);
+    expect(notes?.textContent).toBe('   CALL   FREQ\n\nViper  251.0');
+  });
+
+  it('prints notes of white space only as no notes, as the Markdown does', async () => {
+    await render([{
+      kind: 'whiteboard',
+      section: 'notes',
+      title: 'Whiteboard',
+      data: { notes: '  \n \t\n', strokes: [] },
+    }]);
+    expect(container.querySelector('pre.print-notes')).toBeNull();
+    expect(container.querySelector('.print-notes')?.textContent).toBe('export:label.noWhiteboardNotes');
+  });
+
   it('prints no drawing when the whiteboard has no strokes', async () => {
     await render([{
       kind: 'whiteboard',

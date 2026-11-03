@@ -3,6 +3,7 @@ import WhiteboardDrawing from '../components/WhiteboardDrawing';
 import type { KneeboardPage, KneeboardSection, KneeboardTranslate } from '../utils/kneeboard';
 import { drawMissionMap, mapDrawFailed, type MissionMapLabels, type MissionMapScene } from '../utils/missionMapRaster';
 import { mapLabels } from '../utils/kneeboardRenderer';
+import { freeTextLines } from './kneeboardPlan';
 
 interface PrintDocumentProps {
   pages: readonly KneeboardPage[];
@@ -60,10 +61,14 @@ export default function PrintDocument({ pages, title, viewLabel, t, drawMaps }: 
           );
         }
         if (page.kind === 'whiteboard') {
+          // The notes are free text, kept as written like the other free text (the first line's indentation too).
+          const notes = freeTextLines(page.data.notes);
           return (
             <section key={keys[pageIndex]} className="print-page print-whiteboard-page">
               <h2>{page.title}</h2>
-              <p className="print-notes">{page.data.notes.trim() || t('export:label.noWhiteboardNotes')}</p>
+              {notes.length > 0
+                ? <pre className="print-pre print-notes">{notes.join('\n')}</pre>
+                : <p className="print-notes">{t('export:label.noWhiteboardNotes')}</p>}
               {page.data.strokes.length > 0 && (
                 <WhiteboardDrawing
                   className="print-whiteboard-board"

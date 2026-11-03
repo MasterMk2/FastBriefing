@@ -171,6 +171,55 @@ describe('kneeboard page count and rendering', () => {
     expect(drawn.slice(title, title + 3).map(item => item.text)).toEqual(['   TITLE', '', 'CALL   FREQ']);
   });
 
+  describe('whiteboard notes as free text', () => {
+    function recordDrawn(): { font: string; text: string }[] {
+      const drawn: { font: string; text: string }[] = [];
+      vi.mocked(HTMLCanvasElement.prototype.getContext).mockImplementation(() => {
+        const context = fakeCanvasContext([]);
+        return new Proxy(context, {
+          get(target, property) {
+            if (property === 'fillText') return (value: string) => { drawn.push({ font: String(target.font), text: value }); };
+            return Reflect.get(target, property);
+          },
+        });
+      });
+      return drawn;
+    }
+    const whiteboard = (notes: string, strokes = 0): KneeboardPage => ({
+      kind: 'whiteboard',
+      section: 'notes',
+      title: 'Whiteboard',
+      data: {
+        notes,
+        strokes: Array.from({ length: strokes }, (_, index) => ({
+          id: `s${index}`, color: '#175cd3', width: 6, points: [{ x: 1, y: 1 }, { x: 2, y: 2 }],
+        })),
+      },
+    });
+
+    for (const strokes of [0, 1]) {
+      it(`draws the notes in the monospaced font with their leading spaces and blank lines (${strokes} strokes)`, async () => {
+        const drawn = recordDrawn();
+        const pages = [whiteboard('\n   CALL   FREQ\n\nViper  251.0  \n', strokes)];
+        const rendered = await renderKneeboardPages(pages, 768, t);
+        expect(rendered).toHaveLength(countKneeboardPages(pages, t, createMeasurementContext()));
+        const first = drawn.findIndex(item => item.text === '   CALL   FREQ');
+        expect(first).toBeGreaterThanOrEqual(0);
+        expect(drawn.slice(first, first + 3)).toEqual([
+          { font: expect.stringContaining('monospace'), text: '   CALL   FREQ' },
+          { font: expect.stringContaining('monospace'), text: '' },
+          { font: expect.stringContaining('monospace'), text: 'Viper  251.0' },
+        ]);
+      });
+
+      it(`draws notes of white space only as no notes (${strokes} strokes)`, async () => {
+        const drawn = recordDrawn();
+        await renderKneeboardPages([whiteboard('  \n \t\n', strokes)], 768, t);
+        expect(drawn.map(item => item.text)).toContain('export:label.noWhiteboardNotes:{}');
+      });
+    }
+  });
+
   it('reports progress up to the total', async () => {
     const onProgress = vi.fn();
     const rendered = await renderKneeboardPages([textPage('A'), textPage('B')], 768, t, { onProgress });

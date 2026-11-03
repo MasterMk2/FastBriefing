@@ -62,12 +62,39 @@ export function addIssue(
   issues.push(issue);
 }
 
-/** Threat issues are creator-only (SPEC 5.1, D1): pilot view lists them neither on screen nor in the output. */
+/**
+ * Who an issue is for. This table is the one place that decides it, for the overview screen and for every
+ * output (print, PNG, Markdown):
+ * - `notice`: a load notice the pilot needs (the map, the clock, the bearings, the reading of the file).
+ * - `defaulted`: a value the pilot sees was filled in or left out (QNH, temperature, clouds, an airbase name,
+ *   a position). The pilot is told, in the "既定値を使った項目" list and in the handout.
+ * - `creatorOnly`: data quality and tool notes the pilot cannot act on (an unknown CLSID or unit type) and the
+ *   threat data (SPEC 5.1, D1). Pilot view lists them neither on screen nor in the output.
+ */
+export type IssueAudience = 'notice' | 'defaulted' | 'creatorOnly';
+
+export const ISSUE_AUDIENCE: Readonly<Record<IssueCode, IssueAudience>> = {
+  'threat.rangeUnrecorded': 'creatorOnly',
+  'unit.unknownType': 'creatorOnly',
+  'weapon.unknownClsid': 'creatorOnly',
+  // An unknown preset leaves the cloud line with a fallback label, which the pilot reads.
+  'weather.cloudPresetUnknown': 'defaulted',
+  'weather.qnhDefaulted': 'defaulted',
+  'weather.temperatureDefaulted': 'defaulted',
+  'airbase.nameMissing': 'defaulted',
+  'map.unsupported': 'notice',
+  'time.utcOffsetUnknown': 'notice',
+  'magvar.unsupported': 'notice',
+  'parse.unknownNode': 'notice',
+  'coord.unresolved': 'defaulted',
+};
+
+/** Creator-only codes (data quality, tool notes and threats): pilot view lists them nowhere (D1). */
 export function isCreatorOnlyIssueCode(code: string): boolean {
-  return code.startsWith('threat.');
+  return ISSUE_AUDIENCE[code as IssueCode] === 'creatorOnly' || code.startsWith('threat.');
 }
 
-/** Weather values filled with defaults: the overview lists them with the defaults, not as load notices (SPEC 1.3). */
+/** Weather values filled with defaults: listed with the defaults, not as load notices, although they are warnings. */
 export const DEFAULTED_ISSUE_CODES: ReadonlySet<IssueCode> = new Set<IssueCode>(['weather.qnhDefaulted', 'weather.temperatureDefaulted']);
 
 /** Whether the view shows the issue at all: pilot view drops the creator-only codes (D1). */
@@ -77,33 +104,75 @@ export function isIssueShownInView(issue: MissionIssue, viewMode: ViewMode): boo
 
 /**
  * Whether the issue is a load notice of the view (the overview's "読み込みの注意"): a warning or an error the view
- * shows. Info items (data-quality notes such as an unknown CLSID) and defaulted weather values are not: the
- * overview lists them with the defaults.
+ * shows, other than a defaulted value. Every other issue the view shows goes in the defaults list.
  */
 export function isLoadNoticeIssue(issue: MissionIssue, viewMode: ViewMode): boolean {
-  return issue.severity !== 'info' && !DEFAULTED_ISSUE_CODES.has(issue.code) && isIssueShownInView(issue, viewMode);
+  return issue.severity !== 'info' && ISSUE_AUDIENCE[issue.code] !== 'defaulted' && isIssueShownInView(issue, viewMode);
 }
 
-/** The load notices of the view, without duplicates (same code, side and params), in the order they came. */
-export function loadNoticeIssues(issues: readonly MissionIssue[], viewMode: ViewMode): MissionIssue[] {
-  return uniqueIssues(issues.filter(issue => isLoadNoticeIssue(issue, viewMode)));
+/** Whether the issue goes in the defaults list of the view ("既定値を使った項目"): shown, and not a load notice. */
+export function isDefaultsListIssue(issue: MissionIssue, viewMode: ViewMode): boolean {
+  return isIssueShownInView(issue, viewMode) && !isLoadNoticeIssue(issue, viewMode);
+}
+
+/** Whether the mission has an issue of the code, for example to mark a QNH filled with the default value. */
+export function hasIssue(issues: readonly MissionIssue[], code: IssueCode): boolean {
+  return issues.some(issue => issue.code === code);
+}
+
+/** One line of an issue list, before translation. `side` is the coalition mark to show, or null for none. */
+export interface IssueEntry {
+  /** Stable and independent of the language: code, side mark and sorted params. */
+  key: string;
+  issue: MissionIssue;
+  side: 'blue' | 'red' | null;
+}
+
+const SEVERITY_RANK: Record<IssueSeverity, number> = { error: 0, warning: 1, info: 2 };
+
+/**
+ * The lines of an issue list, without duplicates. The overview screen and the handouts both call this, so they
+ * list the same lines with the same side marks. Two issues are one line when their code and params are the same:
+ * an issue without a coalition (or a neutral one) takes in the copies of the coalitions, and is shown without a
+ * mark; copies of blue and red without such an issue stay one line per coalition, each with its mark.
+ */
+export function issueEntries(issues: readonly MissionIssue[]): IssueEntry[] {
+  const groups = new Map<string, { issue: MissionIssue; whole: boolean; sides: Array<'blue' | 'red'> }>();
+  for (const issue of issues) {
+    const identity = issueKey({ ...issue, side: undefined });
+    const side = issue.side === 'blue' || issue.side === 'red' ? issue.side : null;
+    const group = groups.get(identity) ?? { issue, whole: false, sides: [] };
+    if (side === null) group.whole = true;
+    else if (!group.sides.includes(side)) group.sides.push(side);
+    groups.set(identity, group);
+  }
+  return [...groups.entries()].flatMap(([identity, group]) => {
+    const sides: Array<'blue' | 'red' | null> = group.whole ? [null] : group.sides;
+    return sides.map(side => ({ key: `${identity}|${side ?? ''}`, issue: group.issue, side }));
+  });
+}
+
+/** The load notices of the view ("読み込みの注意"), errors first, then warnings, each in the order they came. */
+export function loadNoticeEntries(issues: readonly MissionIssue[], viewMode: ViewMode): IssueEntry[] {
+  return issueEntries(issues.filter(issue => isLoadNoticeIssue(issue, viewMode)))
+    .sort((a, b) => SEVERITY_RANK[a.issue.severity] - SEVERITY_RANK[b.issue.severity]);
+}
+
+/** The defaults list of the view ("既定値を使った項目"), in the order they came. */
+export function defaultsListEntries(issues: readonly MissionIssue[], viewMode: ViewMode): IssueEntry[] {
+  return issueEntries(issues.filter(issue => isDefaultsListIssue(issue, viewMode)));
 }
 
 /**
- * The warnings a handout lists (配布前の警告). The pilot handout lists exactly the load notices of the pilot
- * overview, so it says what the screen says: a data-quality note the pilot cannot act on stays off it. The creator
- * handout lists every issue, the data-quality notes included, for the author to fix before distributing.
+ * The issue lists of a handout. The pilot handout lists what the pilot overview lists: its load notices as the
+ * warnings, and its defaults list as the defaulted items. The creator handout lists every issue as warnings (the
+ * creator overview's two lists together), for the author to fix before distributing.
  */
-export function handoutWarningIssues(issues: readonly MissionIssue[], viewMode: ViewMode): MissionIssue[] {
-  return viewMode === 'pilot' ? loadNoticeIssues(issues, viewMode) : uniqueIssues(issues);
-}
-
-function uniqueIssues(issues: readonly MissionIssue[]): MissionIssue[] {
-  const seen = new Set<string>();
-  return issues.filter(issue => {
-    const key = issueKey(issue);
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
+export function handoutIssueEntries(
+  issues: readonly MissionIssue[],
+  viewMode: ViewMode,
+): { warnings: IssueEntry[]; defaulted: IssueEntry[] } {
+  const notices = loadNoticeEntries(issues, viewMode);
+  const defaults = defaultsListEntries(issues, viewMode);
+  return viewMode === 'pilot' ? { warnings: notices, defaulted: defaults } : { warnings: [...notices, ...defaults], defaulted: [] };
 }

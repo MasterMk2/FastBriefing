@@ -1,6 +1,7 @@
 import type { KneeboardPage, KneeboardTranslate } from './kneeboard';
 import { WHITEBOARD_HEIGHT, WHITEBOARD_WIDTH } from '../hooks/useWhiteboard';
 import { drawMissionMap, type MissionMapLabels } from './missionMapRaster';
+import { freeTextLines } from '../export/kneeboardPlan';
 
 const BASE_WIDTH = 1536;
 const BASE_HEIGHT = 2048;
@@ -117,7 +118,7 @@ export async function renderKneeboardPages(
       try {
         if (spec.kind === 'text') renderTextCommands(current.context, spec.commands);
         else if (spec.kind === 'map') await renderMapPage(spec.page, current.context, t);
-        else renderWhiteboardPage(spec.page, spec.noteLines, current.context);
+        else renderWhiteboardPage(spec.page, spec.noteLines, current.context, t);
 
         current.context.fillStyle = '#526176';
         current.context.font = '26px sans-serif';
@@ -174,21 +175,23 @@ function paginatePages(
       result.push(...paginateTextPage(page, t, context));
     } else if (page.kind === 'map') {
       result.push({ kind: 'map', title: page.title, page });
-    } else if (page.data.strokes.length === 0) {
-      result.push(...paginateTextPage({
-        kind: 'text',
-        section: 'notes',
-        title: page.title,
-        sections: [{
-          heading: t('export:label.whiteboardNotes'),
-          lines: page.data.notes ? page.data.notes.split(/\r?\n/) : [t('export:label.noWhiteboardNotes')],
-        }],
-      }, t, context));
     } else {
-      context.font = '32px sans-serif';
-      const wrappedNotes = page.data.notes
-        .split(/\r?\n/)
-        .flatMap(line => wrapLine(context, line, BASE_WIDTH - MARGIN * 2));
+      // The notes are free text, drawn like the other free text: in PRE_FONT, kept as written. Notes of white
+      // space only are no notes, as in the print and the Markdown.
+      const notes = freeTextLines(page.data.notes);
+      if (page.data.strokes.length === 0) {
+        result.push(...paginateTextPage({
+          kind: 'text',
+          section: 'notes',
+          title: page.title,
+          sections: [notes.length > 0
+            ? { heading: t('export:label.whiteboardNotes'), lines: notes, preformatted: true }
+            : { heading: t('export:label.whiteboardNotes'), lines: [t('export:label.noWhiteboardNotes')] }],
+        }, t, context));
+        continue;
+      }
+      context.font = PRE_FONT;
+      const wrappedNotes = notes.flatMap(line => wrapLine(context, line, BASE_WIDTH - MARGIN * 2));
       result.push({ kind: 'whiteboard', title: page.title, page, noteLines: wrappedNotes.slice(0, 7) });
       const overflow = wrappedNotes.slice(7);
       if (overflow.length > 0) {
@@ -196,7 +199,7 @@ function paginatePages(
           kind: 'text',
           section: 'notes',
           title: `${page.title} (${t('export:label.continued')})`,
-          sections: [{ heading: t('export:label.whiteboardNotes'), lines: overflow }],
+          sections: [{ heading: t('export:label.whiteboardNotes'), lines: overflow, preformatted: true }],
         }, t, context));
       }
     }
@@ -320,9 +323,16 @@ function renderWhiteboardPage(
   page: Extract<KneeboardPage, { kind: 'whiteboard' }>,
   noteLines: string[],
   context: CanvasRenderingContext2D,
+  t: KneeboardTranslate,
 ): void {
-  context.font = '32px sans-serif';
   context.fillStyle = '#1e2936';
+  if (noteLines.length === 0) {
+    // No notes (or white space only): say so, as the print does.
+    context.font = '32px sans-serif';
+    context.fillText(t('export:label.noWhiteboardNotes'), MARGIN, 230);
+  }
+  // The same font the notes were wrapped in (paginatePages), so the page count matches what is drawn.
+  context.font = PRE_FONT;
   let y = 230;
   for (const line of noteLines) {
     context.fillText(line, MARGIN, y);

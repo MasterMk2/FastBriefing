@@ -102,6 +102,13 @@
     "whiteboardNotes": "白板のメモ",
     "noWhiteboardNotes": "白板のメモはありません",
     "warnings": "配布前の警告",
+    "defaultedItems": "既定値を使った項目",
+    "defaultedValue": "{{value}}（既定値）",
+    "sideIssue": "{{side}}: {{text}}",
+    "sideName": {
+      "blue": "青",
+      "red": "赤"
+    },
     "mapAnnotationsSkipped": "座標を変換できない注記があるため、一部を描いていません",
     "astro": "天文",
     "bullseye": "Bullseye（自陣営）",

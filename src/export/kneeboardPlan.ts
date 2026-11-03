@@ -1,5 +1,5 @@
-import { handoutWarningIssues } from '../core/issues';
-import type { DisplaySettings, Flight, MissionData, MissionMeta, Pylon, RoutePoint, Side, SupportAsset, Unit } from '../types/mission';
+import { handoutIssueEntries, hasIssue, type IssueEntry } from '../core/issues';
+import type { DisplaySettings, Flight, IssueCode, MissionData, MissionMeta, Pylon, RoutePoint, Side, SupportAsset, Unit } from '../types/mission';
 import type { BriefingSection } from '../utils/briefingSections';
 import type { WhiteboardData } from '../types/whiteboard';
 import type { KneeboardMapPin, KneeboardPage, KneeboardSection, KneeboardTranslate } from '../utils/kneeboard';
@@ -97,13 +97,27 @@ function overviewPage(input: PagePlanInput, t: KneeboardTranslate): KneeboardPag
   const task = ownTask.length > 0 ? ownTask : freeTextLines(meta.descriptionNeutralTask);
   if (task.length > 0) sections.push({ heading: t('export:label.task'), lines: task, preformatted: true });
   sections.push(astroSection(input, t));
-  // Warnings of the displayed view. applyViewMode already removed the other side's issues and the issues of
-  // hidden groups (D1). The pilot handout lists what the pilot overview lists as load notices (handoutWarningIssues),
-  // so data-quality notes and creator-only codes stay off it. The texts are in the output language.
-  const warnings = [...new Set(handoutWarningIssues(input.view.issues, input.plan.viewMode)
-    .map(issue => t(`issues:${issue.code}`, { ...issue.params })))];
+  // Issues of the displayed view. applyViewMode already removed the other side's issues and the issues of hidden
+  // groups (D1). core/issues.ts decides the lists and removes the duplicates for the overview screen too, so the
+  // pilot handout lists the pilot overview's load notices and defaults list, and the creator handout lists every
+  // issue. The texts are in the output language.
+  const lists = handoutIssueEntries(input.view.issues, input.plan.viewMode);
+  const warnings = lists.warnings.map(entry => issueLine(entry, t));
   if (warnings.length > 0) sections.push({ heading: t('export:label.warnings'), lines: warnings });
+  const defaulted = lists.defaulted.map(entry => issueLine(entry, t));
+  if (defaulted.length > 0) sections.push({ heading: t('export:label.defaultedItems'), lines: defaulted });
   return textPage('overview', t('export:sections.overview'), sections);
+}
+
+/** An issue in the output language, with the coalition mark the overview screen shows next to it. */
+function issueLine(entry: IssueEntry, t: KneeboardTranslate): string {
+  const text = t(`issues:${entry.issue.code}`, { ...entry.issue.params });
+  return entry.side ? t('export:label.sideIssue', { side: t(`export:label.sideName.${entry.side}`), text }) : text;
+}
+
+/** A weather value, marked when the mission left it out and it was filled with the default (SPEC 1.3). */
+function defaultedValue(value: string, code: IssueCode, input: PagePlanInput, t: KneeboardTranslate): string {
+  return hasIssue(input.view.issues, code) ? t('export:label.defaultedValue', { value }) : value;
 }
 
 /** The date follows the time display setting, like the start times next to it (D6). */
@@ -160,8 +174,8 @@ function weatherPage(input: PagePlanInput, t: KneeboardTranslate): KneeboardPage
   const { settings } = input;
   const zulu = missionZuluDate(meta);
   const lines = [
-    `${t('export:label.temperature')}: ${formatTemperature(weather.temperature, settings.temperatureUnit)}`,
-    `${t('export:label.qnh')}: ${formatPressure(weather.qnh, settings.pressureUnit)}`,
+    `${t('export:label.temperature')}: ${defaultedValue(formatTemperature(weather.temperature, settings.temperatureUnit), 'weather.temperatureDefaulted', input, t)}`,
+    `${t('export:label.qnh')}: ${defaultedValue(formatPressure(weather.qnh, settings.pressureUnit), 'weather.qnhDefaulted', input, t)}`,
     `${t('export:label.visibility')}: ${formatDistance(weather.visibility, settings.distanceUnit)}`,
     `${t('export:label.clouds')}: ${weather.clouds.label} (${t('export:label.cloudBase', { value: formatAltitude(weather.clouds.base, settings.altitudeUnit) })})`,
   ];

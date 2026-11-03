@@ -33,6 +33,7 @@
     "title": "Weather",
     "temperature": "Temperature",
     "qnh": "QNH",
+    "defaultedValue": "{{value}} (default)",
     "visibility": "Visibility",
     "clouds": "Clouds",
     "cloudBase": "base {{value}}",

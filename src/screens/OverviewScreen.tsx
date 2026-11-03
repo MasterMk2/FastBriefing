@@ -7,8 +7,8 @@ import { useTranslation } from 'react-i18next';
 import { checkedLintRuleCount, isCreatorOnlyLintRule, lintMissionForSide } from '../analysis/lint';
 import { buildTot } from '../analysis/tot';
 import { isResolvedLatLon, taskTextFor, weatherConditionPairs, type Translate } from '../briefing/slides';
-import { DEFAULTED_ISSUE_CODES, isIssueShownInView, loadNoticeIssues } from '../core/issues';
-import { issueText, issueTextList } from '../core/issueText';
+import { defaultsListEntries, hasIssue, loadNoticeEntries } from '../core/issues';
+import { issueText } from '../core/issueText';
 import { Notice } from '../shell/Notice';
 import { SideMark } from '../shell/SideMark';
 import { Unresolved } from '../shell/Unresolved';
@@ -16,7 +16,7 @@ import { useMission } from '../shell/MissionContext';
 import { useUnits } from '../shell/units';
 import { useWorkspace } from '../shell/workspace';
 import type { LintFinding } from '../types/lint';
-import type { DisplaySettings, IssueSeverity, MissionData, Side } from '../types/mission';
+import type { IssueCode, IssueSeverity, Side } from '../types/mission';
 import { getMoonInfo, getSunTimes } from '../utils/astro';
 import { buildMetar } from '../utils/metar';
 import { formatDateYMD, formatUtcOffset, missionLocalDate, missionZuluDate } from '../utils/time';
@@ -30,36 +30,6 @@ function sortFindings(findings: readonly LintFinding[]): LintFinding[] {
   return [...findings].sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity]);
 }
 
-interface LoadNotice {
-  key: string;
-  severity: Exclude<IssueSeverity, 'info'>;
-  text: string;
-  side: Side | null;
-}
-
-/**
- * Warnings and errors of the file as it was read (SPEC 3: issues are the warning kind).
- * Info items and the defaulted weather values are listed in the defaults section instead.
- * The pilot handout lists the same issues as its warnings (loadNoticeIssues in core/issues.ts).
- */
-function loadNotices(issues: MissionData['issues'], viewMode: DisplaySettings['viewMode']): LoadNotice[] {
-  const seen = new Set<string>();
-  const notices: LoadNotice[] = [];
-  for (const issue of loadNoticeIssues(issues, viewMode)) {
-    if (issue.severity === 'info') continue; // never true here; narrows the severity type
-    const text = issueText(issue);
-    const key = `${issue.severity}|${issue.side ?? ''}|${text}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    notices.push({
-      key,
-      severity: issue.severity,
-      text,
-      side: issue.side && issue.side !== 'neutral' ? issue.side : null,
-    });
-  }
-  return notices.sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity]);
-}
 
 /** Whole days between the reference clock and a point's clock (the TOT date mark, F7). */
 function dayShift(date: Date, reference: Date): number {
@@ -96,13 +66,15 @@ export default function OverviewScreen() {
     [view, side, viewMode, pilot],
   );
   const tot = useMemo(() => buildTot(view, side), [view, side]);
+  // Warnings and errors of the file as it was read, and the values filled with defaults. core/issues.ts decides
+  // which issue goes where and removes the duplicates; the handouts list the same entries (handoutIssueEntries).
   // Issue texts are read in the current UI language on every render (the translation hook re-renders on change).
-  const notices = loadNotices(view.issues, viewMode);
-  const defaultTexts = issueTextList(
-    view.issues.filter(issue => (issue.severity === 'info' || DEFAULTED_ISSUE_CODES.has(issue.code))
-      && isIssueShownInView(issue, viewMode)),
-  );
+  const notices = loadNoticeEntries(view.issues, viewMode);
+  const defaults = defaultsListEntries(view.issues, viewMode);
   const translate: Translate = (key, values) => String(t(key, values));
+  const defaulted = (value: string, code: IssueCode) => (
+    hasIssue(view.issues, code) ? t('overview:weather.defaultedValue', { value }) : value
+  );
 
   const na = t('overview:notAvailable');
   const cloudLabel = weather.clouds.label.trim() || na;
@@ -206,8 +178,11 @@ export default function OverviewScreen() {
         <section className="overview-section" aria-labelledby="overview-weather-title">
           <h3 id="overview-weather-title">{t('overview:weather.title')}</h3>
           <dl className="overview-pairs">
-            <div><dt>{t('overview:weather.temperature')}</dt><dd>{units.temp(weather.temperature)}</dd></div>
-            <div><dt>{t('overview:weather.qnh')}</dt><dd>{units.pressure(weather.qnh)}</dd></div>
+            <div>
+              <dt>{t('overview:weather.temperature')}</dt>
+              <dd>{defaulted(units.temp(weather.temperature), 'weather.temperatureDefaulted')}</dd>
+            </div>
+            <div><dt>{t('overview:weather.qnh')}</dt><dd>{defaulted(units.pressure(weather.qnh), 'weather.qnhDefaulted')}</dd></div>
             <div><dt>{t('overview:weather.visibility')}</dt><dd>{units.distance(weather.visibility)}</dd></div>
             <div>
               <dt>{t('overview:weather.clouds')}</dt>
@@ -269,12 +244,12 @@ export default function OverviewScreen() {
           <ul className="overview-list overview-load-list">
             {notices.map(notice => (
               <li key={notice.key} className="overview-load-row">
-                <span className="overview-lint-severity" data-severity={notice.severity}>
-                  <span aria-hidden="true">{SEVERITY_SYMBOL[notice.severity]}</span>
-                  {' '}{t(`overview:lint.severity.${notice.severity}`)}
+                <span className="overview-lint-severity" data-severity={notice.issue.severity}>
+                  <span aria-hidden="true">{SEVERITY_SYMBOL[notice.issue.severity]}</span>
+                  {' '}{t(`overview:lint.severity.${notice.issue.severity}`)}
                 </span>
                 {notice.side && <SideMark side={notice.side} />}
-                <span className="overview-lint-text">{notice.text}</span>
+                <span className="overview-lint-text">{issueText(notice.issue)}</span>
               </li>
             ))}
           </ul>
@@ -307,11 +282,16 @@ export default function OverviewScreen() {
 
         <section className="overview-section" aria-labelledby="overview-defaults-title">
           <h3 id="overview-defaults-title">{t('overview:defaults.title')}</h3>
-          {defaultTexts.length === 0
+          {defaults.length === 0
             ? <p className="overview-muted">{t('overview:defaults.none')}</p>
             : (
-              <ul className="overview-list">
-                {defaultTexts.map(text => <li key={text}>{text}</li>)}
+              <ul className="overview-list overview-defaults-list">
+                {defaults.map(entry => (
+                  <li key={entry.key} className="overview-defaults-row">
+                    {entry.side && <><SideMark side={entry.side} />{' '}</>}
+                    {issueText(entry.issue)}
+                  </li>
+                ))}
               </ul>
             )}
         </section>

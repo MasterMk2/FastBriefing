@@ -33,6 +33,7 @@
     "title": "天候",
     "temperature": "気温",
     "qnh": "QNH",
+    "defaultedValue": "{{value}}（既定値）",
     "visibility": "視程",
     "clouds": "雲",
     "cloudBase": "基部 {{value}}",

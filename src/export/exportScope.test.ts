@@ -148,8 +148,12 @@ describe('warnings follow the view (D1, migrated from PrintView.test)', () => {
     const pilot = warnings('pilot');
     expect(pilot.join('\n')).not.toContain('issues:weapon.unknownClsid');
     expect(pilot.join('\n')).not.toContain('ODD-TRUCK');
+    // The blue issue carries the side mark the overview shows next to it.
     expect(pilot).toEqual([
-      'issues:parse.unknownNode {"type":"OWN-UNKNOWN"}',
+      withParams('export:label.sideIssue', {
+        side: 'export:label.sideName.blue',
+        text: 'issues:parse.unknownNode {"type":"OWN-UNKNOWN"}',
+      }),
       'issues:map.unsupported {"theatre":"Test"}',
     ]);
     const creator = warnings('creator').join('\n');
