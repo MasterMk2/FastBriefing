@@ -13,6 +13,7 @@ declare const process: {
 
 const smokeDirectory = process.env.SMOKE_MIZ_DIR?.trim() ?? '';
 const settings = { coordinateFormat: 'DDM', unitSystem: 'metric', viewMode: 'creator' };
+const unknownUnitWarningPrefix = '参照データに未収録のユニット: ';
 
 function filePath(directory: string, name: string): string {
   return `${directory.replace(/[\\/]+$/, '')}/${name}`;
@@ -113,6 +114,9 @@ describe.skipIf(!smokeDirectory)('real .miz smoke test', () => {
     let hiddenMissionCount = 0;
     let reducedPilotMissionCount = 0;
     let refuelingMissionCount = 0;
+    let totalWarningCount = 0;
+    let unknownUnitWarningCount = 0;
+    const unknownUnitMissionCounts = new Map<string, number>();
 
     for (const name of names) {
       let parsed: Awaited<ReturnType<typeof parseMissionArchive>>;
@@ -126,6 +130,14 @@ describe.skipIf(!smokeDirectory)('real .miz smoke test', () => {
       }
 
       const normalized = normalizeMission(parsed, settings);
+      const unknownUnits = normalized.warnings
+        .filter(warning => warning.startsWith(unknownUnitWarningPrefix))
+        .map(warning => warning.slice(unknownUnitWarningPrefix.length));
+      totalWarningCount += normalized.warnings.length;
+      unknownUnitWarningCount += unknownUnits.length;
+      unknownUnits.forEach((unit) => {
+        unknownUnitMissionCounts.set(unit, (unknownUnitMissionCounts.get(unit) ?? 0) + 1);
+      });
       const creatorView = applyViewMode(normalized, 'creator');
       const pilotView = applyViewMode(normalized, 'pilot');
       const creatorEntityCount = missionEntityCount(creatorView);
@@ -175,6 +187,7 @@ describe.skipIf(!smokeDirectory)('real .miz smoke test', () => {
           pylons: pylonCount,
           threatGroups: threatGroups.length,
           warnings: normalized.warnings.length,
+          unknownUnits,
           sourceHasClientData,
           sourceHasPylonData,
           sourceHasRefuelingTask,
@@ -212,6 +225,16 @@ describe.skipIf(!smokeDirectory)('real .miz smoke test', () => {
       }
     }
 
+    console.log(JSON.stringify({
+      warningSummary: {
+        total: totalWarningCount,
+        unknownUnits: unknownUnitWarningCount,
+        uniqueUnknownUnits: unknownUnitMissionCounts.size,
+      },
+      unknownUnitMissionCounts: Object.fromEntries(
+        [...unknownUnitMissionCounts.entries()].sort(([left], [right]) => left.localeCompare(right)),
+      ),
+    }));
     expect(parseFailures, `解析に失敗した .miz: ${parseFailures.join('; ')}`).toEqual([]);
     expect(pylonMissionCount, '搭載パイロンを取得できたミッション数').toBeGreaterThan(0);
     expect(threatMissionCount, '脅威半径を解決できたミッション数').toBeGreaterThan(0);

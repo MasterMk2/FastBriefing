@@ -675,20 +675,26 @@ describe('MissionNormalizer reference-backed layers', () => {
     expect(normalized.warnings).not.toContain('脅威半径が未収録のため地図に描画できません: 55G6 EWR');
   });
 
-  it('does not warn about unrecorded threat radii for aircraft groups', () => {
+  it('does not treat aircraft or static groups as missing threat reference data', () => {
     const aircraftGroup = {
       category: 'plane',
       group: [{ units: [unit('F-16C_50')] }],
     };
+    const staticGroup = {
+      category: 'static',
+      group: [{ units: [unit('barrels_cargo')] }],
+    };
     const normalized = normalizeMission(makeMission({
       coalition: {
-        blue: { country: [{ plane: [aircraftGroup] }] },
+        blue: { country: [{ plane: [aircraftGroup], static: [staticGroup] }] },
         red: {},
         neutrals: {},
       },
     }), settings);
 
     expect(normalized.warnings).not.toContain('脅威半径が未収録のため地図に描画できません: F-16C_50');
+    expect(normalized.warnings).not.toContain('参照データに未収録のユニット: F-16C_50');
+    expect(normalized.warnings).not.toContain('参照データに未収録のユニット: barrels_cargo');
     expect(normalized.coalitions.blue.aiGroups[0].threatRangeSource).toBeUndefined();
   });
 
@@ -718,21 +724,22 @@ describe('MissionNormalizer reference-backed layers', () => {
     expect(normalized.warnings).not.toContain('脅威半径が未収録のため地図に描画できません: M-2 Bradley');
   });
 
-  it('does not warn for the confirmed non-threat units from the real mission', () => {
-    const nonThreatTypes = [
-      'house1arm',
-      'GAZ-3308',
-      'Ural-4320T',
-      'ZIL-131 KUNG',
-      'ATMZ-5',
-      'Ural-4320 APA-5D',
-      'ZiL-131 APA-80',
-      'Ship_Tilde_Supply',
-      'speedboat',
-      'ELNYA',
-    ];
+  it('resolves previously noisy real-mission units without flattening armed buildings', () => {
+    const expectedRanges: Record<string, [number, number]> = {
+      house1arm: [800, 0],
+      'GAZ-3308': [0, 0],
+      'Ural-4320T': [0, 0],
+      'ZIL-131 KUNG': [0, 0],
+      'ATMZ-5': [0, 0],
+      'Ural-4320 APA-5D': [0, 0],
+      'ZiL-131 APA-80': [0, 0],
+      'Ship_Tilde_Supply': [0, 0],
+      speedboat: [1000, 5000],
+      ELNYA: [0, 0],
+    };
+    const types = Object.keys(expectedRanges);
     const vehicleGroups = {
-      group: nonThreatTypes.map((type, index) => ({
+      group: types.map((type, index) => ({
         groupId: 800 + index,
         units: [unit(type)],
         hidden: false,
@@ -753,8 +760,61 @@ describe('MissionNormalizer reference-backed layers', () => {
     }), settings);
     const groups = normalized.coalitions.blue.aiGroups;
 
-    for (const type of nonThreatTypes) {
-      expect(groups.find(group => group.type === type), type).toMatchObject({ threatRange: 0, detectionRange: 0 });
+    for (const [type, [threatRange, detectionRange]] of Object.entries(expectedRanges)) {
+      expect(groups.find(group => group.type === type), type).toMatchObject({ threatRange, detectionRange });
+      expect(normalized.warnings).not.toContain(`脅威半径が未収録のため地図に描画できません: ${type}`);
+    }
+  });
+
+  it('uses current pydcs references for frequent vehicle and ship ids from the smoke corpus', () => {
+    const expectedVehicles: Record<string, [number, number]> = {
+      'Grad_FDDM': [1000, 0],
+      'TACAN_beacon': [0, 0],
+      'ATZ-5': [0, 0],
+      'tacr2a': [0, 0],
+      'AA8': [0, 0],
+      'BMP-3': [4000, 0],
+      'LARC-V': [0, 500],
+      'BMD-1': [3000, 0],
+      'Infantry AK ver3': [500, 0],
+      'outpost': [800, 0],
+      'BTR-80': [1600, 0],
+      'FPS-117 ECS': [0, 0],
+      'CHAP_9K720_HE': [400000, 0],
+      'BTR-60': [1600, 0],
+    };
+    const expectedShips: Record<string, [number, number]> = {
+      'IMPROVED_KILO': [0, 0],
+      'CVN_73': [25000, 50000],
+    };
+    const makeGroups = (types: string[], idOffset: number) => ({
+      group: types.map((type, index) => ({
+        groupId: idOffset + index,
+        units: [unit(type)],
+        hidden: false,
+        lateActivation: false,
+      })),
+    });
+    const normalized = normalizeMission(makeMission({
+      coalition: {
+        blue: {
+          country: [{
+            vehicle: makeGroups(Object.keys(expectedVehicles), 1000),
+            ship: makeGroups(Object.keys(expectedShips), 2000),
+          }],
+        },
+        red: {},
+        neutrals: {},
+      },
+    }), settings);
+
+    for (const [type, [threatRange, detectionRange]] of Object.entries({ ...expectedVehicles, ...expectedShips })) {
+      expect(normalized.coalitions.blue.aiGroups.find(group => group.type === type), type).toMatchObject({
+        threatRange,
+        detectionRange,
+        threatRangeSource: 'reference',
+      });
+      expect(normalized.warnings).not.toContain(`参照データに未収録のユニット: ${type}`);
       expect(normalized.warnings).not.toContain(`脅威半径が未収録のため地図に描画できません: ${type}`);
     }
   });
