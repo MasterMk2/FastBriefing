@@ -1,49 +1,58 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { ChangeEvent, DragEvent as ReactDragEvent, KeyboardEvent as ReactKeyboardEvent } from 'react';
+import type { ChangeEvent } from 'react';
 import { MissionParser } from './core/MissionParser';
 import { MissionBatchLoader, validateMissionFiles } from './core/MissionBatchLoader';
 import { createMissionRevision } from './utils/missionRevision';
-import RevisionComparison from './components/RevisionComparison';
 import type { LoadedRevision } from './components/RevisionComparison';
 import { normalizeMission } from './core/MissionNormalizer';
-import type { DisplaySettings, MissionData, UserNotes } from './types/mission';
-import MissionView from './components/MissionView';
-import { THEMES, useSettings } from './hooks/useSettings';
+import type { MissionData, UserNotes } from './types/mission';
+import AppShell from './shell/AppShell';
+import { useSettings } from './hooks/useSettings';
 import { useTranslation } from 'react-i18next';
 import { createMissionKey, emptyUserNotes, readStoredNotes, saveStoredNotes } from './utils/notes';
 import { missionLoadErrorTranslationKey } from './utils/missionLoadError';
+import { resetExportScope } from './export/exportPlan';
+import { clearNoteDrafts } from './screens/flight/noteDrafts';
 
 function App() {
   const [missionData, setMissionData] = useState<MissionData | null>(null);
   const [sourceFile, setSourceFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // A failure of the old-version pick (F10). It has its own band, so the open mission is never reset from it.
+  const [compareError, setCompareError] = useState<string | null>(null);
   const [revisions, setRevisions] = useState<[LoadedRevision, LoadedRevision] | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [storageFailed, setStorageFailed] = useState(false);
-  const { settings, setViewMode, setLanguage, setTheme } = useSettings();
+  const { settings } = useSettings();
   const { t } = useTranslation();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const compareInputRef = useRef<HTMLInputElement>(null);
   const dragCounterRef = useRef(0);
   const loaderRef = useRef(new MissionBatchLoader(() => new MissionParser()));
   const parseGenerationRef = useRef(0);
+  // The revision snapshot of the open file, so that comparing parses only the older file (F10).
+  const latestSnapshotRef = useRef<LoadedRevision | null>(null);
 
   useEffect(() => {
     if (typeof document === 'undefined') return;
     document.documentElement.dataset.theme = settings.theme;
+    document.documentElement.dataset.fontScale = settings.fontScale;
     return () => {
       delete document.documentElement.dataset.theme;
+      delete document.documentElement.dataset.fontScale;
     };
-  }, [settings.theme]);
+  }, [settings.theme, settings.fontScale]);
 
   const handleFiles = useCallback((fileList: FileList | readonly File[]) => {
     const files = Array.from(fileList);
     const generation = ++parseGenerationRef.current;
     loaderRef.current.cancel();
+    setCompareError(null);
     const validationError = validateMissionFiles(files);
     if (validationError) {
       setLoading(false);
-      setError(t(`app.${validationError}`));
+      setError(t(`shell:app.${validationError}`));
       return;
     }
     setLoading(true);
@@ -58,6 +67,7 @@ function App() {
         const normalized = normalizeMission(parsed[parsed.length - 1], settings);
         normalized.userNotes = readStoredNotes(missionKey) ?? emptyUserNotes(missionKey);
         const snapshots = parsed.map((mission, index) => ({ name: files[index].name, fingerprint: mission.sourceFingerprint, revision: createMissionRevision(mission) }));
+        latestSnapshotRef.current = snapshots[snapshots.length - 1] ?? null;
         setStorageFailed(false);
         setMissionData(normalized);
         setSourceFile(latestFile);
@@ -66,7 +76,7 @@ function App() {
         if (parseGenerationRef.current === generation && !isAbortError(err)) {
           const message = err instanceof Error ? err.message : '';
           const translationKey = missionLoadErrorTranslationKey(err);
-          setError(message ? t(translationKey, { message }) : t('app.parseError'));
+          setError(message ? t(translationKey, { message }) : t('shell:app.parseError'));
         }
       } finally {
         if (parseGenerationRef.current === generation) setLoading(false);
@@ -134,11 +144,6 @@ function App() {
     };
   }, []);
 
-  const handleDropZoneDragOver = useCallback((event: ReactDragEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    event.stopPropagation();
-  }, []);
-
   const handleFileSelect = useCallback((event: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files ?? []);
     // Snapshot before clearing, so the same selection can be retried.
@@ -146,126 +151,164 @@ function App() {
     if (files.length) handleFiles(files);
   }, [handleFiles]);
 
+  /** The old version of a comparison: only that file is parsed; the open mission stays as it is (F10). */
+  const handleCompareSelect = useCallback((event: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files ?? []);
+    event.target.value = '';
+    const current = latestSnapshotRef.current;
+    if (files.length === 0 || !current) return;
+    const [file] = files;
+    setError(null);
+    setCompareError(null);
+    const validationError = validateMissionFiles([file]);
+    if (validationError) {
+      setCompareError(t(`shell:app.${validationError}`));
+      return;
+    }
+    const generation = ++parseGenerationRef.current;
+    loaderRef.current.cancel();
+    setLoading(true);
+    void (async () => {
+      try {
+        const parsed = await loaderRef.current.load([file]);
+        if (!parsed || parseGenerationRef.current !== generation) return;
+        const before: LoadedRevision = {
+          name: file.name,
+          fingerprint: parsed[0].sourceFingerprint,
+          revision: createMissionRevision(parsed[0]),
+        };
+        setRevisions([before, current]);
+      } catch (err) {
+        if (parseGenerationRef.current === generation && !isAbortError(err)) {
+          const message = err instanceof Error ? err.message : '';
+          const translationKey = missionLoadErrorTranslationKey(err);
+          setCompareError(message ? t(translationKey, { message }) : t('shell:app.parseError'));
+        }
+      } finally {
+        if (parseGenerationRef.current === generation) setLoading(false);
+      }
+    })();
+  }, [t]);
+
   const openFilePicker = useCallback(() => {
     fileInputRef.current?.click();
   }, []);
-
-  const handleDropLabelKeyDown = useCallback((event: ReactKeyboardEvent<HTMLLabelElement>) => {
-    if (event.key === 'Enter' || event.key === ' ') {
-      event.preventDefault();
-      openFilePicker();
-    }
-  }, [openFilePicker]);
 
   const handleRetrySelection = useCallback(() => {
     setError(null);
     openFilePicker();
   }, [openFilePicker]);
 
+  /** Opens the comparison input (the old version), never the picker that replaces the mission (F10). */
+  const openComparePicker = useCallback(() => {
+    compareInputRef.current?.click();
+  }, []);
+
+  /** Chooses the old version again. */
+  const handleRetryCompare = useCallback(() => {
+    setCompareError(null);
+    openComparePicker();
+  }, [openComparePicker]);
+
   const resetMission = useCallback(() => {
     loaderRef.current.cancel();
     parseGenerationRef.current += 1;
     setLoading(false);
     setError(null);
+    setCompareError(null);
     setMissionData(null);
     setSourceFile(null);
     setRevisions(null);
+    latestSnapshotRef.current = null;
+    // Shared per-mission state outside React: the export target and the unsaved flight-note drafts. They are keyed
+    // by the file's fingerprint, so without this the same file opened again would come back with them (W5).
+    resetExportScope();
+    clearNoteDrafts();
   }, []);
 
+  const bandError = compareError ?? (missionData ? error : null);
+
   return (
-    <div className="app" data-theme={settings.theme}>
-      <header className="header">
-        <h1>FastBriefing</h1>
-        <div className="header-controls">
-          <label>
-            <input type="checkbox" checked={settings.viewMode === 'creator'} onChange={() => setViewMode(settings.viewMode === 'creator' ? 'pilot' : 'creator')} />
-            {settings.viewMode === 'creator' ? t('app.creatorView') : t('app.pilotView')}
-          </label>
-          <select value={settings.language} onChange={(event) => setLanguage(event.target.value as DisplaySettings['language'])} aria-label={t('app.displayLanguage')}>
-            <option value="ja">{t('app.japanese')}</option>
-            <option value="en">{t('app.english')}</option>
-          </select>
-          {THEMES.length > 1 && (
-            <select value={settings.theme} onChange={(event) => setTheme(event.target.value as DisplaySettings['theme'])} aria-label={t('app.theme')}>
-              {THEMES.map(theme => <option key={theme} value={theme}>{t(`app.themes.${theme}`)}</option>)}
-            </select>
-          )}
+    <div className="app" data-theme={settings.theme} data-font-scale={settings.fontScale}>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".miz"
+        multiple
+        onChange={handleFileSelect}
+        id="file-input"
+        className="visually-hidden"
+        // Opened from the buttons with click(); hidden inputs take no Tab stop, which would show no focus ring (A11Y-4).
+        tabIndex={-1}
+        aria-hidden="true"
+        aria-label={t('shell:app.selectMiz')}
+      />
+      <input
+        ref={compareInputRef}
+        type="file"
+        accept=".miz"
+        onChange={handleCompareSelect}
+        id="compare-file-input"
+        className="visually-hidden"
+        tabIndex={-1}
+        aria-hidden="true"
+        aria-label={t('revision:pickOld')}
+      />
+
+      <AppShell
+        mission={missionData}
+        sourceFile={sourceFile}
+        storageFailed={storageFailed}
+        revisions={revisions}
+        loading={loading}
+        isDragging={isDragging}
+        onNotesChange={handleNotesChange}
+        onPickFiles={openFilePicker}
+        onCompare={openComparePicker}
+        onCloseRevisions={() => setRevisions(null)}
+        onCloseMission={resetMission}
+        // With no mission open, a read error belongs under the drop area of the initial screen (SPEC 3).
+        initialError={missionData ? null : error}
+        onRetryInitial={handleRetrySelection}
+      />
+
+      {isDragging && missionData && (
+        <div className="drop-overlay" role="status" aria-live="polite">
+          {t('shell:app.dropFile')}
         </div>
-      </header>
+      )}
 
-      <main className="main">
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept=".miz"
-          multiple
-          onChange={handleFileSelect}
-          id="file-input"
-          className="visually-hidden"
-          aria-label={t('app.selectMiz')}
-        />
-
-        {missionData && <div className="revision-actions">
-          <button type="button" className="btn btn-secondary" onClick={openFilePicker}>{t('revision.open')}</button>
-          <span>{sourceFile?.name}</span>
-        </div>}
-        {revisions && <RevisionComparison
-          key={`${revisions[0].fingerprint}:${revisions[1].fingerprint}`}
-          revisions={revisions} settings={settings} onClose={() => setRevisions(null)}
-        />}
-        {!missionData ? (
-          <div
-            className={`drop-zone${isDragging ? ' dragging' : ''}`}
-            onDragOver={handleDropZoneDragOver}
-            aria-label={t('app.dropZone')}
-            aria-busy={loading}
-          >
-            <label
-              htmlFor="file-input"
-              className="drop-label"
-              role="button"
-              tabIndex={0}
-              onKeyDown={handleDropLabelKeyDown}
-              aria-describedby="drop-hint"
-            >
-              <div className="drop-icon" aria-hidden="true">📁</div>
-              <p>{t('app.dropFile')}</p>
-              <p className="drop-hint" id="drop-hint">{t('app.dropHint')}</p>
-            </label>
+      {/* The band is for an open mission only; the initial screen shows its own error, so it is never doubled. */}
+      {bandError && (
+        <div className="error app-error" role="alert">
+          <p>{bandError}</p>
+          <div className="error-actions">
+            {compareError ? (
+              <>
+                <button type="button" className="btn btn-secondary" onClick={handleRetryCompare}>{t('revision:retryCompare')}</button>
+                <button type="button" className="btn btn-secondary" onClick={() => setCompareError(null)}>{t('revision:dismissCompare')}</button>
+              </>
+            ) : (
+              <>
+                <button type="button" className="btn btn-secondary" onClick={handleRetrySelection}>{t('shell:app.retry')}</button>
+                <button type="button" className="btn btn-secondary" onClick={resetMission}>{t('shell:app.reset')}</button>
+              </>
+            )}
           </div>
-        ) : (
-          <MissionView mission={missionData} settings={settings} sourceFile={sourceFile} onNotesChange={handleNotesChange} storageFailed={storageFailed} />
-        )}
+        </div>
+      )}
 
-        {isDragging && missionData && (
-          <div className="drop-overlay" role="status" aria-live="polite">
-            {t('app.dropFile')}
-          </div>
-        )}
-
-
-        {error && (
-          <div className="error app-error" role="alert">
-            <p>{error}</p>
-            <div className="error-actions">
-              <button type="button" className="btn btn-secondary" onClick={handleRetrySelection}>{t('app.retry')}</button>
-              <button type="button" className="btn btn-secondary" onClick={resetMission}>{t('app.reset')}</button>
-            </div>
-          </div>
-        )}
-
-        {loading && (
-          <div className="loading-overlay" role="status" aria-live="polite">
-            <div className="spinner" aria-hidden="true"></div>
-            <p>{t('app.loading')}</p>
-            <button type="button" className="btn btn-secondary" onClick={() => {
-              loaderRef.current.cancel();
-              parseGenerationRef.current += 1;
-              setLoading(false);
-            }}>{t('revision.cancel')}</button>
-          </div>
-        )}
-      </main>
+      {loading && (
+        <div className="loading-overlay" role="status" aria-live="polite">
+          <div className="spinner" aria-hidden="true"></div>
+          <p>{t('shell:app.loading')}</p>
+          <button type="button" className="btn btn-secondary" onClick={() => {
+            loaderRef.current.cancel();
+            parseGenerationRef.current += 1;
+            setLoading(false);
+          }}>{t('shell:app.cancel')}</button>
+        </div>
+      )}
     </div>
   );
 }

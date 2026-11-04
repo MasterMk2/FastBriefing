@@ -1,0 +1,161 @@
+/*
+ * Design tokens (SPEC 4.1 and 4.2). Colours are semantic: a surface, a text role or a
+ * status. Each status has -text (words and symbols), -bg and -border. Pick values only
+ * through these tokens; do not write hex colours in package stylesheets.
+ *
+ * Themes: FFS dark is the default (no data-theme needed). data-theme="standard" is the
+ * white theme with one blue. data-theme="night" is a red-only theme for night use:
+ * status is shown by symbols and words, never by hue alone.
+ */
+
+:root,
+:root[data-theme="ffs"] {
+  color-scheme: dark;
+
+  --surface-0: #101113;
+  --surface-1: #17191d;
+  --surface-2: #202329;
+  --text: #e8e6e1;
+  --text-muted: #a9a7a1;
+  --border: #2c2f36;
+  /* Accent is a border and a brand mark only; primary buttons use the primary pair. */
+  --accent: #c2a76c;
+  --accent-text: #101113;
+  --primary-bg: #e8e6e1;
+  --primary-text: #101113;
+
+  --info-text: #9cc3ea;
+  --info-bg: #15263a;
+  --info-border: #2c4a6e;
+  --success-text: #8fd19e;
+  --success-bg: #15281c;
+  --success-border: #2e5a3c;
+  --warning-text: #f0b36b;
+  --warning-bg: #2e2212;
+  --warning-border: #6b4a1f;
+  --danger-text: #ff8a80;
+  --danger-bg: #2e1514;
+  --danger-border: #6e2b28;
+
+  /* Coalition colours (Lead decision 5). Shapes and words carry the side too; colour is never the only cue. */
+  --side-blue: #6aa6e8;
+  --side-blue-text: #9cc3ea;
+  --side-red: #ef7f73;
+  --side-red-text: #ff9d94;
+  --side-neutral: #b8b5ad;
+  --side-neutral-text: #b8b5ad;
+  /* Annotation ink on the map (four distinct hues). */
+  --ink-1: #ffd166;
+  --ink-2: #7fe0c4;
+  --ink-3: #f49ac1;
+  --ink-4: #e8e6e1;
+}
+
+:root[data-theme="standard"] {
+  color-scheme: light;
+
+  --surface-0: #ffffff;
+  --surface-1: #f5f6f8;
+  --surface-2: #eceef2;
+  --text: #1d2330;
+  --text-muted: #5b6270;
+  --border: #d0d5dd;
+  --accent: #1f5fbf;
+  --accent-text: #ffffff;
+  --primary-bg: #1f5fbf;
+  --primary-text: #ffffff;
+
+  --info-text: #1f5fbf;
+  --info-bg: #e7f0fb;
+  --info-border: #9dbde8;
+  --success-text: #137a3a;
+  --success-bg: #e8f5ec;
+  --success-border: #8dc7a2;
+  --warning-text: #8a4b00;
+  --warning-bg: #fdf3e4;
+  --warning-border: #e2b77a;
+  --danger-text: #b42318;
+  --danger-bg: #fdecea;
+  --danger-border: #e8a39d;
+
+  --side-blue: #1f5fbf;
+  --side-blue-text: #1f5fbf;
+  --side-red: #b42318;
+  --side-red-text: #b42318;
+  --side-neutral: #5b6270;
+  --side-neutral-text: #5b6270;
+  --ink-1: #1f5fbf;
+  --ink-2: #137a3a;
+  --ink-3: #a85d00;
+  --ink-4: #7a3e9d;
+}
+
+:root[data-theme="night"] {
+  color-scheme: dark;
+
+  --surface-0: #000000;
+  --surface-1: #140000;
+  --surface-2: #1f0000;
+  --text: #ff5a4e;
+  /* SPEC 4.2 listed #c0453c, which measures 4.16:1 on black; raised to keep 4.5:1 (SPEC 4.2 asks for this). */
+  --text-muted: #d4574b;
+  --border: #5a1410;
+  --accent: #ff5a4e;
+  --accent-text: #000000;
+  --primary-bg: #ff5a4e;
+  --primary-text: #000000;
+
+  --info-text: #ff5a4e;
+  --info-bg: #1f0000;
+  --info-border: #5a1410;
+  --success-text: #ff5a4e;
+  --success-bg: #1f0000;
+  --success-border: #5a1410;
+  --warning-text: #ff5a4e;
+  --warning-bg: #1f0000;
+  --warning-border: #5a1410;
+  --danger-text: #ff5a4e;
+  --danger-bg: #1f0000;
+  --danger-border: #5a1410;
+
+  /* Night red: one hue, so the sides are told apart by shape, words and lightness. */
+  --side-blue: #ff5a4e;
+  --side-blue-text: #ff5a4e;
+  --side-red: #ff8a80;
+  --side-red-text: #ff8a80;
+  --side-neutral: #d4574b;
+  --side-neutral-text: #d4574b;
+  /* Inks step in lightness (adjacent contrast about 1.5 to 2.2) so the four stay apart on black. The darkest still
+     keeps 3:1 against the map ground (surface-1), the WCAG 1.4.11 level for marks (A11Y-10). */
+  --ink-1: #ffb3ab;
+  --ink-2: #ff7a70;
+  --ink-3: #e0463b;
+  --ink-4: #b32d22;
+}
+
+/* Shared, theme-independent tokens. */
+:root {
+  --radius: 4px;
+  --fs-body: 1rem;
+  --fs-table: 0.875rem;
+  --fs-note: 0.8125rem;
+  --fs-small: 0.8125rem;
+  --target-desktop: 28px;
+  --target-touch: 44px;
+  --focus-ring: 2px solid var(--accent);
+  --shell-header-height: 52px;
+  --shell-rail-width: 240px;
+  --shell-bottom-height: 56px;
+  --shell-gutter: 16px;
+  /*
+   * The whiteboard paper and its grid. Theme-independent on purpose: the board is a writing surface whose ink
+   * colours are stored with the data, and the same drawing is printed, so the paper stays light in every theme.
+   */
+  --whiteboard-paper: #ffffff;
+  --whiteboard-grid: #e5e7eb;
+}
+
+/* Large text: the whole UI scales by 112% (SPEC 4.1). */
+html[data-font-scale="large"] {
+  font-size: 112%;
+}

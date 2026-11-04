@@ -1,4 +1,6 @@
-import type { DisplaySettings, ParsedMissionFile } from '../types/mission';
+import { supportKindOf } from '../core/MissionNormalizer';
+import type { DisplaySettings, ParsedMissionFile, Side } from '../types/mission';
+import { shownInPilotView } from './viewMode';
 
 export type RevisionValue = string | number | boolean | null | RevisionValue[] | { [key: string]: RevisionValue };
 type RecordValue = Record<string, unknown>;
@@ -11,6 +13,12 @@ export interface RevisionFlight {
   side: string;
   category: string;
   hidden: boolean;
+  /** Late activation of the group. Pilot view leaves out a late-activation AI group, but not a flight or a support asset (G11). */
+  lateActivation?: boolean;
+  /** True when a unit of the group is a Client or Player slot. */
+  client?: boolean;
+  /** True when the normalizer lists the group as a support asset (tanker, AWACS, carrier, JTAC). */
+  support?: boolean;
   route: RevisionPoint[];
   units: RevisionUnit[];
   radio: RevisionValue;
@@ -85,6 +93,17 @@ function resolveName(value: unknown, dictionary: Record<string, string>): string
   return Object.prototype.hasOwnProperty.call(dictionary, name) ? dictionary[name] : name;
 }
 
+/** A group that pilot view does not show (G11), by the rule applyViewMode applies (`shownInPilotView`). */
+function withheldFromPilot(flight: RevisionFlight | undefined): boolean {
+  if (!flight) return false;
+  return !shownInPilotView({
+    hidden: flight.hidden,
+    lateActivation: flight.lateActivation === true,
+    client: flight.client === true,
+    support: flight.support === true,
+  });
+}
+
 /** Compare source values, before display defaults erase missing-vs-zero differences. */
 export function createMissionRevision(parsed: Pick<ParsedMissionFile, 'mission' | 'theatre' | 'dictionary'>): MissionRevision {
   const mission = record(parsed.mission);
@@ -112,9 +131,16 @@ export function createMissionRevision(parsed: Pick<ParsedMissionFile, 'mission' 
             radio: sourceRadios(unit),
           };
         });
+        const client = entries(source.units).some(([, item]) => {
+          const skill = text(record(item).skill);
+          return skill === 'Client' || skill === 'Player';
+        });
         flights.push({
           id: id(source.groupId), name: resolveName(source.name, parsed.dictionary), side, category,
           hidden: source.hidden === true,
+          lateActivation: source.lateActivation === true,
+          client,
+          support: supportKindOf(source) !== null,
           radio: { ...pick(source, ['modulation', 'communication'], true),
             ...(source.frequency !== undefined ? { frequency: frequency(source.frequency)! } : {}) },
           route: entries(record(source.route).points).map(([key, item]) => {
@@ -210,7 +236,23 @@ function pointPairs(before: RevisionPoint[], after: RevisionPoint[]) {
   return anchored;
 }
 
-export function compareMissionRevisions(before: MissionRevision, after: MissionRevision, viewMode: DisplaySettings['viewMode']): MissionRevisionDiff {
+/**
+ * Compare two revisions as the given view shows them.
+ *
+ * Pilot view (D1) lists only the displayed side's flights. The opposing and
+ * neutral flights are left out before matching, so their added, removed or
+ * changed fields never appear, the same rule applyViewMode applies to the
+ * mission. A pilot comparison without a side lists no flights (fail closed).
+ * In pilot view the groups that applyViewMode does not show are also left out
+ * (G11): hidden groups, and late-activation AI groups. A late-activation client
+ * flight and a late-activation support asset (tanker, AWACS) are kept, since the
+ * flight, support and comms screens show them. The rule is `shownInPilotView`,
+ * shared with applyViewMode; the values compared stay the source values.
+ */
+export function compareMissionRevisions(before: MissionRevision, after: MissionRevision, viewMode: DisplaySettings['viewMode'], side?: Side): MissionRevisionDiff {
+  const visibleFlights = (flights: RevisionFlight[]) => viewMode === 'creator'
+    ? flights
+    : flights.filter(flight => side !== undefined && flight.side === side);
   const changes: RevisionChange[] = [];
   const routes: RevisionRoute[] = [];
   const diff = (category: RevisionCategory, entity: string, field: string, a?: RevisionValue, b?: RevisionValue) => {
@@ -229,12 +271,12 @@ export function compareMissionRevisions(before: MissionRevision, after: MissionR
   diff('mission', '', 'start_time', before.startTime, after.startTime);
   diff('mission', '', 'date', before.date, after.date);
   diff('weather', '', 'weather', before.weather, after.weather);
-  const pairs = match(before.flights, after.flights, [
+  const pairs = match(visibleFlights(before.flights), visibleFlights(after.flights), [
     f => f.id ? `${f.side}:${f.category}:${f.id}` : undefined,
     f => f.name ? `${f.side}:${f.category}:${f.name}` : undefined,
   ]);
   for (const [a, b] of pairs) {
-    if (viewMode === 'pilot' && (a?.hidden || b?.hidden)) continue;
+    if (viewMode === 'pilot' && (withheldFromPilot(a) || withheldFromPilot(b))) continue;
     const flight = b ?? a!;
     const label = `${flight.side} / ${flight.name || `#${flight.id ?? '?'}`}`;
     diff('mission', label, 'flight', a ? a.name : undefined, b ? b.name : undefined);

@@ -88,11 +88,11 @@ export default function WaypointAnnotationEditor({
       applyToGroup ? visibleWaypointKeys : undefined,
     );
     if (!updated) {
-      setStatus(t('waypoints.limitReached'));
+      setStatus(t('flight:waypoints.limitReached'));
       return;
     }
     onNotesChange(updated);
-    setStatus(t(applyToGroup && groupMembers.length > 1 ? 'waypoints.savedGroup' : 'waypoints.saved'));
+    setStatus(t(applyToGroup && groupMembers.length > 1 ? 'flight:waypoints.savedGroup' : 'flight:waypoints.saved'));
   };
 
   const createGroup = () => {
@@ -107,53 +107,53 @@ export default function WaypointAnnotationEditor({
       visibleWaypointKeys,
     );
     if (!updated) {
-      setStatus(t(targetKeys.length === 0 ? 'waypoints.selectTarget' : 'waypoints.limitReached'));
+      setStatus(t(targetKeys.length === 0 ? 'flight:waypoints.selectTarget' : 'flight:waypoints.limitReached'));
       return;
     }
     onNotesChange(updated);
     setSelected(new Set());
-    setStatus(t('waypoints.groupCreated', { count: syncTargets.length }));
+    setStatus(t('flight:waypoints.groupCreated', { count: syncTargets.length }));
   };
 
   const leaveGroup = () => {
     onNotesChange(leaveWaypointSyncGroup(mission.userNotes, key));
-    setStatus(t('waypoints.leftGroup'));
+    setStatus(t('flight:waypoints.leftGroup'));
   };
 
   return (
     <div className={`waypoint-editor${compact ? ' compact' : ''}`}>
       <label>
-        <span>{t('waypoints.purpose')}</span>
+        <span>{t('flight:waypoints.purpose')}</span>
         <input
           value={purpose}
           maxLength={MAX_WAYPOINT_PURPOSE_LENGTH}
           onChange={event => setPurpose(event.target.value)}
-          placeholder={t('waypoints.purposePlaceholder')}
+          placeholder={t('flight:waypoints.purposePlaceholder')}
         />
       </label>
       <label>
-        <span>{t('waypoints.notes')}</span>
+        <span>{t('flight:waypoints.notes')}</span>
         <textarea
           value={notes}
           maxLength={MAX_WAYPOINT_NOTES_LENGTH}
           rows={compact ? 2 : 3}
           onChange={event => setNotes(event.target.value)}
-          placeholder={t('waypoints.notesPlaceholder')}
+          placeholder={t('flight:waypoints.notesPlaceholder')}
         />
       </label>
       <div className="waypoint-editor-actions">
-        <button type="button" className="button-secondary" onClick={() => save(false)}>{t('common.save')}</button>
+        <button type="button" className="button-secondary" onClick={() => save(false)}>{t('flight:waypoints.save')}</button>
         {groupMembers.length > 1 && (
           <button type="button" className="button-secondary" onClick={() => save(true)}>
-            {t('waypoints.saveGroup', { count: groupMembers.length })}
+            {t('flight:waypoints.saveGroup', { count: groupMembers.length })}
           </button>
         )}
       </div>
       <details className="waypoint-sync">
-        <summary>{t('waypoints.syncNearby')}</summary>
-        <p className="hint">{t('waypoints.syncHelp')}</p>
+        <summary>{t('flight:waypoints.syncNearby')}</summary>
+        <p className="hint">{t('flight:waypoints.syncHelp')}</p>
         <label className="waypoint-radius">
-          <span>{t('waypoints.radius')}</span>
+          <span>{t('flight:waypoints.radius')}</span>
           <input
             type="number"
             min="0.1"
@@ -165,7 +165,7 @@ export default function WaypointAnnotationEditor({
           <span>NM</span>
         </label>
         {candidates.length === 0 ? (
-          <p className="hint">{t('waypoints.noCandidates')}</p>
+          <p className="hint">{t('flight:waypoints.noCandidates')}</p>
         ) : (
           <div className="waypoint-candidates">
             {candidates.map(candidate => (
@@ -182,25 +182,25 @@ export default function WaypointAnnotationEditor({
                 />
                 <span>
                   {formatWaypointLabel(candidate.side, candidate.flight, candidate.routeIndex, mission)} · {candidate.distanceNm.toFixed(2)} NM
-                  {!allowedCandidateKeys.has(candidate.key) && ` · ${t('waypoints.groupConflict')}`}
+                  {!allowedCandidateKeys.has(candidate.key) && ` · ${t('flight:waypoints.groupConflict')}`}
                 </span>
               </label>
             ))}
           </div>
         )}
         <button type="button" className="button-secondary" disabled={selectedTargets.length === 0} onClick={createGroup}>
-          {t('waypoints.createGroup', { count: syncTargets.length })}
+          {t('flight:waypoints.createGroup', { count: syncTargets.length })}
         </button>
         {groupMembers.length > 1 && (
           <div className="waypoint-group-members">
-            <strong>{t('waypoints.currentGroup', { count: groupMembers.length })}</strong>
+            <strong>{t('flight:waypoints.currentGroup', { count: groupMembers.length })}</strong>
             <ul>
               {groupMembers.map(memberKey => {
                 const member = allWaypoints.find(item => item.key === memberKey);
                 return <li key={memberKey}>{member ? formatWaypointLabel(member.side, member.flight, member.routeIndex, mission) : memberKey}</li>;
               })}
             </ul>
-            <button type="button" className="button-danger-text" onClick={leaveGroup}>{t('waypoints.leaveGroup')}</button>
+            <button type="button" className="button-danger-text" onClick={leaveGroup}>{t('flight:waypoints.leaveGroup')}</button>
           </div>
         )}
       </details>

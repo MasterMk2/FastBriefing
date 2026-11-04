@@ -1,0 +1,149 @@
+{
+  "layers": {
+    "title": "レイヤー",
+    "group": {
+      "route": "経路と施設",
+      "units": "支援と脅威",
+      "unitsSupport": "支援",
+      "drawing": "描画と注釈"
+    },
+    "flights": "フライトの経路",
+    "navpoints": "経路点（NavPoint）",
+    "airbases": "飛行場",
+    "bullseye": "Bullseye",
+    "support": "支援機",
+    "threats": "脅威の圏",
+    "detection": "探知の圏",
+    "enemies": "AI 群",
+    "zones": "トリガーゾーン",
+    "drawings": "ME 図形",
+    "annotations": "注釈"
+  },
+  "tools": {
+    "label": "注釈ツール",
+    "color": "色",
+    "move": "移動",
+    "pin": "ピン",
+    "line": "線",
+    "help": {
+      "move": "地図をドラッグして動かします。",
+      "pin": "地図をタップするとピンを置きます。Esc で移動に戻ります。",
+      "line": "ドラッグして線を描きます。2 本指で触ると線は止まり、地図を動かせます。Esc で移動に戻ります。"
+    },
+    "colors": {
+      "ink1": "色 1",
+      "ink2": "色 2",
+      "ink3": "色 3",
+      "ink4": "色 4"
+    },
+    "undoPin": "直前のピンを取り消す",
+    "undoLine": "直前の線を取り消す",
+    "undoNone": "取り消す",
+    "restore": "元に戻す",
+    "pinCentre": "地図の中心に置く",
+    "count": "注釈 {{count}} / {{max}}",
+    "pointsLeft": "線の点の残り {{remaining}} / {{max}}",
+    "storageFailed": "この端末に保存できません。追加した注釈は残らないおそれがあります。",
+    "hidden": "注釈のレイヤーが非表示のため、注釈は編集できません。レイヤーで「注釈」を入れてください。",
+    "removed": "{{kind}} を消しました。「元に戻す」で戻せます。",
+    "limit": {
+      "annotations": "注釈は上限の {{max}} 件に達しています。消してから追加してください。",
+      "strokePoints": "1 本の線は {{max}} 点までです。ここで線を終えました。続きは新しい線で描いてください。",
+      "totalPoints": "線の点数の合計が上限（{{max}} 点）に近づいています。残りは {{remaining}} 点です。"
+    },
+    "clearAll": "注釈をすべて消す",
+    "clearConfirm": "注釈 {{count}} 件をすべて消します。「元に戻す」で一度に戻せます。",
+    "clearConfirm_one": "注釈 {{count}} 件をすべて消します。「元に戻す」で一度に戻せます。",
+    "clearYes": "消す",
+    "clearNo": "やめる",
+    "removedAll": "注釈 {{count}} 件をすべて消しました。「元に戻す」で戻せます。",
+    "removedAll_one": "注釈 {{count}} 件をすべて消しました。「元に戻す」で戻せます。"
+  },
+  "annotations": {
+    "defaultPin": "ピン {{count}}",
+    "label": "名前",
+    "notes": "メモ",
+    "color": "色",
+    "width": "太さ",
+    "save": "保存",
+    "delete": "削除",
+    "kind": {
+      "pin": "ピン",
+      "stroke": "線"
+    }
+  },
+  "controls": {
+    "fitAll": "全体表示",
+    "offMap": "地図外 {{count}} 件",
+    "backgroundHidden": "地図背景は非表示（表示設定）",
+    "backgroundLoading": "地図を準備中",
+    "backgroundMissing": "地図背景なし",
+    "zoom": "ズーム",
+    "zoomIn": "拡大",
+    "zoomOut": "縮小"
+  },
+  "empty": {
+    "noPoints": "表示できる点がありません。座標が解決できない点は「地図外」に出ます。",
+    "noLayers": "表示中のレイヤーがありません。",
+    "restoreLayers": "レイヤーを戻す"
+  },
+  "unsupported": {
+    "title": "未対応マップ: DCS {{theatre}} の一覧のみ",
+    "body": "このマップの緯度経度は変換できません。地図は描かず、DCS 座標の一覧を出します。",
+    "caption": "DCS 座標の一覧（単位はメートル）",
+    "col": {
+      "side": "陣営",
+      "kind": "種類",
+      "name": "名前"
+    },
+    "kind": {
+      "waypoint": "経路点",
+      "navPoint": "経路点（NavPoint）",
+      "support": "支援機",
+      "bullseye": "Bullseye",
+      "group": "AI 群"
+    }
+  },
+  "legend": {
+    "title": "凡例",
+    "route": "{{side}}の経路",
+    "shapes": "陣営の形",
+    "shape": {
+      "blue": "青（四角）",
+      "red": "赤（ひし形）",
+      "neutral": "中立（丸）"
+    },
+    "navpoint": "経路点",
+    "airbase": "飛行場",
+    "bullseye": "Bullseye",
+    "support": "支援機（形は陣営、略号は種類）",
+    "threat": "脅威の圏",
+    "detection": "探知の圏",
+    "enemy": "AI 群（形は陣営）",
+    "zone": "トリガーゾーン",
+    "drawing": "ME 図形",
+    "annotation": "注釈"
+  },
+  "popup": {
+    "openFlight": "この機のナビログを開く",
+    "threat": "{{side}} {{type}}: 脅威の圏 {{range}}",
+    "detection": "{{side}} {{type}}: 探知の圏 {{range}}",
+    "enemy": "{{side}}: {{type}}（{{count}}）",
+    "zone": "トリガーゾーン: {{name}}"
+  },
+  "airbase": {
+    "fallback": "飛行場 {{id}}"
+  },
+  "support": {
+    "kind": {
+      "tanker": "給油機",
+      "awacs": "AWACS",
+      "carrier": "空母",
+      "jtac": "JTAC"
+    }
+  },
+  "solo": {
+    "showing": "{{callsign}} だけを表示中",
+    "showAll": "全機を表示に戻す"
+  }
+}

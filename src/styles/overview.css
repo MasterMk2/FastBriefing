@@ -1,0 +1,320 @@
+/* Owner: P4 (概要とブリーフィング). Overview screen. Colours come from tokens only (SPEC 4.1). */
+
+.overview {
+  display: grid;
+  gap: 20px;
+  min-width: 0;
+  padding: 16px;
+  color: var(--text);
+  font-size: var(--fs-body);
+}
+
+.overview .visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.overview-head {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+.overview-head-text {
+  min-width: 0;
+}
+
+.overview-title {
+  margin: 0 0 6px;
+  font-size: 1.25rem;
+  line-height: 1.35;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow-wrap: anywhere;
+}
+
+.overview-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin: 0 0 8px;
+  color: var(--text-muted);
+  font-size: var(--fs-note);
+  font-variant-numeric: tabular-nums;
+}
+
+.overview-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  margin: 0;
+}
+
+.overview-count {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+}
+
+.overview-count dt,
+.overview-count dd {
+  margin: 0;
+}
+
+.overview-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.overview-button,
+.overview-link-button {
+  min-height: var(--target-desktop);
+  padding: 4px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-1);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.overview-button.is-primary {
+  border-color: var(--primary-bg);
+  background: var(--primary-bg);
+  color: var(--primary-text);
+  font-weight: 600;
+}
+
+.overview-link-button {
+  min-height: 0;
+  padding: 2px 8px;
+  color: var(--info-text);
+  background: transparent;
+  text-decoration: underline;
+}
+
+.overview-button:focus-visible,
+.overview-link-button:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.overview-section {
+  min-width: 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.overview-section h3 {
+  margin: 0 0 8px;
+  font-size: 1rem;
+}
+
+.overview-muted {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--fs-note);
+}
+
+.overview-task-text {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.overview-label {
+  color: var(--text-muted);
+  font-size: var(--fs-note);
+}
+
+.overview-grid {
+  display: grid;
+  gap: 20px;
+  min-width: 0;
+}
+
+.overview-list {
+  margin: 0;
+  padding-left: 1.25em;
+  font-size: var(--fs-table);
+  overflow-wrap: anywhere;
+}
+
+.overview-lint-list {
+  padding-left: 0;
+  list-style: none;
+}
+
+.overview-lint-row {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 4px 10px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: var(--fs-table);
+}
+
+.overview-load-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: var(--fs-table);
+}
+
+.overview-day-shift {
+  color: var(--text-muted);
+  font-size: var(--fs-note);
+  white-space: nowrap;
+}
+
+.overview-lint-severity {
+  color: var(--warning-text);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.overview-lint-severity[data-severity="error"] {
+  color: var(--danger-text);
+}
+
+.overview-lint-severity[data-severity="info"] {
+  color: var(--info-text);
+}
+
+.overview-lint-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.overview-pairs {
+  display: grid;
+  gap: 6px;
+  margin: 0 0 8px;
+}
+
+.overview-pairs > div {
+  display: grid;
+  grid-template-columns: minmax(7em, auto) minmax(0, 1fr);
+  gap: 12px;
+}
+
+.overview-pairs dt {
+  color: var(--text-muted);
+  font-size: var(--fs-note);
+}
+
+.overview-pairs dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.overview-bullseye {
+  margin: 0 0 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The frame is positioned so the visually hidden labels in the table (position: absolute) stay inside it:
+   without it they take the page as their containing block and widen the page on a phone. */
+.overview-table-wrap {
+  position: relative;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.overview-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-table);
+  font-variant-numeric: tabular-nums;
+}
+
+.overview-table caption {
+  text-align: left;
+}
+
+.overview-table th,
+.overview-table td {
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.overview-table .num {
+  text-align: right;
+}
+
+.overview-tot td:nth-child(1) {
+  white-space: nowrap;
+}
+
+.overview-near {
+  color: var(--warning-text);
+  white-space: nowrap;
+}
+
+.overview-metar {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+  min-width: 0;
+}
+
+.overview-metar p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.overview-metar code {
+  font-size: var(--fs-note);
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.overview .notice {
+  margin-top: 6px;
+}
+
+@media (min-width: 768px) {
+  .overview-head {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+  }
+}
+
+@media (min-width: 1280px) {
+  .overview-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: start;
+  }
+}
+
+/* Touch widths: buttons get the touch target (SPEC 4.1). */
+@media (max-width: 767px) {
+  .overview {
+    padding: 16px;
+  }
+
+  .overview-button,
+  .overview-link-button {
+    min-height: var(--target-touch);
+  }
+
+  .overview-lint-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "dropZone": ".miz mission file drop area",
+  "dropFile": "Drop a .miz file here",
+  "dropHint": "Select 1 file to open. Select 2 files at once to compare revisions (first: before, second: after).",
+  "pick": "Choose a file",
+  "retry": "Choose another file",
+  "loading": "Reading the file…",
+  "slow": "This is taking a while. Use Cancel load on the overlay to stop.",
+  "guideTitle": "What you can do here",
+  "point1": "Check the route and frequencies on the map",
+  "point2": "Send the verbal briefing screen by screen",
+  "point3": "Export material (print, PNG, Markdown)",
+  "compareHint": "After opening, choose File > Compare revisions and pick the older file to compare revisions"
+}

@@ -6,6 +6,7 @@ import {
   type SettingsStorage,
   loadSettings,
   saveSettings,
+  migrateSettings,
 } from './useSettings';
 
 function createStorage(initialValue: string | null = null): SettingsStorage {
@@ -94,15 +95,15 @@ describe('useSettings persistence', () => {
     });
   });
 
-  it('v2記録のdefault明示選択は尊重する', () => {
+  it('v2記録のdefault明示選択は標準テーマとして尊重する（v5 で名前を standard に改める）', () => {
     const stored = JSON.stringify({
-      settingsVersion: SETTINGS_VERSION,
+      settingsVersion: 2,
       theme: 'default',
     });
 
     expect(loadSettings(createStorage(stored))).toEqual({
       ...DEFAULT_SETTINGS,
-      theme: 'default',
+      theme: 'standard',
     });
   });
 
@@ -116,18 +117,18 @@ describe('useSettings persistence', () => {
     expect(loadSettings(createStorage(stored))).toEqual({
       ...DEFAULT_SETTINGS,
       language: 'en',
-      theme: 'default',
+      theme: 'standard',
     });
   });
 
-  it('v3の選択順を保ちつつ新しい記入欄を概要の後へ追加する', () => {
+  it('v3の選択順を保ちつつ新しい記入欄と天候欄を概要の後へ追加する', () => {
     const stored = JSON.stringify({
       settingsVersion: 3,
       briefingSections: ['whiteboard', 'overview', 'map'],
     });
 
     expect(loadSettings(createStorage(stored)).briefingSections).toEqual([
-      'whiteboard', 'overview', 'notes', 'map',
+      'overview', 'weather', 'notes', 'map',
     ]);
   });
 
@@ -160,7 +161,7 @@ describe('useSettings persistence', () => {
 
     expect(loadSettings(createStorage(stored))).toEqual({
       ...DEFAULT_SETTINGS,
-      briefingSections: ['whiteboard', 'overview'],
+      briefingSections: ['notes', 'overview'],
     });
   });
 
@@ -200,5 +201,114 @@ describe('useSettings persistence', () => {
     expect(JSON.parse(storage.getItem(SETTINGS_STORAGE_KEY) ?? '{}').briefingPresets).toEqual([
       { name: 'Pilot', sections: ['overview', 'map'] },
     ]);
+  });
+});
+
+describe('useSettings schema v5', () => {
+  it('migrates a v4 record: keeps its choices, renames the default theme and fills the new fields', () => {
+    const stored = JSON.stringify({ settingsVersion: 4, theme: 'default', language: 'en', coordinateFormat: 'MGRS' });
+
+    expect(loadSettings(createStorage(stored))).toMatchObject({
+      theme: 'standard',
+      language: 'en',
+      coordinateFormat: 'MGRS',
+      side: null,
+      fontScale: 'standard',
+      windDisplay: 'both',
+      timeDisplay: 'both',
+      mapBackground: true,
+      kneeboardWidth: 1536,
+    });
+  });
+
+  it('keeps a chosen side, font scale and display options', () => {
+    const stored = JSON.stringify({
+      settingsVersion: SETTINGS_VERSION,
+      side: 'red',
+      fontScale: 'large',
+      windDisplay: 'from',
+      timeDisplay: 'zulu',
+      mapBackground: false,
+      kneeboardWidth: 2048,
+      theme: 'night',
+    });
+
+    expect(loadSettings(createStorage(stored))).toMatchObject({
+      side: 'red',
+      fontScale: 'large',
+      windDisplay: 'from',
+      timeDisplay: 'zulu',
+      mapBackground: false,
+      kneeboardWidth: 2048,
+      theme: 'night',
+    });
+  });
+
+  it('falls back field by field for unknown side, font scale, width and theme values', () => {
+    const stored = JSON.stringify({
+      settingsVersion: SETTINGS_VERSION,
+      side: 'green',
+      fontScale: 'huge',
+      kneeboardWidth: 999,
+      theme: 'default-dark',
+      mapBackground: 'yes',
+    });
+
+    expect(loadSettings(createStorage(stored))).toMatchObject({
+      side: null,
+      fontScale: 'standard',
+      kneeboardWidth: 1536,
+      theme: 'ffs',
+      mapBackground: true,
+    });
+  });
+
+  it('keeps the aircraft coordinate setting and round-trips a saved v5 record', () => {
+    const storage = createStorage();
+    const next = { ...DEFAULT_SETTINGS, coordinateFormat: 'aircraft' as const, side: 'blue' as const };
+
+    expect(saveSettings(next, storage)).toBe(true);
+    const saved = JSON.parse(storage.getItem(SETTINGS_STORAGE_KEY) ?? 'null') as Record<string, unknown>;
+    expect(saved.settingsVersion).toBe(SETTINGS_VERSION);
+    expect(loadSettings(storage)).toMatchObject({ coordinateFormat: 'aircraft', side: 'blue' });
+  });
+
+  it('treats a record that is not an object as defaults and keeps the v3 section migration', () => {
+    expect(migrateSettings('not an object')).toEqual(DEFAULT_SETTINGS);
+    expect(migrateSettings({ settingsVersion: 3, briefingSections: ['overview', 'flights'] }).briefingSections)
+      .toEqual(['overview', 'weather', 'notes', 'flights', 'route']);
+  });
+
+  it('gives a v4 selection the weather after overview and the nav logs after flights', () => {
+    const stored = JSON.stringify({ settingsVersion: 4, briefingSections: ['overview', 'flights', 'map'] });
+
+    expect(loadSettings(createStorage(stored)).briefingSections).toEqual([
+      'overview', 'weather', 'flights', 'route', 'map',
+    ]);
+  });
+
+  it('keeps a v4 selection that already has the weather and the nav logs', () => {
+    const stored = JSON.stringify({ settingsVersion: 4, briefingSections: ['overview', 'weather', 'flights', 'route'] });
+
+    expect(loadSettings(createStorage(stored)).briefingSections).toEqual([
+      'overview', 'weather', 'flights', 'route',
+    ]);
+  });
+
+  it('migrates the sections of v4 presets too, so applying an old preset keeps the printout', () => {
+    const stored = JSON.stringify({
+      settingsVersion: 4,
+      briefingPresets: [{ name: 'Old', sections: ['overview', 'flights'] }],
+    });
+
+    expect(loadSettings(createStorage(stored)).briefingPresets).toEqual([
+      { name: 'Old', sections: ['overview', 'weather', 'flights', 'route'] },
+    ]);
+  });
+
+  it('does not add the weather or nav logs to a current record the user trimmed', () => {
+    const stored = JSON.stringify({ settingsVersion: SETTINGS_VERSION, briefingSections: ['overview', 'flights'] });
+
+    expect(loadSettings(createStorage(stored)).briefingSections).toEqual(['overview', 'flights']);
   });
 });

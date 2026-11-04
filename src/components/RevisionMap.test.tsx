@@ -9,7 +9,7 @@ import type { RevisionPoint } from '../utils/missionRevision';
 const mocks = vi.hoisted(() => ({ fitBounds: vi.fn() }));
 vi.mock('react-leaflet', () => ({
   MapContainer: ({ children }: { children: ReactNode }) => <div data-testid="map">{children}</div>,
-  TileLayer: () => null,
+  TileLayer: () => <div data-testid="tiles" />,
   CircleMarker: ({ children, center }: { children: ReactNode; center: number[] }) => <div data-testid="marker" data-position={JSON.stringify(center)}>{children}</div>,
   Popup: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   Polyline: ({ positions }: { positions: number[][] }) => <div data-testid="line" data-positions={JSON.stringify(positions)} />,
@@ -26,7 +26,7 @@ afterEach(async () => { await act(async () => root.unmount()); container.remove(
 
 describe('revision map rendering contract', () => {
   it('projects and labels both revisions with separate route segments', async () => {
-    await act(async () => root.render(<RevisionMap theatre="Iraq" routes={[{ name: 'A',
+    await act(async () => root.render(<RevisionMap theatre="Iraq" mapBackground routes={[{ name: 'A',
       before: [point(1, { x: 0, y: 0 }), point(2, { x: 100000, y: 50000 })],
       after: [point(1, { x: 1000, y: 0 }), point(2, { x: 100000, y: 50000 })],
     }]} />));
@@ -36,17 +36,26 @@ describe('revision map rendering contract', () => {
     expect(mocks.fitBounds).toHaveBeenCalled();
   });
   it('never bridges a missing coordinate with an invented segment', async () => {
-    await act(async () => root.render(<RevisionMap theatre="Afghanistan" routes={[{ name: 'A',
+    await act(async () => root.render(<RevisionMap theatre="Afghanistan" mapBackground routes={[{ name: 'A',
       before: [point(1, { x: 0, y: 0 }), point(2, {}), point(3, { x: 100000, y: 50000 })], after: [],
     }]} />));
     expect(container.querySelectorAll('[data-testid=line]')).toHaveLength(0);
     expect(container.querySelectorAll('[data-testid=marker]')).toHaveLength(2);
   });
   it('shows an explicit fallback for unsupported maps', async () => {
-    await act(async () => root.render(<RevisionMap theatre="UnsupportedTestTheatre" routes={[{ name: 'A',
+    await act(async () => root.render(<RevisionMap theatre="UnsupportedTestTheatre" mapBackground routes={[{ name: 'A',
       before: [point(1, { x: 0, y: 0 })], after: [],
     }]} />));
     expect(container.querySelector('[data-testid=map]')).toBeNull();
     expect(container.textContent).toContain('緯度経度を解決できません');
+  });
+  it('mounts the tile layer only when the map background setting is on (decision 6)', async () => {
+    const routes = [{ name: 'A', before: [point(1, { x: 0, y: 0 })], after: [point(1, { x: 1000, y: 0 })] }];
+    await act(async () => root.render(<RevisionMap theatre="Iraq" mapBackground routes={routes} />));
+    expect(container.querySelector('[data-testid=tiles]')).not.toBeNull();
+    await act(async () => root.render(<RevisionMap theatre="Iraq" mapBackground={false} routes={routes} />));
+    expect(container.querySelector('[data-testid=tiles]')).toBeNull();
+    // The routes are still drawn without the background.
+    expect(container.querySelectorAll('[data-testid=marker]')).toHaveLength(2);
   });
 });

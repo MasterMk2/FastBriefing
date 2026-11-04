@@ -1,0 +1,112 @@
+{
+  "app": {
+    "name": "FastBriefing",
+    "selectMiz": "Open 1 .miz or compare 2 .miz files",
+    "dropFile": "Drop a .miz file here",
+    "retry": "Choose another file",
+    "reset": "Start over",
+    "loading": "Parsing mission...",
+    "cancel": "Cancel loading",
+    "screenLoading": "Loading the screen...",
+    "invalidMizOnly": "Please select a .miz file (other formats cannot be loaded)",
+    "tooManyFiles": "Select one .miz, or exactly two .miz files to compare revisions.",
+    "parseError": "Failed to parse the mission file",
+    "emptyMiz": "This file is empty (0 bytes) and contains no mission data. Download or copy it again.",
+    "corruptMiz": "This file is not a valid DCS mission ZIP or was damaged during transfer. Check whether DCS Mission Editor can open it, then obtain the source file again.",
+    "mizSafetyLimit": "This mission cannot be loaded because it exceeds a safety limit. Check the archive contents and embedded images.",
+    "invalidMissionData": "The ZIP opened, but its DCS mission data could not be read. Save it again in DCS Mission Editor."
+  },
+  "header": {
+    "side": "Side",
+    "view": "View",
+    "viewHint": "Also changes exported content",
+    "start": "Start briefing",
+    "settings": "Display settings",
+    "file": "File"
+  },
+  "side": {
+    "blue": "Blue",
+    "red": "Red",
+    "neutral": "Neutral",
+    "blueShape": "Blue (square)",
+    "redShape": "Red (diamond)",
+    "neutralShape": "Neutral (circle)"
+  },
+  "view": {
+    "creator": "Creator",
+    "pilot": "Pilot"
+  },
+  "nav": {
+    "overview": "Overview",
+    "flights": "Flights",
+    "map": "Map",
+    "comms": "Comms",
+    "support": "Support",
+    "threats": "Threats",
+    "notes": "Notes",
+    "export": "Export",
+    "more": "More",
+    "briefing": "Briefing",
+    "revision": "Compare revisions",
+    "initial": "Start"
+  },
+  "rail": {
+    "title": "Own-side flights",
+    "search": "Search flights",
+    "count": "{{count}}",
+    "empty": "No flights",
+    "noMatch": "No flights match the search",
+    "clearSearch": "Clear search",
+    "opponent": "Opposing side (creator view)",
+    "navLabel": "Screens"
+  },
+  "file": {
+    "label": "File",
+    "open": "Open",
+    "compare": "Compare revisions",
+    "close": "Close mission"
+  },
+  "stub": {
+    "preparing": "In preparation",
+    "body": "This screen is being redesigned."
+  },
+  "unresolved": {
+    "label": "Unresolved",
+    "dcsXY": "DCS X/Y"
+  },
+  "notice": {
+    "info": "Info",
+    "warning": "Warning",
+    "error": "Error",
+    "success": "Done"
+  },
+  "bottom": {
+    "sheetTitle": "More"
+  },
+  "screens": {
+    "threatsPilot": {
+      "title": "Threats are not shown in pilot view",
+      "body": "Switch to creator view to see the threat list and crossings with the route."
+    },
+    "briefing": {
+      "title": "Briefing is in preparation",
+      "body": "The full-screen verbal briefing will be available in a later update."
+    },
+    "revision": {
+      "title": "Choose two files to compare revisions",
+      "body": "Use Compare revisions from the File menu, or choose a second .miz file."
+    }
+  },
+  "units": {
+    "time": {
+      "local": "{{value}} local",
+      "zulu": "{{value}} Z",
+      "both": "{{local}} local / {{zulu}} Z"
+    },
+    "wind": {
+      "from": "from {{deg}}°",
+      "to": "to {{deg}}°",
+      "both": "from {{from}}° / to {{to}}°"
+    }
+  }
+}

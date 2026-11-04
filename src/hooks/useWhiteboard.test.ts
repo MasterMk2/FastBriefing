@@ -6,6 +6,7 @@ import {
   WHITEBOARD_STORAGE_PREFIX,
   WHITEBOARD_VERSION,
   getMissionWhiteboardId,
+  inspectWhiteboard,
   loadWhiteboard,
   normalizeWhiteboard,
   parseWhiteboardSidecar,
@@ -97,5 +98,36 @@ describe('whiteboard persistence', () => {
     expect(parseWhiteboardSidecar(sidecar, 'archive-one')).toEqual(data);
     expect(() => parseWhiteboardSidecar(sidecar, 'archive-two')).toThrow();
     expect(() => parseWhiteboardSidecar('{"version":1}', 'archive-one')).toThrow();
+  });
+});
+
+describe('whiteboard stored state (F11)', () => {
+  const storedValue = (value: unknown) => createStorage(typeof value === 'string' ? value : JSON.stringify(value));
+  const id = 'archive-one';
+
+  it('treats a board written by the app as readable', () => {
+    const storage = createStorage();
+    saveWhiteboard(id, {
+      notes: 'Push at 14:30Z',
+      strokes: [{ id: 'one', color: '#b42318', width: 6, points: [{ x: 10, y: 20 }, { x: 30, y: 40 }] }],
+    }, storage);
+
+    expect(inspectWhiteboard(id, storage)).toBe('ok');
+    expect(inspectWhiteboard(id, createStorage())).toBe('absent');
+  });
+
+  it.each([
+    ['broken JSON', '{"broken":'],
+    ['notes that are not text', { version: 1, notes: 5, strokes: [] }],
+    ['strokes that are not a list', { version: 1, notes: '', strokes: 'x' }],
+    ['a stroke without points', { version: 1, notes: '', strokes: [{ id: 'one', color: '#b42318', width: 6 }] }],
+    ['a stroke whose points are all invalid', { version: 1, notes: '', strokes: [{ points: [{ x: 'bad', y: 2 }] }] }],
+    ['a stroke that is not a record', { version: 1, notes: '', strokes: ['line'] }],
+    ['a stroke list over the limit', { version: 1, notes: '', strokes: Array.from({ length: 301 }, () => ({ points: [{ x: 1, y: 1 }] })) }],
+    ['notes over the limit', { version: 1, notes: 'x'.repeat(MAX_WHITEBOARD_NOTES + 1), strokes: [] }],
+    ['more points in total than the board holds', { version: 1, notes: '', strokes: Array.from({ length: 9 }, () => ({ points: Array.from({ length: MAX_POINTS_PER_STROKE }, () => ({ x: 1, y: 1 })) })) }],
+    ['another version', { version: 2, notes: '', strokes: [] }],
+  ])('marks a record with %s as corrupt', (_label, value) => {
+    expect(inspectWhiteboard(id, storedValue(value))).toBe('corrupt');
   });
 });

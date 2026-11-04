@@ -1,0 +1,166 @@
+/* Owner: P3 (出力). The printable briefing document (A4 portrait, SPEC F9).
+   On screen the document is kept off-screen rather than display:none, so a map canvas
+   still lays out and draws. Its height is 0 with overflow hidden, so the
+   off-screen copy adds no scrollable height to the page. Printing brings it into the flow.
+   The print preview (html[data-print-preview="on"]) shows the same copy full screen.
+   Colours use the system keywords CanvasText and Canvas with color-scheme: light, so they are black on white
+   even when the app theme is dark (the FFS and night themes set color-scheme: dark on :root). */
+
+.print-briefing {
+  display: block;
+  position: absolute;
+  top: 0;
+  left: -100000px;
+  width: 180mm;
+  height: 0;
+  overflow: hidden;
+  color-scheme: light;
+  color: CanvasText;
+  background: Canvas;
+}
+
+html[data-print-preview="on"] .print-briefing {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  width: auto;
+  height: auto;
+  overflow: auto;
+  box-sizing: border-box;
+  padding: 64px 16px 24px;
+  z-index: 1000;
+}
+
+html[data-print-preview="on"] .print-document {
+  max-width: 180mm;
+  margin: 0 auto;
+}
+
+.print-whiteboard-board {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin-top: 3mm;
+  border: 0.3mm solid CanvasText;
+}
+
+.print-document-head h1 {
+  margin: 0 0 4mm;
+  font-size: 18pt;
+}
+
+.print-document-head p {
+  margin: 0;
+  font-size: 10pt;
+}
+
+.print-page {
+  padding-top: 4mm;
+}
+
+.print-page h2 {
+  margin: 0 0 3mm;
+  font-size: 14pt;
+  border-bottom: 1px solid CanvasText;
+}
+
+.print-page h3 {
+  margin: 4mm 0 1.5mm;
+  font-size: 11pt;
+}
+
+.print-lines {
+  margin: 0;
+  padding-left: 5mm;
+  font-size: 10pt;
+  font-variant-numeric: tabular-nums;
+}
+
+.print-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 8.5pt;
+  font-variant-numeric: tabular-nums;
+}
+
+.print-table th,
+.print-table td {
+  padding: 0.6mm 1mm;
+  border-bottom: 0.2mm solid CanvasText;
+  text-align: left;
+  vertical-align: top;
+}
+
+.print-notes {
+  white-space: pre-wrap;
+  font-size: 10pt;
+}
+
+/* Free text (the mission description, task texts, memos): the author's spaces line up columns in a monospaced
+   font, so both are kept. A line longer than the page wraps instead of running off it. */
+.print-pre {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: ui-monospace, "Cascadia Mono", Consolas, "Courier New", monospace;
+  font-size: 9pt;
+}
+
+.print-map-frame {
+  position: relative;
+}
+
+.print-map-canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.print-map-status {
+  margin: 2mm 0 0;
+  font-size: 10pt;
+}
+
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 12mm;
+  }
+
+  html,
+  body {
+    color-scheme: light;
+    background: Canvas;
+    color: CanvasText;
+  }
+
+  /* The preview selector is listed too: its fixed, scrolling box would otherwise win (higher specificity) and the
+     print would be one clipped screen repeated on every page when "印刷" is pressed from the preview. */
+  .print-briefing,
+  html[data-print-preview="on"] .print-briefing {
+    position: static;
+    inset: auto;
+    left: auto;
+    width: auto;
+    height: auto;
+    overflow: visible;
+    padding: 0;
+    z-index: auto;
+  }
+
+  .print-page {
+    break-before: page;
+    page-break-before: always;
+  }
+
+  .print-document-head + .print-page {
+    break-before: auto;
+    page-break-before: auto;
+  }
+
+  .print-table tr {
+    break-inside: avoid;
+  }
+}

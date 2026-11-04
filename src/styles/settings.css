@@ -1,0 +1,86 @@
+/* Owner: P8 (表示設定). Contents of the settings drawer. The frame (position, 360px, bottom sheet, focus of the trigger) is in shell.css. Colours come from tokens only. */
+
+.settings-drawer {
+  gap: 20px;
+}
+
+.settings-drawer-note {
+  margin: 0;
+}
+
+.settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+.settings-section-title {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--fs-note);
+  font-weight: 700;
+}
+
+.settings-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.settings-row > .field-label {
+  font-weight: 700;
+  font-size: var(--fs-note);
+}
+
+.settings-select {
+  min-height: var(--target-desktop);
+  max-width: 100%;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-0);
+  color: var(--text);
+  font: inherit;
+}
+
+.settings-select:focus-visible,
+.settings-check input:focus-visible,
+.settings-reset:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.settings-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: var(--target-desktop);
+  cursor: pointer;
+}
+
+.settings-check input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.settings-reset-block {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.settings-reset {
+  align-self: flex-start;
+}
+
+@media (max-width: 767px) {
+  .settings-select,
+  .settings-check {
+    min-height: var(--target-touch);
+  }
+}

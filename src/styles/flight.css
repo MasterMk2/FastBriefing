@@ -1,0 +1,832 @@
+/* Flight screen (SPEC 1.3 flights, F3, F4). Owner: P1. Colours come from tokens.css only. */
+
+.flight-screen {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+/* Flight picker for widths without the left rail (SPEC 3). Hidden where the rail shows the same list. */
+.flight-screen-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.flight-screen-picker label {
+  color: var(--text-muted);
+  font-size: var(--fs-note);
+  font-weight: 700;
+}
+
+.flight-screen-picker select {
+  min-height: var(--target-touch);
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-0);
+  color: var(--text);
+  font: inherit;
+}
+
+@media (min-width: 1280px) {
+  .flight-screen-picker {
+    display: none;
+  }
+}
+
+.flight-screen-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+/* Wide screens: the same map panel sits to the right of the flight (SPEC 1.3). */
+.flight-screen-body.is-wide {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(400px, 40%);
+  align-items: start;
+}
+
+.flight-map-pane {
+  position: sticky;
+  top: calc(var(--shell-header-height) + 12px);
+  display: flex;
+  height: calc(100vh - var(--shell-header-height) - 40px);
+  min-height: 420px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.flight-map-pane > * {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* Header: identity on the left, facts under it, the export action on the right. */
+.flight-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.flight-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px 16px;
+  align-items: start;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.flight-title-block {
+  min-width: 0;
+}
+
+.flight-title-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 4px;
+}
+
+.flight-callsign {
+  margin: 0;
+  font-size: 1.5rem;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.flight-name {
+  margin: 2px 0 0;
+  color: var(--text-muted);
+  font-size: var(--fs-note);
+  overflow-wrap: anywhere;
+}
+
+.flight-badge {
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-muted);
+  font-size: var(--fs-note);
+}
+
+.flight-facts {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 8px 16px;
+  margin: 0;
+}
+
+.flight-facts > div {
+  min-width: 0;
+}
+
+.flight-facts dt {
+  color: var(--text-muted);
+  font-size: var(--fs-note);
+}
+
+.flight-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Buttons of this screen. They are drawn here rather than with the shared .btn rules (common.css). */
+.flight-button {
+  min-height: var(--target-desktop);
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-0);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--fs-note);
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.flight-button:hover:not(:disabled) {
+  background: var(--surface-2);
+}
+
+.flight-button-primary {
+  background: var(--primary-bg);
+  border-color: var(--primary-bg);
+  color: var(--primary-text);
+}
+
+/* Same specificity as the secondary hover rule and later in the file, so the primary background wins on hover too. */
+.flight-button-primary:hover:not(:disabled) {
+  background: var(--primary-bg);
+  opacity: 0.9;
+}
+
+.flight-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.flight-export {
+  white-space: nowrap;
+}
+
+/* The header's actions sit on one row; the map action comes first, then the export (SPEC 1.3). */
+.flight-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+/* Empty when the card renders nothing (no wingman chosen on this device), so no frame is left behind. */
+.flight-wingman-slot {
+  min-width: 0;
+}
+
+.flight-wingman-slot:empty {
+  display: none;
+}
+
+.flight-subviews {
+  max-width: 100%;
+}
+
+.flight-subview-body {
+  min-width: 0;
+}
+
+.flight-empty-line,
+.flight-screen .hint {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--fs-note);
+}
+
+.flight-diff {
+  display: inline-flex;
+  gap: 4px;
+  color: var(--warning-text);
+  font-weight: 700;
+}
+
+/* Navigation log (F3). Default: eight columns; the menu adds the optional ones. */
+.route-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.route-main {
+  min-width: 0;
+}
+
+.route-coord-note {
+  margin: 0 0 8px;
+  color: var(--text-muted);
+  font-size: var(--fs-note);
+}
+
+.route-columns {
+  margin-bottom: 8px;
+}
+
+.route-columns > summary {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--target-desktop);
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: var(--fs-note);
+}
+
+.route-columns-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin: 4px 0 0;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.route-columns-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: var(--target-desktop);
+}
+
+/* Positioned, so the visually hidden caption and headers inside cannot widen the page (see overview.css). */
+.route-table-wrap {
+  position: relative;
+  min-width: 0;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.route-table {
+  width: 100%;
+  min-width: 920px;
+  border-collapse: collapse;
+  font-size: var(--fs-table);
+  font-variant-numeric: tabular-nums;
+}
+
+.route-table th,
+.route-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.route-table th {
+  color: var(--text-muted);
+  font-size: var(--fs-note);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.route-table tbody tr.is-selected td {
+  background: var(--surface-2);
+}
+
+.route-col-no { width: 64px; }
+.route-col-name { width: 220px; }
+.route-col-coord { width: 200px; }
+.route-col-alt { width: 110px; }
+.route-col-speed { width: 90px; }
+.route-col-eta { width: 170px; }
+.route-col-leg { width: 100px; }
+.route-col-bearing { width: 120px; }
+.route-col-legTime,
+.route-col-cumDistance,
+.route-col-cumTime,
+.route-col-trueBearing,
+.route-col-annotations { width: 120px; }
+
+.route-select {
+  min-width: 44px;
+  min-height: var(--target-desktop);
+  padding: 2px 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.route-select[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--surface-2);
+}
+
+.route-name {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow-wrap: anywhere;
+}
+
+.route-action,
+.route-alt-type {
+  display: block;
+  color: var(--text-muted);
+  font-size: var(--fs-note);
+}
+
+/*
+ * Waypoint notes sit under the table at every width (Lead decision 9), so they never squeeze the table.
+ */
+.route-annotation {
+  max-width: 720px;
+  min-width: 0;
+}
+
+/* Beside the map pane (1600px and wider only) the flight pane is narrower, so the default columns take narrower
+   widths. The table still scrolls inside its wrap when the room is smaller than the columns. Without the map pane the
+   widths above apply (Lead decision 9). */
+.flight-screen-body.is-wide .route-col-no { width: 56px; }
+.flight-screen-body.is-wide .route-col-name { width: 170px; }
+.flight-screen-body.is-wide .route-col-coord { width: 170px; }
+.flight-screen-body.is-wide .route-col-alt { width: 96px; }
+.flight-screen-body.is-wide .route-col-speed { width: 80px; }
+.flight-screen-body.is-wide .route-col-eta { width: 140px; }
+.flight-screen-body.is-wide .route-col-leg { width: 84px; }
+.flight-screen-body.is-wide .route-col-bearing { width: 100px; }
+
+.route-annotation-title {
+  margin: 0 0 8px;
+  font-size: 1rem;
+}
+
+/* Narrow screens (SPEC 1.3): one card per route point. Cells are labelled with their column name. */
+@media (max-width: 767px) {
+  .route-table-wrap {
+    overflow: visible;
+    border: 0;
+  }
+
+  .route-table {
+    min-width: 0;
+  }
+
+  /* Hidden visually, not with display: none, so the column headers stay in the accessibility tree. */
+  .route-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  .route-table,
+  .route-table tbody,
+  .route-table tr,
+  .route-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .route-table tr {
+    margin-bottom: 8px;
+    padding: 8px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+  }
+
+  .route-table td {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+    padding: 4px 0;
+    border: 0;
+  }
+
+  .route-table td::before {
+    content: attr(data-label);
+    color: var(--text-muted);
+    font-size: var(--fs-note);
+  }
+
+  .route-table .route-select {
+    min-height: var(--target-touch);
+  }
+
+  .route-table td.route-col-name {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+/* Comms (F3): radios of each aircraft. A radio that differs from the lead is marked with a symbol and words. */
+.flight-comms,
+.flight-lineup {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.flight-unit-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0 0 6px;
+  font-size: 1rem;
+  overflow-wrap: anywhere;
+}
+
+.flight-unit-tail,
+.flight-unit-lead {
+  color: var(--text-muted);
+  font-size: var(--fs-note);
+  font-weight: 400;
+}
+
+.flight-comms .data-table {
+  font-size: var(--fs-table);
+}
+
+/* The radio table scrolls inside this frame on a phone instead of widening the page; positioned, so visually
+   hidden labels inside cannot widen it either (see overview.css). */
+.flight-table-scroll {
+  position: relative;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.flight-comms tr.is-diff td {
+  background: var(--warning-bg);
+}
+
+.flight-link16 {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin: 8px 0 0;
+  font-size: var(--fs-table);
+}
+
+.flight-link16 dt {
+  color: var(--text-muted);
+}
+
+.flight-link16 dd {
+  margin: 0;
+}
+
+.flight-link16.is-diff {
+  color: var(--warning-text);
+}
+
+.flight-lineup-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.flight-roster {
+  position: relative;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow-x: auto;
+}
+
+.flight-props {
+  font-size: var(--fs-note);
+}
+
+.flight-props > summary {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--target-desktop);
+  cursor: pointer;
+  color: var(--text-muted);
+}
+
+.flight-props .info-grid {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 4px 12px;
+  margin: 8px 0 0;
+}
+
+.flight-props dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Notes (F3): fuel, TOT, pilot and free text. Edits stay in the draft until 保存. */
+.flight-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 720px;
+  min-width: 0;
+}
+
+.flight-notes-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.flight-notes .field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.flight-notes .field-label {
+  font-weight: 700;
+}
+
+.flight-notes .field-hint {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--fs-note);
+}
+
+.flight-notes .field-reason {
+  margin: 0;
+  color: var(--warning-text);
+  font-size: var(--fs-note);
+  font-weight: 700;
+}
+
+.flight-notes input,
+.flight-notes textarea {
+  width: 100%;
+  min-width: 0;
+  min-height: var(--target-desktop);
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-0);
+  color: var(--text);
+  font: inherit;
+}
+
+.flight-notes input[aria-invalid="true"] {
+  border-color: var(--warning-border);
+}
+
+.flight-notes-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.flight-notes-actions .field-reason {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--fs-note);
+}
+
+@media (max-width: 767px) {
+  .flight-header {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .flight-export {
+    width: 100%;
+    min-height: var(--target-touch);
+  }
+
+  .flight-notes input,
+  .flight-notes textarea {
+    min-height: var(--target-touch);
+  }
+}
+
+/* Rail rows: callsign on the first line, type and frequency under it (replaces the three-column shell.css grid). */
+.flight-row {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+}
+
+.flight-row-meta {
+  grid-column: 2;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0 8px;
+  min-width: 0;
+}
+
+/* The callsign wraps instead of being cut off (SPEC 3, フライト一覧の長い名前). Overrides shell.css. */
+.flight-row-callsign {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+/* Rail row with its row menu beside it. The select button keeps the row look; the menu button sits at its right. */
+.flight-row-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 4px;
+  min-width: 0;
+}
+
+.flight-row-wrap > .flight-row {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+/* "この機だけ地図に" (T12): one disclosure button, its single action under it. */
+.solo-map-menu {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 0;
+}
+
+.flight-row-menu-toggle {
+  min-width: var(--target-desktop);
+  min-height: var(--target-desktop);
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+.flight-row-menu-toggle:hover,
+.flight-row-menu-toggle[aria-expanded="true"] {
+  border-color: var(--border);
+  color: var(--text);
+}
+
+.solo-map-panel {
+  display: flex;
+  flex-basis: 100%;
+}
+
+.solo-map-action {
+  min-height: var(--target-desktop);
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-0);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--fs-note);
+  cursor: pointer;
+}
+
+.solo-map-action:focus-visible,
+.flight-row-menu-toggle:focus-visible,
+.flight-map-toggle:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+}
+
+@media (max-width: 767px) {
+  .flight-row-menu-toggle,
+  .solo-map-action,
+  .flight-button {
+    min-height: var(--target-touch);
+  }
+}
+
+/* Focus ring for the flight screen's controls (SPEC 4.1). Same form as shell.css. */
+.flight-screen button:focus-visible,
+.flight-screen summary:focus-visible,
+.flight-screen select:focus-visible,
+.flight-screen input:focus-visible,
+.flight-screen textarea:focus-visible,
+.flight-screen a:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* The waypoint purpose and memo editor in the route table (components/WaypointAnnotationEditor). */
+.waypoint-editor {
+  display: grid;
+  gap: 8px;
+  min-width: 18rem;
+  color: var(--text);
+}
+
+.waypoint-editor label {
+  display: grid;
+  gap: 4px;
+}
+
+.waypoint-editor input,
+.waypoint-editor textarea {
+  width: 100%;
+  min-height: var(--target-desktop);
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-0);
+  color: var(--text);
+  font: inherit;
+}
+
+.waypoint-editor textarea {
+  resize: vertical;
+}
+
+.waypoint-editor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.waypoint-editor .button-secondary,
+.waypoint-editor .button-danger-text {
+  min-height: var(--target-desktop);
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-0);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.waypoint-editor .button-danger-text {
+  color: var(--danger-text);
+}
+
+.waypoint-editor button:focus-visible,
+.waypoint-editor input:focus-visible,
+.waypoint-editor textarea:focus-visible,
+.waypoint-sync summary:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.waypoint-editor button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.waypoint-sync {
+  border-top: 1px solid var(--border);
+  padding-top: 6px;
+}
+
+.waypoint-sync summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.waypoint-radius {
+  grid-template-columns: auto 5rem auto;
+  align-items: center;
+}
+
+.waypoint-candidates {
+  display: grid;
+  gap: 6px;
+  max-height: 10rem;
+  overflow: auto;
+  margin: 8px 0;
+}
+
+.waypoint-candidates label {
+  grid-template-columns: auto 1fr;
+  align-items: start;
+}
+
+.waypoint-group-members ul {
+  margin: 6px 0;
+  padding-left: 1.2rem;
+}
+
+.waypoint-editor-status {
+  margin: 0;
+  color: var(--info-text);
+  font-size: var(--fs-note);
+}

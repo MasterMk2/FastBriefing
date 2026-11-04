@@ -1,0 +1,112 @@
+{
+  "app": {
+    "name": "FastBriefing",
+    "selectMiz": ".mizを1つ開く／2つ比較する",
+    "dropFile": ".mizファイルをここにドロップ",
+    "retry": "別のファイルを選ぶ",
+    "reset": "やり直す",
+    "loading": "ミッションを解析中...",
+    "cancel": "読込をキャンセル",
+    "screenLoading": "画面を読み込み中...",
+    "invalidMizOnly": ".mizファイルを選択してください（他の形式は読み込めません）",
+    "tooManyFiles": "1つの.miz、または改版比較する2つの.mizを選択してください。",
+    "parseError": "ミッションファイルの解析に失敗しました",
+    "emptyMiz": "このファイルは0バイトで、ミッションデータが入っていません。ダウンロードまたはコピーをやり直してください。",
+    "corruptMiz": "このファイルは有効なDCSミッションZIPではないか、途中で破損しています。DCS Mission Editorで開けるか確認し、元ファイルを再取得してください。",
+    "mizSafetyLimit": "このミッションは安全上限のため読み込めません。ファイル内容と埋め込み画像を確認してください。",
+    "invalidMissionData": "ZIPは開けましたが、DCSのmissionデータを読み取れません。DCS Mission Editorで保存し直してください。"
+  },
+  "header": {
+    "side": "陣営",
+    "view": "表示",
+    "viewHint": "出力の中身も変わります",
+    "start": "ブリーフィング開始",
+    "settings": "表示設定",
+    "file": "ファイル"
+  },
+  "side": {
+    "blue": "青",
+    "red": "赤",
+    "neutral": "中立",
+    "blueShape": "青（四角）",
+    "redShape": "赤（ひし形）",
+    "neutralShape": "中立（丸）"
+  },
+  "view": {
+    "creator": "作成者",
+    "pilot": "パイロット"
+  },
+  "nav": {
+    "overview": "概要",
+    "flights": "フライト",
+    "map": "地図",
+    "comms": "通信",
+    "support": "支援機",
+    "threats": "脅威",
+    "notes": "記入",
+    "export": "出力",
+    "more": "その他",
+    "briefing": "ブリーフィング",
+    "revision": "改版を比べる",
+    "initial": "初回画面"
+  },
+  "rail": {
+    "title": "自陣営フライト",
+    "search": "フライトを検索",
+    "count": "{{count}} 件",
+    "empty": "フライトはありません",
+    "noMatch": "条件に合うフライトがありません",
+    "clearSearch": "検索を解除",
+    "opponent": "相手陣営（作成者ビュー）",
+    "navLabel": "ワークスペースの画面"
+  },
+  "file": {
+    "label": "ファイル",
+    "open": "開く",
+    "compare": "改版を比べる",
+    "close": "ミッションを閉じる"
+  },
+  "stub": {
+    "preparing": "準備中",
+    "body": "この画面は刷新の途中です。"
+  },
+  "unresolved": {
+    "label": "未解決",
+    "dcsXY": "DCS 座標"
+  },
+  "notice": {
+    "info": "情報",
+    "warning": "注意",
+    "error": "エラー",
+    "success": "完了"
+  },
+  "bottom": {
+    "sheetTitle": "その他"
+  },
+  "screens": {
+    "threatsPilot": {
+      "title": "脅威はパイロット表示では出しません",
+      "body": "作成者ビューに切り替えると、脅威の一覧と経路との交差を確認できます。"
+    },
+    "briefing": {
+      "title": "ブリーフィングは準備中です",
+      "body": "全画面の口頭ブリーフィングは次の更新で使えるようになります。"
+    },
+    "revision": {
+      "title": "改版を比べるには 2 つのファイルを選びます",
+      "body": "ファイル ▾ から「改版を比べる」を使うか、2 つ目の .miz を選んでください。"
+    }
+  },
+  "units": {
+    "time": {
+      "local": "{{value}} 現地",
+      "zulu": "{{value}} Z",
+      "both": "{{local}} 現地 / {{zulu}} Z"
+    },
+    "wind": {
+      "from": "{{deg}}° から",
+      "to": "{{deg}}° へ",
+      "both": "{{from}}° から / {{to}}° へ"
+    }
+  }
+}

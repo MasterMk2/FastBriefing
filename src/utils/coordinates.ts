@@ -1,7 +1,7 @@
 import proj4 from 'proj4';
 import { forward as mgrsForward } from 'mgrs';
 import aircraftCoordinateDefaults from '../data/aircraftCoordinateDefaults.json';
-import type { CoordinateFormat } from '../types/mission';
+import type { CoordinateFormat, CoordinateFormatSetting } from '../types/mission';
 
 /**
  * MGRS accuracy is the number of digits used for each of the easting and
@@ -141,7 +141,7 @@ export function latLonToDCS(theatre: string, lat: number, lon: number): [number,
 export function formatCoordinate(
   lat: number,
   lon: number,
-  format: CoordinateFormat,
+  format: CoordinateFormatSetting,
   mgrsAccuracy: number = DEFAULT_MGRS_ACCURACY,
 ): string {
   switch (format) {
@@ -279,6 +279,14 @@ function isCoordinateFormat(value: string | undefined): value is CoordinateForma
 export function getDefaultCoordinateFormat(aircraftType: string | null | undefined): CoordinateFormat {
   const value = typeof aircraftType === 'string' ? AIRCRAFT_DEFAULTS[aircraftType.trim()] : undefined;
   return isCoordinateFormat(value) ? value : 'DDM';
+}
+
+/**
+ * Resolve the stored coordinate setting to a concrete format. 'aircraft' means
+ * the default for the flight's aircraft type (falls back to DDM when unknown).
+ */
+export function resolveCoordinateFormat(setting: CoordinateFormatSetting, aircraftType?: string | null): CoordinateFormat {
+  return setting === 'aircraft' ? getDefaultCoordinateFormat(aircraftType) : setting;
 }
 
 /** Alias kept explicit for callers that phrase the lookup as aircraft format. */

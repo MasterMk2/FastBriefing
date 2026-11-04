@@ -1,0 +1,32 @@
+{
+  "pilot": {
+    "title": "Threats are not shown in pilot view",
+    "body": "Switch to creator view to see the threat list and the crossings with the route."
+  },
+  "crossing": {
+    "title": "Crossings with the route",
+    "note": "Ranges are theoretical horizontal distances (metres from the reference table). Terrain, detection and engagement decisions are not modelled.",
+    "groupNote": "A group that also has an unrecorded unit is judged by its reference range (the largest known). The range of the unrecorded unit is not used.",
+    "unrecordedNote": "{{count}} threats with no recorded range are not included in the crossings.",
+    "unrecordedNote_one": "{{count}} threat with no recorded range is not included in the crossings.",
+    "noThreats": "No threat can be used for crossings (only threats with a range in the reference table are used).",
+    "noFlights": "No flights on the own side.",
+    "noRoute": "No route points",
+    "outside": "Outside",
+    "inside": "{{type}}: inside, legs {{from}} to {{to}}",
+    "grazing": "{{type}}: grazing, legs {{from}} to {{to}} (within 1 nm outside the range)"
+  },
+  "list": {
+    "title": "Threat list",
+    "none": "No threats are recorded",
+    "side": "Side",
+    "type": "Type",
+    "count": "Count",
+    "engagement": "Engagement range",
+    "detection": "Detection range",
+    "position": "Position",
+    "source": "Source",
+    "unrecorded": "Not recorded (range unknown)",
+    "sourceReference": "Reference data ({{unit}})"
+  }
+}

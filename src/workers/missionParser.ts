@@ -1,13 +1,20 @@
 import { strFromU8, unzip, Unzip, UnzipInflate } from 'fflate';
 import type { UnzipFileInfo } from 'fflate';
 import { parse } from 'luaparse';
+import type { MissionIssue, ParsedMissionFile } from '../types/mission';
+
+export type { ParsedMissionFile } from '../types/mission';
 
 export const ZIP_LIMITS = {
   MAX_ARCHIVE_SIZE: 50 * 1024 * 1024,
-  MAX_ENTRIES: 100,
+  // Commercial campaigns carry 100+ entries (for example 101 in FIWOS M2 FINAL).
+  // The count limit only bounds the central directory walk; total size, per-entry
+  // size and compression ratio limits remain the zip-bomb defences.
+  MAX_ENTRIES: 4096,
   MAX_TOTAL_SIZE: 50 * 1024 * 1024,
   MAX_ENTRY_SIZE: 10 * 1024 * 1024,
-  MAX_IMAGE_SIZE: 5 * 1024 * 1024,
+  // Campaign briefing images reach 5.1 MiB (Flightplan.jpg in FIWOS M2 FINAL).
+  MAX_IMAGE_SIZE: 10 * 1024 * 1024,
   MAX_COMPRESSION_RATIO: 100,
 } as const;
 
@@ -25,16 +32,11 @@ export class MissionArchiveError extends Error {
 
 const ZIP_STREAM_CHUNK_SIZE = 64 * 1024;
 
-export interface ParsedMissionFile {
-  mission: unknown;
-  theatre: string;
-  warehouses: unknown;
-  options: unknown;
-  dictionary: Record<string, string>;
-  mapResource: Record<string, string>;
-  kneeboardFiles: Map<string, Uint8Array>;
-  briefingImages: Map<string, Uint8Array>;
-}
+/**
+ * Collects the Lua node types that convertLuaNode could not convert during one
+ * archive parse. Null outside parseMissionArchive, so direct calls stay silent.
+ */
+let unknownLuaNodeTypes: Set<string> | null = null;
 
 type ZipEntryMetadata = Pick<UnzipFileInfo, 'name' | 'size' | 'originalSize' | 'compression'>;
 
@@ -483,7 +485,7 @@ export function convertLuaNode(node: unknown): unknown {
       return n.name;
 
     default:
-      console.warn('Unknown Lua node type:', n.type);
+      unknownLuaNodeTypes?.add(String(n.type));
       return n;
   }
 }
@@ -520,6 +522,9 @@ export function shouldExtractEntry(name: string): boolean {
 
 export async function parseMissionArchive(data: Uint8Array): Promise<ParsedMissionFile> {
   const zip = await unzipWithLimits(data, shouldExtractEntry);
+  const previousSink = unknownLuaNodeTypes;
+  const nodeTypes = new Set<string>();
+  unknownLuaNodeTypes = nodeTypes;
 
   const result: ParsedMissionFile = {
     mission: null,
@@ -532,33 +537,37 @@ export async function parseMissionArchive(data: Uint8Array): Promise<ParsedMissi
     briefingImages: new Map(),
   };
 
-  for (const name of Object.keys(zip)) {
-    const entry = zip[name];
+  try {
+    for (const name of Object.keys(zip)) {
+      const entry = zip[name];
 
-    if (name === 'mission') {
-      try {
-        result.mission = parseLuaTable(decodeUtf8Entry(entry));
-      } catch (error) {
-        throw new MissionArchiveError(
-          'invalid-mission',
-          `DCSのmissionエントリを解析できませんでした: ${asError(error).message}`,
-        );
+      if (name === 'mission') {
+        try {
+          result.mission = parseLuaTable(decodeUtf8Entry(entry));
+        } catch (error) {
+          throw new MissionArchiveError(
+            'invalid-mission',
+            `DCSのmissionエントリを解析できませんでした: ${asError(error).message}`,
+          );
+        }
+      } else if (name === 'theatre') {
+        result.theatre = decodeUtf8Entry(entry).trim();
+      } else if (name === 'warehouses') {
+        result.warehouses = parseLuaTable(decodeUtf8Entry(entry));
+      } else if (name === 'options') {
+        result.options = parseLuaTable(decodeUtf8Entry(entry));
+      } else if (name === 'l10n/DEFAULT/dictionary') {
+        result.dictionary = parseDictionary(decodeUtf8Entry(entry));
+      } else if (name === 'l10n/DEFAULT/mapResource') {
+        result.mapResource = parseMapResource(decodeUtf8Entry(entry));
+      } else if (name.startsWith('KNEEBOARD/')) {
+        result.kneeboardFiles.set(name, entry);
+      } else if (isBriefingImageEntry(name)) {
+        result.briefingImages.set(name, entry);
       }
-    } else if (name === 'theatre') {
-      result.theatre = decodeUtf8Entry(entry).trim();
-    } else if (name === 'warehouses') {
-      result.warehouses = parseLuaTable(decodeUtf8Entry(entry));
-    } else if (name === 'options') {
-      result.options = parseLuaTable(decodeUtf8Entry(entry));
-    } else if (name === 'l10n/DEFAULT/dictionary') {
-      result.dictionary = parseDictionary(decodeUtf8Entry(entry));
-    } else if (name === 'l10n/DEFAULT/mapResource') {
-      result.mapResource = parseMapResource(decodeUtf8Entry(entry));
-    } else if (name.startsWith('KNEEBOARD/')) {
-      result.kneeboardFiles.set(name, entry);
-    } else if (isBriefingImageEntry(name)) {
-      result.briefingImages.set(name, entry);
     }
+  } finally {
+    unknownLuaNodeTypes = previousSink;
   }
 
   if (result.mission === null || typeof result.mission !== 'object') {
@@ -567,6 +576,13 @@ export async function parseMissionArchive(data: Uint8Array): Promise<ParsedMissi
       'DCSのmissionエントリが存在しないか、最上位のLuaテーブルとして読み取れませんでした。',
     );
   }
+
+  const parseIssues: MissionIssue[] = [...nodeTypes].sort().map(type => ({
+    code: 'parse.unknownNode',
+    severity: 'warning',
+    params: { type },
+  }));
+  if (parseIssues.length > 0) result.parseIssues = parseIssues;
 
   return result;
 }

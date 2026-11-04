@@ -1,8 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeMission } from './MissionNormalizer';
+import { normalizeMission, normalizePayload } from './MissionNormalizer';
+import type { IssueCode, MissionData, MissionIssue } from '../types/mission';
 import utcOffsetData from '../data/utcOffsets.json';
 import { formatTimeHHMM, missionLocalDate, missionZuluDate } from '../utils/time';
 import { calculateBearing, calculateDistance } from '../utils/coordinates';
+import { normalizedCallsignlessMission } from '../__tests__/callsignlessMission';
+
+type IssueFilter = Record<string, string | number>;
+
+/** True when the mission reports an issue with this code whose params contain the given values. */
+function hasIssue(mission: MissionData, code: IssueCode, params?: IssueFilter): boolean {
+  return mission.issues.some(issue => issue.code === code
+    && (params === undefined || Object.entries(params).every(([key, value]) => issue.params?.[key] === value)));
+}
 
 const settings = { coordinateFormat: 'DDM', unitSystem: 'metric', viewMode: 'creator' };
 
@@ -129,10 +139,10 @@ describe('MissionNormalizer reference-backed layers', () => {
     for (const type of expectedTypes) {
       expect(groups.find(group => group.type === type)?.threatRange, type).toBeGreaterThan(0);
     }
-    expect(normalized.warnings).toContain('脅威半径が未収録のため地図に描画できません: UnknownSAM');
+    expect(hasIssue(normalized, 'threat.rangeUnrecorded', { type: 'UnknownSAM' })).toBe(true);
   });
 
-  it('normalizes payload resources, readable weapon names, weight, and warnings', () => {
+  it('normalizes payload resources, readable weapon names, weight, and issues', () => {
     const normalized = normalizeMission(makeMission(), settings);
     const normalizedPayload = normalized.coalitions.blue.flights[0].units[0].payload;
 
@@ -142,9 +152,26 @@ describe('MissionNormalizer reference-backed layers', () => {
     expect(normalizedPayload.gun).toBe(510);
     expect(normalizedPayload.pylons[0].name).toContain('AIM-120C');
     expect(normalizedPayload.pylons[1].name).toContain('GBU-38');
-    expect(normalizedPayload.pylons[2].name).toBe('UNLISTED (未収録)');
+    expect(normalizedPayload.pylons[2].name).toBe('UNLISTED');
+    expect(normalizedPayload.pylons[2].unknown).toBe(true);
+    expect(normalizedPayload.pylons[0].unknown).toBeUndefined();
     expect(normalizedPayload.weight).toBeCloseTo(1402.48, 2);
-    expect(normalized.warnings).toContain('未知の兵装 CLSID: {CLSID_UNLISTED}');
+    expect(hasIssue(normalized, 'weapon.unknownClsid', { clsid: '{CLSID_UNLISTED}' })).toBe(true);
+  });
+
+  it('treats a "<CLEAN>" pylon as empty: no loadout row and no unknown-weapon issue', () => {
+    const issues: MissionIssue[] = [];
+    const payload = normalizePayload({
+      fuel: 1000,
+      pylons: {
+        1: { CLSID: '<CLEAN>' },
+        2: { CLSID: '{AIM-120C}' },
+        3: { CLSID: ' <CLEAN> ' },
+      },
+    }, issues);
+
+    expect(payload.pylons.map(pylon => pylon.station)).toEqual(['2']);
+    expect(issues.filter(issue => issue.code === 'weapon.unknownClsid')).toEqual([]);
   });
 
   it('returns empty dictionary values instead of leaking raw keys into the UI', () => {
@@ -351,6 +378,19 @@ describe('MissionNormalizer reference-backed layers', () => {
     expect(jtac).toBeDefined();
     expect(jtac?.jtac?.unitType).toBe('JTAC');
     expect(jtac?.laserCode).toBe(168);
+    expect(jtac?.callsign).toBe('Axeman');
+  });
+
+  it('names a JTAC by its group when neither the group nor the unit has a callsign', () => {
+    const raw = makeMission();
+    const vehicles = raw.mission.coalition.blue.country[0].vehicle[0].group;
+    const jtacGroup = vehicles[vehicles.length - 1];
+    jtacGroup.name = 'Axe Group';
+    (jtacGroup.units as Record<string, unknown>[])[0].name = '';
+
+    const normalized = normalizeMission(raw, settings);
+    const jtac = normalized.coalitions.blue.support.find(asset => asset.kind === 'jtac');
+    expect(jtac?.callsign).toBe('Axe Group');
   });
 
   it('resolves cloud presets and warns for unknown presets', () => {
@@ -358,7 +398,7 @@ describe('MissionNormalizer reference-backed layers', () => {
     expect(known.weather.clouds.label).toBe('Light Scattered 1');
 
     const unknown = normalizeMission(makeMission({ weather: { clouds: { preset: 'RainyPreset99', base: 900 } } }), settings);
-    expect(unknown.warnings).toContain('未知の雲プリセット: RainyPreset99');
+    expect(hasIssue(unknown, 'weather.cloudPresetUnknown', { preset: 'RainyPreset99' })).toBe(true);
   });
 
   it('resolves all briefing image resource keys when DCS provides Lua arrays', () => {
@@ -672,7 +712,7 @@ describe('MissionNormalizer reference-backed layers', () => {
     expect(group.threatRange).toBe(0);
     expect(group.detectionRange).toBe(400000);
     expect(group.detectionRangeUnitType).toBe('55G6 EWR');
-    expect(normalized.warnings).not.toContain('脅威半径が未収録のため地図に描画できません: 55G6 EWR');
+    expect(hasIssue(normalized, 'threat.rangeUnrecorded', { type: '55G6 EWR' })).toBe(false);
   });
 
   it('does not treat aircraft or static groups as missing threat reference data', () => {
@@ -692,9 +732,9 @@ describe('MissionNormalizer reference-backed layers', () => {
       },
     }), settings);
 
-    expect(normalized.warnings).not.toContain('脅威半径が未収録のため地図に描画できません: F-16C_50');
-    expect(normalized.warnings).not.toContain('参照データに未収録のユニット: F-16C_50');
-    expect(normalized.warnings).not.toContain('参照データに未収録のユニット: barrels_cargo');
+    expect(hasIssue(normalized, 'threat.rangeUnrecorded', { type: 'F-16C_50' })).toBe(false);
+    expect(hasIssue(normalized, 'unit.unknownType', { type: 'F-16C_50' })).toBe(false);
+    expect(hasIssue(normalized, 'unit.unknownType', { type: 'barrels_cargo' })).toBe(false);
     expect(normalized.coalitions.blue.aiGroups[0].threatRangeSource).toBeUndefined();
   });
 
@@ -718,10 +758,10 @@ describe('MissionNormalizer reference-backed layers', () => {
 
     for (const type of ['Hummer', 'M978 HEMTT Tanker', 'M 818']) {
       expect(groups.find(group => group.type === type)?.threatRange, type).toBe(0);
-      expect(normalized.warnings).not.toContain(`脅威半径が未収録のため地図に描画できません: ${type}`);
+      expect(hasIssue(normalized, 'threat.rangeUnrecorded', { type: type })).toBe(false);
     }
     expect(groups.find(group => group.type === 'M-2 Bradley')?.threatRange).toBeGreaterThan(0);
-    expect(normalized.warnings).not.toContain('脅威半径が未収録のため地図に描画できません: M-2 Bradley');
+    expect(hasIssue(normalized, 'threat.rangeUnrecorded', { type: 'M-2 Bradley' })).toBe(false);
   });
 
   it('resolves previously noisy real-mission units without flattening armed buildings', () => {
@@ -762,7 +802,7 @@ describe('MissionNormalizer reference-backed layers', () => {
 
     for (const [type, [threatRange, detectionRange]] of Object.entries(expectedRanges)) {
       expect(groups.find(group => group.type === type), type).toMatchObject({ threatRange, detectionRange });
-      expect(normalized.warnings).not.toContain(`脅威半径が未収録のため地図に描画できません: ${type}`);
+      expect(hasIssue(normalized, 'threat.rangeUnrecorded', { type: type })).toBe(false);
     }
   });
 
@@ -814,12 +854,30 @@ describe('MissionNormalizer reference-backed layers', () => {
         detectionRange,
         threatRangeSource: 'reference',
       });
-      expect(normalized.warnings).not.toContain(`参照データに未収録のユニット: ${type}`);
-      expect(normalized.warnings).not.toContain(`脅威半径が未収録のため地図に描画できません: ${type}`);
+      expect(hasIssue(normalized, 'unit.unknownType', { type: type })).toBe(false);
+      expect(hasIssue(normalized, 'threat.rangeUnrecorded', { type: type })).toBe(false);
     }
   });
 
-  it('separates unknown-unit warnings from missing-threat-range warnings', () => {
+  it('tags unknown-unit issues with the coalition that owns the group (D1)', () => {
+    const group = (groupId: number) => ({
+      group: [{ groupId, units: [unit('UnknownSAM')], hidden: false, lateActivation: false }],
+    });
+    const normalized = normalizeMission(makeMission({
+      coalition: {
+        blue: { country: [{ vehicle: [group(900)] }] },
+        red: { country: [{ vehicle: [group(901)] }] },
+        neutrals: {},
+      },
+    }), settings);
+
+    const sides = normalized.issues
+      .filter(issue => issue.code === 'unit.unknownType' && issue.params?.type === 'UnknownSAM')
+      .map(issue => issue.side);
+    expect(sides.sort()).toEqual(['blue', 'red']);
+  });
+
+  it('separates unknown-unit issues from missing-threat-range issues', () => {
     const unknownGroup = {
       group: [{
         groupId: 900,
@@ -836,9 +894,9 @@ describe('MissionNormalizer reference-backed layers', () => {
       },
     }), settings);
 
-    expect(normalized.warnings).toContain('参照データに未収録のユニット: UnknownSAM');
-    expect(normalized.warnings).toContain('脅威半径が未収録のため地図に描画できません: UnknownSAM');
-    expect(normalized.warnings.filter(warning => warning.includes('UnknownSAM'))).toHaveLength(2);
+    expect(hasIssue(normalized, 'unit.unknownType', { type: 'UnknownSAM' })).toBe(true);
+    expect(hasIssue(normalized, 'threat.rangeUnrecorded', { type: 'UnknownSAM' })).toBe(true);
+    expect(normalized.issues.filter(issue => issue.params?.type === 'UnknownSAM')).toHaveLength(2);
   });
 
   it('uses the pydcs ship engagement and detection ranges for the four known armed ships', () => {
@@ -868,7 +926,7 @@ describe('MissionNormalizer reference-backed layers', () => {
 
     for (const [type, [threatRange, detectionRange]] of Object.entries(expectedRanges)) {
       expect(groups.find(group => group.type === type), type).toMatchObject({ threatRange, detectionRange });
-      expect(normalized.warnings).not.toContain(`脅威半径が未収録のため地図に描画できません: ${type}`);
+      expect(hasIssue(normalized, 'threat.rangeUnrecorded', { type: type })).toBe(false);
     }
   });
 
@@ -897,7 +955,7 @@ describe('MissionNormalizer reference-backed layers', () => {
 
     const metadataKeyTheatre = normalizeMission(makeMission({ theatre: '_source' }), settings);
     expect(metadataKeyTheatre.meta.utcOffset).toBe(0);
-    expect(metadataKeyTheatre.warnings).toContain('UTC オフセット未収録: _source');
+    expect(hasIssue(metadataKeyTheatre, 'time.utcOffsetUnknown', { theatre: '_source' })).toBe(true);
   });
 
   it.each([
@@ -979,13 +1037,13 @@ describe('MissionNormalizer reference-backed layers', () => {
     expect(normalized.coalitions.blue.support[0].latlonResolved).toBe(false);
     expect(normalized.coalitions.blue.aiGroups[0].latlon).toEqual([0, 0]);
     expect(normalized.coalitions.blue.aiGroups[0].latlonResolved).toBe(false);
-    expect(normalized.warnings.filter(warning => warning === '未対応のマップ: UnsupportedTestTheatre（座標を解決できません）')).toHaveLength(1);
-    expect(normalized.warnings.filter(warning => warning === 'UTC オフセット未収録: UnsupportedTestTheatre')).toHaveLength(1);
+    expect(normalized.issues.filter(issue => issue.code === 'map.unsupported' && issue.params?.theatre === 'UnsupportedTestTheatre')).toHaveLength(1);
+    expect(normalized.issues.filter(issue => issue.code === 'time.utcOffsetUnknown' && issue.params?.theatre === 'UnsupportedTestTheatre')).toHaveLength(1);
   });
 });
 
 describe('new theatre projection integration', () => {
-  it.each(['Afghanistan', 'Iraq'])('resolves %s flight and bullseye coordinates without unsupported-map warnings', theatre => {
+  it.each(['Afghanistan', 'Iraq'])('resolves %s flight and bullseye coordinates without unsupported-map issues', theatre => {
     const normalized = normalizeMission(makeMission({ theatre, coalition: {
       blue: { bullseye: { x: 0, y: 0 }, country: [{ plane: { group: [{
         name: 'Projection fixture', groupId: 1, units: [unit('F-16C_50', 'Client')],
@@ -995,6 +1053,24 @@ describe('new theatre projection integration', () => {
     expect(normalized.coalitions.blue.bullseye.latlonResolved).toBe(true);
     expect(normalized.coalitions.blue.bullseye.latlon[0]).toBeGreaterThan(30);
     expect(normalized.coalitions.blue.flights[0].route[0].latlonResolved).toBe(true);
-    expect(normalized.warnings.some(warning => warning.startsWith('未対応のマップ:'))).toBe(false);
+    expect(normalized.issues.some(issue => issue.code === 'map.unsupported')).toBe(false);
+    expect(hasIssue(normalized, 'magvar.unsupported', { theatre })).toBe(true);
+  });
+});
+
+describe('groups without a group callsign', () => {
+  it('give the flight, tanker and AWACS their group name as the callsign, never an empty one', () => {
+    const blue = normalizedCallsignlessMission().coalitions.blue;
+    expect(blue.flights.map(flight => flight.callsign)).toEqual(['Chevy', 'Dealer']);
+    expect(blue.support.map(asset => [asset.kind, asset.callsign])).toEqual([['tanker', 'Texaco'], ['awacs', 'Overlord']]);
+  });
+
+  it('do not turn a callsign table without a name into "[object Object]"', () => {
+    const mission = makeMission();
+    const flight = (mission.mission.coalition.blue as { country: Array<{ plane: Array<{ group: Array<Record<string, unknown>> }> }> })
+      .country[0].plane[0].group[0];
+    flight.name = 'Nameless';
+    flight.callsign = { 1: 7, 2: 1, 3: 1 };
+    expect(normalizeMission(mission, settings).coalitions.blue.flights[0].callsign).toBe('Nameless');
   });
 });

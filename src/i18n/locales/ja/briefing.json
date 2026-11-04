@@ -1,0 +1,136 @@
+{
+  "title": "ブリーフィング",
+  "notAvailable": "未設定",
+  "continued": "（続き）",
+  "start": {
+    "title": "ブリーフィングを始める前に",
+    "view": "表示",
+    "include": "含める項目",
+    "hint": "表示（作成者・パイロット）は画面上部で変えられます。ここで決めた項目だけを全画面で順に出します。",
+    "threatsPilotHidden": "脅威はパイロット表示には含まれません",
+    "begin": "開始",
+    "cancel": "戻る"
+  },
+  "nav": {
+    "prev": "前へ",
+    "next": "次へ",
+    "exit": "終了（Esc）",
+    "contents": "目次",
+    "counter": "{{current}} / {{total}}",
+    "slideBody": "スライドの本文（溢れた部分は内側でスクロールできます）"
+  },
+  "empty": {
+    "title": "表示する項目がありません",
+    "body": "ブリーフィングに含める項目は、開始前の確認か出力画面で選んでください。",
+    "flights": "フライトはありません",
+    "comms": "周波数はありません",
+    "support": "支援機はありません",
+    "threats": "脅威は登録されていません"
+  },
+  "section": {
+    "overview": "概要",
+    "weather": "天候",
+    "flights": "フライト一覧",
+    "route": "ナビログ",
+    "comms": "通信",
+    "support": "支援機",
+    "threats": "脅威",
+    "map": "地図",
+    "notes": "記入"
+  },
+  "overview": {
+    "mission": "任務名",
+    "theatre": "マップ",
+    "date": "日付",
+    "start": "開始時刻",
+    "flightCount": "{{side}} のフライト数",
+    "task": "任務文"
+  },
+  "weather": {
+    "temperature": "気温",
+    "qnh": "QNH",
+    "defaultedValue": "{{value}}（既定値）",
+    "visibility": "視程",
+    "clouds": "雲",
+    "cloudBase": "基部 {{value}}",
+    "cloudsValue": "{{label}}（{{base}}）",
+    "fog": "霧",
+    "fogDetails": "厚さ {{thickness}}・視程 {{visibility}}",
+    "dust": "砂塵",
+    "dustDensity": "濃度 {{value}}",
+    "groundTurbulence": "地上乱気流",
+    "groundTurbulenceValue": "{{value}} m/s",
+    "none": "なし",
+    "windLevelHeader": "高度",
+    "windDirection": "風向",
+    "windSpeed": "風速",
+    "windLevel": {
+      "ground": "地上",
+      "2000": "2000 m",
+      "8000": "8000 m"
+    },
+    "metar": "METAR"
+  },
+  "flights": {
+    "side": "陣営",
+    "callsign": "コールサイン",
+    "type": "機種",
+    "units": "機数",
+    "firstEta": "先頭の時刻"
+  },
+  "route": {
+    "title": "ナビログ: {{callsign}}",
+    "trueOnly": "真のみ",
+    "col": {
+      "no": "No",
+      "name": "名称",
+      "coord": "座標",
+      "alt": "高度",
+      "speed": "速度",
+      "eta": "時刻",
+      "leg": "区間距離",
+      "magvar": "磁方位"
+    }
+  },
+  "alt": {
+    "BARO": "気圧",
+    "RADIO": "対地"
+  },
+  "comms": {
+    "name": "名称",
+    "channel": "チャンネル",
+    "frequency": "周波数",
+    "modulation": "変調"
+  },
+  "support": {
+    "kind": "種類",
+    "callsign": "コールサイン",
+    "frequency": "周波数",
+    "tacan": "TACAN",
+    "position": "位置",
+    "kinds": {
+      "tanker": "給油機",
+      "awacs": "AWACS",
+      "carrier": "空母",
+      "jtac": "JTAC"
+    }
+  },
+  "threats": {
+    "side": "陣営",
+    "type": "種類",
+    "count": "数",
+    "range": "範囲",
+    "unrecorded": "未収録（範囲不明）"
+  },
+  "map": {
+    "all": "全機",
+    "flight": "選んだフライト: {{callsign}}"
+  },
+  "smeac": {
+    "situation": "状況",
+    "mission": "任務",
+    "execution": "実行",
+    "adminLogistics": "補給",
+    "commandSignal": "指揮"
+  }
+}

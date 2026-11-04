@@ -62,8 +62,11 @@ describe('theatre magnetic variation', () => {
     const middle = getMagneticVariation('Caucasus', 42, 41.8, new Date(Date.UTC(2027, 0, 1)));
     const end = getMagneticVariation('Caucasus', 42, 41.8, new Date(Date.UTC(2030, 0, 1)));
 
-    expect(middle).toBeCloseTo(start + (end - start) * 0.4, 8);
-    expect(getMagneticVariation('UnknownTheatre', 0, 0, TEST_DATE)).toBe(0);
+    expect(start).not.toBeNull();
+    expect(end).not.toBeNull();
+    expect(middle).toBeCloseTo((start as number) + ((end as number) - (start as number)) * 0.4, 8);
+    // Theatres without a table (custom maps, Afghanistan, Iraq) have no magnetic variation: callers show true bearings only.
+    expect(getMagneticVariation('UnknownTheatre', 0, 0, TEST_DATE)).toBeNull();
   });
 
   it('uses east-positive variation with the aviation sign convention', () => {

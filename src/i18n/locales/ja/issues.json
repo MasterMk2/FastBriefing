@@ -1,0 +1,34 @@
+{
+  "threat": {
+    "rangeUnrecorded": "脅威半径が未収録のため地図に描画できません: {{type}}"
+  },
+  "unit": {
+    "unknownType": "参照データに未収録のユニット: {{type}}"
+  },
+  "weapon": {
+    "unknownClsid": "未知の兵装 CLSID: {{clsid}}"
+  },
+  "weather": {
+    "cloudPresetUnknown": "未知の雲プリセット: {{preset}}",
+    "qnhDefaulted": "QNH が既定値で補われました",
+    "temperatureDefaulted": "気温が既定値で補われました"
+  },
+  "airbase": {
+    "nameMissing": "飛行場名が未収録です（ID: {{id}}）"
+  },
+  "map": {
+    "unsupported": "未対応のマップ: {{theatre}}（座標を解決できません）"
+  },
+  "time": {
+    "utcOffsetUnknown": "UTC オフセット未収録: {{theatre}}"
+  },
+  "magvar": {
+    "unsupported": "磁気偏差の表が無いため、磁方位は表示しません（真方位のみ）: {{theatre}}"
+  },
+  "parse": {
+    "unknownNode": "未知の Lua ノード型（{{type}}）を読み飛ばしました"
+  },
+  "coord": {
+    "unresolved": "座標を解決できない点があります"
+  }
+}

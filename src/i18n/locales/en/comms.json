@@ -1,0 +1,66 @@
+{
+  "conflicts": {
+    "title": "Frequency conflicts",
+    "none": "No conflicts",
+    "count": "{{count}} conflicts",
+    "count_one": "{{count}} conflict",
+    "explanation": "Main frequencies (flight and support frequencies) within {{kilohertz}} kHz with the same modulation (AM/FM), used by different flights or support assets, are counted as conflicts. Matching radio presets (channels) are not counted.",
+    "scope": "In creator view, the main frequencies of both sides are compared together. A conflict across both sides is marked neutral. The pre-distribution check L1 uses the same definition."
+  },
+  "frequencyValue": "{{frequency}} MHz ({{modulation}})",
+  "types": {
+    "same-aircraft-preset": "The same frequency on another channel of the same aircraft",
+    "different-flight": "The same frequency as another flight",
+    "support": "The same frequency as a support asset"
+  },
+  "usage": {
+    "support": "Support asset frequency",
+    "mainFrequency": "Flight frequency"
+  },
+  "table": {
+    "title": "Frequency list",
+    "caption": "{{count}} frequencies",
+    "caption_one": "{{count}} frequency",
+    "side": "Side",
+    "owner": "Owner",
+    "channel": "Channel",
+    "usage": "Use",
+    "modulation": "Modulation",
+    "frequency": "Frequency"
+  },
+  "empty": {
+    "title": "No frequencies",
+    "body": "No flight has radio presets, and no support asset has a frequency."
+  },
+  "filter": {
+    "side": "Filter by side",
+    "modulation": "Filter by modulation",
+    "owner": "Owner",
+    "all": "All",
+    "noMatch": "No frequencies match the filter",
+    "clear": "Clear filter",
+    "shown": "Showing {{shown}} of {{total}}"
+  },
+  "sort": {
+    "label": "Sort",
+    "frequency": "By frequency",
+    "owner": "By owner"
+  },
+  "common": {
+    "title": "Common frequencies"
+  },
+  "guard": {
+    "uhf": "Guard (emergency, UHF)",
+    "vhf": "Guard (emergency, VHF)"
+  },
+  "navaid": {
+    "title": "Support TACAN and ICLS",
+    "none": "No support asset has a TACAN or ICLS",
+    "tacan": "TACAN",
+    "icls": "ICLS"
+  },
+  "atc": {
+    "title": "Air traffic control (ATC)",
+    "notRecorded": "ATC frequencies are not recorded. Airbase control frequencies are not shown on this screen."
+  }
+}
