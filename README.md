@@ -185,7 +185,7 @@ Main
 
 ```
 FastBriefing/
-├── public/                 # 静的アセット（favicon.svg）
+├── public/                 # 静的アセット（favicon.ico など。FFS サイトと同じアイコン）
 ├── src/
 │   ├── App.tsx             # DropZone + 正規化 + 状態管理
 │   ├── main.tsx            # ReactDOM + SettingsProvider
